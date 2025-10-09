@@ -1,26 +1,49 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Palette from print.css */
+  --ink: #111111;
+  --ink-2: #444444;
+  --aqua: #2AA7B5;
+  --teal: #1D7C87; /* deep teal */
+  --mist: #8CA7B2; /* soft teal */
+  --parchment: #F7F0E4; /* parchment background */
+  --amber: #A66A2B; /* brownish amber divider */
+
+  --background: var(--parchment);
+  --foreground: var(--ink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-deep-teal: var(--teal);
+  --color-aqua: var(--aqua);
+  --color-mist: var(--mist);
+  --color-amber: var(--amber);
+  --font-sans: Helvetica, Arial, sans-serif;
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Helvetica, Arial, sans-serif;
+}
+
+/* Adobe Seasons font utility (requires kit include) */
+.font-seasons { font-family: "the-seasons", serif; }
+
+/* Global button style: deep teal with white bold Helvetica */
+button, .btn {
+  background-color: var(--teal);
+  color: #fff;
+  font-weight: 700;
+  font-family: Helvetica, Arial, sans-serif;
+}
+
+/* Divider with thinning edges in amber */
+.divider-amber {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--amber), transparent);
 }

@@ -1,0 +1,12 @@
+.env.local
+.env*
+node_modules
+.git
+supabase
+**/*.md
+**/*.MD
+**/*.txt
+**/*.log
+**/.DS_Store
+
+
