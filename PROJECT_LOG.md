@@ -1,3 +1,12 @@
+## 2025-10-09
+
+- Added country-only schema: `country_code CHAR(2)` (deprecated `city`).
+- Updated signup (participate and dashboard sheet) to require country dropdown (ISO-2), removed city.
+- Implemented Globe component (D3 canvas): nodes (users), links (parent→child), time filters (All/30d/7d), realtime updates via Supabase.
+- Integrated Globe under landing (BelowMap) with touch pan support; brand palette applied.
+- Added server API routes: `/api/users/check`, `/api/users/upsert` with `country_code`.
+- Vercel: linked project `riverflows`, deployed. Env vars confirmed. 401 on root traced to protection/middleware; verify Pages/Access Controls settings and middleware matcher.
+
 # Dream River – Project Log
 
 Audience: Anyone following development. Chronological updates + backlog.

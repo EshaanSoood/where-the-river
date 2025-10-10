@@ -10,7 +10,6 @@ export default function ParticipatePage() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [country, setCountry] = useState("");
-  const [city, setCity] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [userMessage, setUserMessage] = useState("");
   const [code, setCode] = useState("");
@@ -49,6 +48,22 @@ export default function ParticipatePage() {
       });
       if (error) throw error;
       if (data?.user) {
+        // Upsert minimal profile with required country_code
+        const name = `${firstName} ${lastName}`.trim();
+        const referral_id = Math.random().toString(36).slice(2, 10);
+        await fetch("/api/users/upsert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            email,
+            country_code: country,
+            message: userMessage || null,
+            photo_url: null,
+            referral_id,
+            referred_by: null,
+          }),
+        }).catch(() => {});
         setStep("done");
         router.push("/dashboard");
       } else {
@@ -118,24 +133,24 @@ export default function ParticipatePage() {
                 required
               >
                 <option value="" disabled>Select your country</option>
-                <option value="United States">United States</option>
-                <option value="United Kingdom">United Kingdom</option>
-                <option value="Canada">Canada</option>
-                <option value="India">India</option>
-                <option value="Australia">Australia</option>
-                <option value="Other">Other</option>
+                <option value="US">United States</option>
+                <option value="GB">United Kingdom</option>
+                <option value="CA">Canada</option>
+                <option value="IN">India</option>
+                <option value="AU">Australia</option>
+                <option value="DE">Germany</option>
+                <option value="FR">France</option>
+                <option value="ES">Spain</option>
+                <option value="IT">Italy</option>
+                <option value="BR">Brazil</option>
+                <option value="SG">Singapore</option>
+                <option value="ZA">South Africa</option>
+                <option value="NG">Nigeria</option>
+                <option value="MX">Mexico</option>
+                <option value="JP">Japan</option>
+                <option value="CN">China</option>
+                <option value="TR">Turkey</option>
               </select>
-            </div>
-            <div className="space-y-1">
-              <label htmlFor="city" className="text-sm font-medium">City<span aria-hidden> *</span></label>
-              <input
-                id="city"
-                className="w-full border rounded-md px-3 py-2 bg-background"
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                required
-              />
             </div>
           </div>
 
@@ -169,7 +184,7 @@ export default function ParticipatePage() {
             className="w-full rounded-md bg-foreground text-background px-4 py-2 disabled:opacity-50"
             type="submit"
             disabled={
-              loading || !firstName || !lastName || !email || !country || !city
+              loading || !firstName || !lastName || !email || !country
             }
           >
             {loading ? "Sending..." : "Send Code"}
