@@ -6,7 +6,7 @@ Purpose: This file helps the AI assistant instantly pick up where we left off.
 - Next.js app in `web/` using App Router, TypeScript, Tailwind v4, Turbopack.
 - Supabase client via `lib/supabaseClient.ts` (client-side helper `getSupabase`).
 - Pages:
-  - `/` landing (marketing) + Globe component (realtime, time filters)
+  - `/` landing (marketing) + Globe component (Three.js)
   - `/participate` (magic link OTP; country-only form)
   - `/dashboard` (badge placeholder)
   - `/r/[referral]` (referral landing)
@@ -36,11 +36,26 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
 - Admin panel: moderation, exports, flags.
 
 ## Decisions So Far
-- Stack: Next.js 15, Tailwind v4, Supabase, Plausible. D3 installed for map (canvas/webgl TBD).
+- Stack: Next.js 15, Tailwind v4, Supabase, Plausible. Three.js for globe (OrbitControls), TopoJSON for world data.
 - Safe client init: `getSupabase()` avoids build-time crash if envs absent.
 - Turbopack used for dev/build; workspace root warning acceptable for now.
- - Globe uses D3 Canvas (brand palette); time filters All/30d/7d; realtime Supabase.
- - Country-only geography; ISO-2 required; pins jittered within country centroid.
+- Globe now uses Three.js (glass ocean, rotating clouds, extruded land, animated river tubes, markers, boat). Double‑tap (mobile) or double‑click toggles fullscreen globe overlay.
+- Country-only geography; ISO-2 required; pins jittered within country centroid.
+
+## Today’s Changes
+- Replaced D3 canvas globe with Three.js implementation from local prototype; integrated exactly, no extra files.
+- Layout overhaul (`components/BelowMap.tsx`):
+  - Desktop: 25px global side padding; Dashboard (top-left) and Leaderboard (top-right) chips above the centered globe; 15px gap below globe, then two columns (left text/Hero, right Bandcamp).
+  - Mobile: Globe dominates; top-left/right hamburger chips for Dashboard/Leaderboard open as overlay panels with shadow and close; double‑tap globe for fullscreen overlay with close; below globe, heading/text then Bandcamp.
+- Globe enhancements (`components/Globe.tsx`): fullscreen overlay behavior; tooltips on country hover; OrbitControls with auto-rotate.
+- Added `web/types.ts` for GeoJSON typings.
+- Dependencies: added `three`, `topojson-client`; dev types `@types/three`, `@types/topojson-client`.
+
+## Deployment
+- Vercel project linked: `riverflows` (org: eshaans-projects-d91d58e1)
+- Deployed directly from local (no git push):
+  - Live URL: https://riverflows-7fkwo9qch-eshaans-projects-d91d58e1.vercel.app
+  - CLI: `vercel pull --yes --environment=production && vercel build --prod && vercel deploy --prebuilt --prod`
 
 ## Useful Commands
 - Dev: `npm run dev` (in `web/`)
