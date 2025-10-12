@@ -8,9 +8,6 @@ import type { FeatureCollection } from '../types';
 
 const GlobeComponent: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const pathsRef = useRef<THREE.CatmullRomCurve3[]>([]);
-  const pathLengthsRef = useRef<number[]>([]);
-  const boatStateRef = useRef({ pathIndex: 0, distanceTraveled: 0 });
   const lastTapRef = useRef<number>(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [tooltip, setTooltip] = useState<{
@@ -65,6 +62,7 @@ const GlobeComponent: React.FC = () => {
     controls.maxDistance = 500;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.5;
+    controls.enableZoom = false;
 
     // Cursor style
     mount.style.cursor = 'grab';
@@ -81,58 +79,48 @@ const GlobeComponent: React.FC = () => {
 
     const globeRadius = 100;
 
-    // Ocean sphere (Glass Shell)
-    const oceanGeometry = new THREE.IcosahedronGeometry(globeRadius, 20);
-    const oceanMaterial = new THREE.MeshPhysicalMaterial({
-        color: 0xadd8e6, // Lighter blue for glass
-        roughness: 0.05,
-        metalness: 0.0,
-        transmission: 0.95,
+    // Ocean sphere (simplified)
+    const oceanGeometry = new THREE.IcosahedronGeometry(globeRadius - 0.5, 30);
+    const oceanMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1e90ff,
+        roughness: 0.9,
+        metalness: 0.1,
         transparent: true,
-        ior: 1.5, // Index of refraction closer to glass
-        thickness: 15, // Simulates glass thickness for better refraction
-        clearcoat: 1.0, // Adds a glossy clear coat layer
-        clearcoatRoughness: 0.1,
+        opacity: 0.4,
     });
     const oceanSphere = new THREE.Mesh(oceanGeometry, oceanMaterial);
     scene.add(oceanSphere);
-    const originalOceanPositions = oceanGeometry.attributes.position.clone();
 
-    // Inner Liquid Core (for blurry effect)
-    const innerCoreGeometry = new THREE.IcosahedronGeometry(globeRadius - 8, 10);
-    const innerCoreMaterial = new THREE.MeshPhysicalMaterial({
-        color: 0x54a0d4, // Deeper, slightly murky blue
-        roughness: 0.4,
-        metalness: 0.0,
-        transmission: 0.8,
-        transparent: true,
-        opacity: 0.6,
-        ior: 1.33,
-    });
-    const innerCore = new THREE.Mesh(innerCoreGeometry, innerCoreMaterial);
-    scene.add(innerCore);
-
-    // Cloud Layer
+    // Cloud Layers
     const textureLoader = new THREE.TextureLoader();
     const cloudTexture = textureLoader.load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/141228/earthcloudmap.jpg');
-    const cloudGeometry = new THREE.IcosahedronGeometry(globeRadius + 3, 12);
-    const cloudMaterial = new THREE.MeshPhongMaterial({
+    const cloudGeometry1 = new THREE.IcosahedronGeometry(globeRadius + 5, 12);
+    const cloudMaterial1 = new THREE.MeshPhongMaterial({
         map: cloudTexture,
         alphaMap: cloudTexture,
         transparent: true,
-        opacity: 0.4,
+        opacity: 0.05,
         depthWrite: false,
     });
-    const clouds = new THREE.Mesh(cloudGeometry, cloudMaterial);
-    scene.add(clouds);
+    const clouds1 = new THREE.Mesh(cloudGeometry1, cloudMaterial1);
+    scene.add(clouds1);
+
+    const cloudGeometry2 = new THREE.IcosahedronGeometry(globeRadius + 5.5, 12);
+    const cloudMaterial2 = new THREE.MeshPhongMaterial({
+        map: cloudTexture,
+        alphaMap: cloudTexture,
+        transparent: true,
+        opacity: 0.05,
+        depthWrite: false,
+    });
+    const clouds2 = new THREE.Mesh(cloudGeometry2, cloudMaterial2);
+    scene.add(clouds2);
 
     // Group to hold all country meshes for raycasting
     const countriesGroup = new THREE.Group();
     scene.add(countriesGroup);
     
-    // Group to hold all markers
-    const markersGroup = new THREE.Group();
-    scene.add(markersGroup);
+    // No markers in simplified style
 
     // Convert lat/lon to 3D coordinates
     const latLonToVector3 = (lat: number, lon: number, radius: number) => {
@@ -145,7 +133,7 @@ const GlobeComponent: React.FC = () => {
     };
     
     const renderWorldFromGeoJson = (geoJson: FeatureCollection) => {
-        const landMaterial = new THREE.MeshStandardMaterial({ color: 0x9a7b4f, roughness: 0.8 });
+        const landMaterial = new THREE.MeshStandardMaterial({ color: 0xffc700, roughness: 0.8 });
 
         const createLandMesh = (polygon: number[][][], elevation: number) => {
             if (!polygon || polygon.length === 0) return null;
@@ -182,7 +170,10 @@ const GlobeComponent: React.FC = () => {
                 }
                 geometry.computeVertexNormals();
 
-                return new THREE.Mesh(geometry, landMaterial);
+                const mesh = new THREE.Mesh(geometry, landMaterial);
+                mesh.castShadow = false;
+                mesh.receiveShadow = false;
+                return mesh;
             } catch (e) {
                 console.warn("Could not generate geometry for a polygon:", e);
                 return null;
@@ -210,81 +201,7 @@ const GlobeComponent: React.FC = () => {
         });
     };
     
-    const createBoatPaths = (geoJson: FeatureCollection) => {
-        const points = [];
-        const validFeatures = geoJson.features.filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
-
-        for (let i = 0; i < 10; i++) {
-            const feature = validFeatures[Math.floor(Math.random() * validFeatures.length)];
-            let coords: number[];
-            if (feature.geometry.type === 'Polygon') {
-                coords = feature.geometry.coordinates[0][0];
-            } else { // MultiPolygon
-                coords = feature.geometry.coordinates[0][0][0];
-            }
-            if (coords && coords.length >= 2) {
-                points.push(latLonToVector3(coords[1], coords[0], globeRadius + 0.1));
-            }
-        }
-
-        const riverMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0x54a0d4,
-            transmission: 0.7,
-            roughness: 0.2,
-            metalness: 0.0,
-            transparent: true,
-            opacity: 0.8,
-            ior: 1.33
-        });
-
-        // Marker setup
-        const markerMaterial = new THREE.MeshStandardMaterial({
-            color: 0xdc143c, // Crimson red
-            roughness: 0.4,
-            metalness: 0.1
-        });
-        const markerHeight = 2.5;
-        const markerGeometry = new THREE.CylinderGeometry(0.2, 0.2, markerHeight, 8);
-        markerGeometry.translate(0, markerHeight / 2, 0); // Pivot at the bottom
-
-        // Add a marker for each connection point
-        points.forEach(point => {
-            const marker = new THREE.Mesh(markerGeometry, markerMaterial);
-            marker.position.copy(point);
-            
-            // Orient the marker to point outwards from the globe's center
-            const normal = point.clone().normalize();
-            const up = new THREE.Vector3(0, 1, 0); // Default cylinder orientation
-            marker.quaternion.setFromUnitVectors(up, normal);
-            
-            markersGroup.add(marker);
-        });
-
-        for (let i = 0; i < points.length; i++) {
-            const startPoint = points[i];
-            const endPoint = points[(i + 1) % points.length];
-
-            const controlPoints = [];
-            const segments = 10;
-            for(let j = 1; j < segments; j++) {
-                const t = j / segments;
-                const intermediatePoint = new THREE.Vector3().lerpVectors(startPoint, endPoint, t);
-                const tangent = new THREE.Vector3().crossVectors(intermediatePoint, new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)).normalize();
-                const offset = Math.sin(t * Math.PI) * (startPoint.distanceTo(endPoint) / 5);
-                intermediatePoint.add(tangent.multiplyScalar(offset));
-                intermediatePoint.normalize().multiplyScalar(globeRadius + 0.1);
-                controlPoints.push(intermediatePoint);
-            }
-            
-            const curve = new THREE.CatmullRomCurve3([startPoint, ...controlPoints, endPoint]);
-            pathsRef.current.push(curve);
-
-            const tubeGeometry = new THREE.TubeGeometry(curve, 100, 0.5, 8, false);
-            const riverMesh = new THREE.Mesh(tubeGeometry, riverMaterial);
-            scene.add(riverMesh);
-        }
-        pathLengthsRef.current = pathsRef.current.map(p => p.getLength());
-    };
+    // Removed boat paths/markers for simplified visual style
 
     const loadAndDrawGlobe = async () => {
         try {
@@ -294,7 +211,6 @@ const GlobeComponent: React.FC = () => {
             
             const countriesGeoJson = topojson.feature(worldData, worldData.objects.countries) as unknown as FeatureCollection;
             renderWorldFromGeoJson(countriesGeoJson);
-            createBoatPaths(countriesGeoJson);
         } catch (error) {
             console.error("Error loading or processing world data:", error);
         }
@@ -302,53 +218,38 @@ const GlobeComponent: React.FC = () => {
 
     loadAndDrawGlobe();
     
-    const boat = new THREE.Group();
-    const boatMaterial = new THREE.MeshStandardMaterial({
-      color: 0xf7f5e6,
-      roughness: 0.9,
-      metalness: 0.1,
-      side: THREE.DoubleSide
-    });
-    const hullGeom = new THREE.BoxGeometry(1.5, 0.4, 0.8);
-    const hull = new THREE.Mesh(hullGeom, boatMaterial);
-    hull.position.y = -0.2;
-    boat.add(hull);
-    const sailGeom = new THREE.PlaneGeometry(1.2, 1.8);
-    sailGeom.translate(0, 0.9, 0); 
-    const sail = new THREE.Mesh(sailGeom, boatMaterial);
-    boat.add(sail);
-    boat.scale.set(2, 2, 2);
-    scene.add(boat);
+    // No boat in simplified look
 
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
     const onPointerInteract = (event: MouseEvent) => {
-        mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
-        mouse.y = -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+        const rect = mount.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects([oceanSphere, ...countriesGroup.children], true);
-        
-        if (intersects.length > 0 && intersects[0].object === oceanSphere) {
-             setTooltip(t => ({ ...t, content: null }));
-             if (mount.style.cursor !== 'grabbing') {
-                mount.style.cursor = 'grab';
-             }
-             return;
-        }
+        const intersects = raycaster.intersectObjects(countriesGroup.children, true);
 
         const countryIntersect = intersects.find(i => i.object.userData.countryName);
 
         if (countryIntersect) {
-            const countryName = countryIntersect.object.userData.countryName;
-            setTooltip({ content: countryName, x: event.clientX, y: event.clientY });
-            mount.style.cursor = 'pointer';
-        } else {
-            setTooltip(t => ({ ...t, content: null }));
-            if (mount.style.cursor !== 'grabbing') {
-                mount.style.cursor = 'grab';
+            const intersectionPoint = countryIntersect.point;
+            const surfaceNormal = intersectionPoint.clone().normalize();
+            const toCameraVector = new THREE.Vector3().subVectors(camera.position, intersectionPoint).normalize();
+            const dotProduct = surfaceNormal.dot(toCameraVector);
+
+            if (dotProduct > 0.1) {
+              const countryName = countryIntersect.object.userData.countryName;
+              setTooltip({ content: countryName, x: event.clientX, y: event.clientY });
+              mount.style.cursor = 'pointer';
+              return;
             }
+        }
+
+        setTooltip(t => ({ ...t, content: null }));
+        if (mount.style.cursor !== 'grabbing') {
+            mount.style.cursor = 'grab';
         }
     };
     
@@ -371,76 +272,9 @@ const GlobeComponent: React.FC = () => {
     const animate = () => {
       requestAnimationFrame(animate);
       const delta = clock.getDelta();
-      const elapsedTime = clock.getElapsedTime();
-      
-      clouds.rotation.y += delta * 0.01;
-
-      const state = boatStateRef.current;
-      const paths = pathsRef.current;
-      const pathLengths = pathLengthsRef.current;
-
-      if (paths.length > 0 && pathLengths.length > 0) {
-        const currentPath = paths[state.pathIndex];
-        const totalPathLength = pathLengths[state.pathIndex];
-        
-        const currentProgress = totalPathLength > 0 ? state.distanceTraveled / totalPathLength : 0;
-
-        const tangent = currentPath.getTangentAt(currentProgress).normalize();
-        const lookAheadDistanceForCurvature = 5;
-        const nextTangentProgress = totalPathLength > 0 ? Math.min(currentProgress + (lookAheadDistanceForCurvature / totalPathLength), 1) : 1;
-        const nextTangent = currentPath.getTangentAt(nextTangentProgress).normalize();
-        
-        const curvature = (1 - tangent.dot(nextTangent)) * 100;
-
-        const baseSpeed = 10;
-        const maxSpeedFactor = 1.5;
-        const minSpeedFactor = 0.5;
-
-        const speedFactor = THREE.MathUtils.lerp(maxSpeedFactor, minSpeedFactor, THREE.MathUtils.smoothstep(curvature, 0, 0.5));
-        const currentSpeed = baseSpeed * speedFactor;
-
-        state.distanceTraveled += currentSpeed * delta;
-
-        if (state.distanceTraveled >= totalPathLength) {
-            state.distanceTraveled = 0;
-            state.pathIndex = (state.pathIndex + 1) % paths.length;
-        }
-        
-        const newProgress = totalPathLength > 0 ? state.distanceTraveled / totalPathLength : 0;
-        const currentPos = currentPath.getPointAt(newProgress);
-        
-        const lookAheadDistanceForOrientation = 1;
-        const lookAtProgress = totalPathLength > 0 ? Math.min(newProgress + (lookAheadDistanceForOrientation / totalPathLength), 1) : 1;
-        const lookAtPos = currentPath.getPointAt(lookAtProgress);
-        
-        const bobbingSpeed = 2.5;
-        const bobbingAmount = 0.1;
-        const bobbing = Math.sin(elapsedTime * bobbingSpeed) * bobbingAmount;
-
-        currentPos.normalize().multiplyScalar(globeRadius + 0.2 + bobbing);
-        lookAtPos.normalize().multiplyScalar(globeRadius + 0.2);
-        
-        boat.position.copy(currentPos);
-        boat.lookAt(lookAtPos);
-      }
-      
-      const oceanPositions = oceanSphere.geometry.attributes.position;
-      const time = elapsedTime * 0.3;
-      for (let i = 0; i < oceanPositions.count; i++) {
-        const originalPos = new THREE.Vector3().fromBufferAttribute(originalOceanPositions, i);
-        const distortedPos = new THREE.Vector3().fromBufferAttribute(originalOceanPositions, i).normalize();
-        
-        const wave1 = Math.sin(originalPos.x * 0.1 + time) * 0.2;
-        const wave2 = Math.cos(originalPos.y * 0.1 + time) * 0.2;
-        const wave3 = Math.sin(originalPos.z * 0.1 + time) * 0.2;
-        const totalWave = wave1 + wave2 + wave3;
-        
-        distortedPos.multiplyScalar(globeRadius + totalWave);
-        oceanPositions.setXYZ(i, distortedPos.x, distortedPos.y, distortedPos.z);
-      }
-      oceanSphere.geometry.attributes.position.needsUpdate = true;
-      oceanSphere.geometry.computeVertexNormals();
-
+      clouds1.rotation.y += delta * 0.012;
+      clouds2.rotation.y += delta * 0.008;
+      clouds2.rotation.x += delta * 0.002;
       controls.update();
       renderer.render(scene, camera);
     };
