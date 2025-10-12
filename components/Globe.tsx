@@ -32,18 +32,23 @@ const GlobeComponent: React.FC = () => {
     scene.fog = new THREE.Fog(sceneColor, 250, 450);
 
 
-    // Camera setup
-    const camera = new THREE.PerspectiveCamera(
-      45,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
+    // Camera setup (size based on container, not window)
+    const getContainerSize = () => {
+      const rect = mount.getBoundingClientRect();
+      // Fallback if not yet laid out
+      const width = Math.max(1, Math.floor(rect.width || mount.clientWidth || window.innerWidth));
+      const height = Math.max(1, Math.floor(rect.height || mount.clientHeight || window.innerHeight));
+      return { width, height };
+    };
+
+    const { width: initialWidth, height: initialHeight } = getContainerSize();
+
+    const camera = new THREE.PerspectiveCamera(45, initialWidth / initialHeight, 0.1, 1000);
     camera.position.z = 300;
 
-    // Renderer setup
+    // Renderer setup (match parent container)
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(initialWidth, initialHeight);
     mount.appendChild(renderer.domElement);
     
     // Lighting
@@ -442,14 +447,32 @@ const GlobeComponent: React.FC = () => {
     animate();
 
     const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+      const { width, height } = getContainerSize();
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(width, height);
     };
-    window.addEventListener('resize', handleResize);
+
+    // Observe container resize to avoid window-based sizing
+    let resizeObserver: ResizeObserver | null = null;
+    let removeWindowListener = false;
+    let win: (Window & typeof globalThis) | null = null;
+    if (typeof window !== "undefined") {
+      win = window as Window & typeof globalThis;
+      const hasResizeObserver = typeof (win as unknown as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver !== 'undefined';
+      if (hasResizeObserver) {
+        const RO = (win as unknown as { ResizeObserver: typeof ResizeObserver }).ResizeObserver;
+        resizeObserver = new RO(() => handleResize());
+        resizeObserver.observe(mount);
+      } else {
+        win.addEventListener('resize', handleResize);
+        removeWindowListener = true;
+      }
+    }
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      if (resizeObserver) resizeObserver.disconnect();
+      else if (removeWindowListener && win) win.removeEventListener('resize', handleResize);
       mount.removeEventListener('mousemove', onPointerInteract);
       mount.removeEventListener('click', onPointerInteract);
       mount.removeEventListener('pointerdown', onPointerDown as unknown as EventListener);
@@ -466,9 +489,9 @@ const GlobeComponent: React.FC = () => {
 
   return (
     <>
-      {/* Normal placement */}
+      {/* Normal placement: fills parent container */}
       {!isFullscreen && (
-        <div ref={mountRef} style={{ width: '100%', height: '100vh' }} />
+        <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
       )}
       {/* Fullscreen overlay on mobile double-tap (or double-click) */}
       {isFullscreen && (
