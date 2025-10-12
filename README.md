@@ -7,3 +7,5 @@ Quickstart:
 3. Visit `/participate` for magic link signup.
 
 Deploy: Vercel recommended. Set env vars in project settings.
+
+Live (Production): https://riverflows-px80wu0ej-eshaans-projects-d91d58e1.vercel.app
