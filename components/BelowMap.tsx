@@ -21,7 +21,7 @@ export default function BelowMap() {
   const [favoriteSong, setFavoriteSong] = useState("");
   const [boatColor, setBoatColor] = useState<string>("#135E66");
   const [code, setCode] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [uiLoading, setUiLoading] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
 
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -239,9 +239,9 @@ export default function BelowMap() {
                         <div className="flex items-center gap-3">
                           <button
                             className="rounded-md px-4 py-3 btn font-seasons flex-1"
-                            disabled={loading || !firstName || !lastName || !email || !country || !favoriteSong}
+                            disabled={uiLoading || !firstName || !lastName || !email || !country || !favoriteSong}
                             onClick={async () => {
-                              setLoading(true);
+                              setUiLoading(true);
                               setAlert(null);
                               try {
                                 const supabase = getSupabase();
@@ -253,11 +253,11 @@ export default function BelowMap() {
                                 const msg = err instanceof Error ? err.message : 'Something went wrong';
                                 setAlert(msg);
                               } finally {
-                                setLoading(false);
+                                setUiLoading(false);
                               }
                             }}
                           >
-                            {loading ? 'Sending…' : 'Send Code'}
+                            {uiLoading ? 'Sending…' : 'Send Code'}
                           </button>
                           <button className="text-sm underline" onClick={() => setGuestStep('menu')}>Back</button>
                         </div>
@@ -272,9 +272,9 @@ export default function BelowMap() {
                         <div className="flex items-center gap-3">
                           <button
                             className="rounded-md px-4 py-3 btn flex-1"
-                            disabled={loading || code.length !== 6}
+                            disabled={uiLoading || code.length !== 6}
                             onClick={async () => {
-                              setLoading(true);
+                              setUiLoading(true);
                               setAlert(null);
                               try {
                                 const supabase = getSupabase();
@@ -306,11 +306,11 @@ export default function BelowMap() {
                                 const msg = err instanceof Error ? err.message : 'Something went wrong';
                                 setAlert(msg);
                               } finally {
-                                setLoading(false);
+                                setUiLoading(false);
                               }
                             }}
                           >
-                            {loading ? 'Verifying…' : 'Verify'}
+                            {uiLoading ? 'Verifying…' : 'Verify'}
                           </button>
                           <button className="text-sm underline" onClick={() => setGuestStep('signup_email')}>Back</button>
                         </div>
@@ -325,9 +325,9 @@ export default function BelowMap() {
                         <div className="flex items-center gap-3">
                           <button
                             className="rounded-md px-4 py-3 btn flex-1"
-                            disabled={loading || !email}
+                            disabled={uiLoading || !email}
                             onClick={async () => {
-                              setLoading(true);
+                              setUiLoading(true);
                               setAlert(null);
                               try {
                                 const res = await fetch('/api/users/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
@@ -345,11 +345,11 @@ export default function BelowMap() {
                               } catch (e) {
                                 setAlert('Unable to check river. Try again.');
                               } finally {
-                                setLoading(false);
+                                setUiLoading(false);
                               }
                             }}
                           >
-                            {loading ? 'Sending…' : 'Send Code'}
+                            {uiLoading ? 'Sending…' : 'Send Code'}
                           </button>
                           <button className="text-sm underline" onClick={() => setGuestStep('menu')}>Back</button>
                         </div>
@@ -364,9 +364,9 @@ export default function BelowMap() {
                         <div className="flex items-center gap-3">
                           <button
                             className="rounded-md px-4 py-3 btn flex-1"
-                            disabled={loading || code.length !== 6}
+                            disabled={uiLoading || code.length !== 6}
                             onClick={async () => {
-                              setLoading(true);
+                              setUiLoading(true);
                               setAlert(null);
                               try {
                                 const supabase = getSupabase();
@@ -382,11 +382,11 @@ export default function BelowMap() {
                                 const msg = err instanceof Error ? err.message : 'Something went wrong';
                                 setAlert(msg);
                               } finally {
-                                setLoading(false);
+                                setUiLoading(false);
                               }
                             }}
                           >
-                            {loading ? 'Verifying…' : 'Verify'}
+                            {uiLoading ? 'Verifying…' : 'Verify'}
                           </button>
                           <button className="text-sm underline" onClick={() => setGuestStep('login_email')}>Back</button>
                         </div>
