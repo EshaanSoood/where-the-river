@@ -20,6 +20,7 @@ const GlobeComponent: React.FC = () => {
     y: number;
   }>({ content: null, x: 0, y: 0 });
   const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const [nodeRadius, setNodeRadius] = useState<number>(3.5);
   const nodesRef = useRef<{ id: string; name: string; countryCode: string; lat: number; lng: number }[]>([]);
   const linksRef = useRef<{ source: string; target: string }[]>([]);
   const countersRef = useRef<{ fetched: number; drawnNodes: number; drawnEdges: number; missingCentroid: number }>({ fetched: 0, drawnNodes: 0, drawnEdges: 0, missingCentroid: 0 });
@@ -51,12 +52,21 @@ const GlobeComponent: React.FC = () => {
     };
 
     const { width: initialWidth, height: initialHeight } = getContainerSize();
+    const computeNodeRadius = () => {
+      const { width } = getContainerSize();
+      if (width <= 480) return 5.0;
+      if (width <= 768) return 4.25;
+      return 3.5;
+    };
+    setNodeRadius(computeNodeRadius());
 
     const camera = new THREE.PerspectiveCamera(45, initialWidth / initialHeight, 0.1, 1000);
     camera.position.z = 300;
+    const initialDistance = camera.position.length();
 
     // Renderer setup (match parent container)
     const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(2, (typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1));
     renderer.setSize(initialWidth, initialHeight);
     mount.appendChild(renderer.domElement);
     // Accessibility: treat globe as decorative to avoid trapping focus
@@ -64,6 +74,9 @@ const GlobeComponent: React.FC = () => {
       renderer.domElement.setAttribute('aria-hidden', 'true');
       renderer.domElement.setAttribute('role', 'presentation');
       renderer.domElement.setAttribute('tabindex', '-1');
+    } catch {}
+    try {
+      (renderer.domElement.style as CSSStyleDeclaration).touchAction = 'none';
     } catch {}
     
     // Lighting
@@ -76,11 +89,16 @@ const GlobeComponent: React.FC = () => {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 150;
-    controls.maxDistance = 500;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.5;
-    controls.enableZoom = false;
+    controls.enableZoom = true;
+    controls.minDistance = initialDistance * 0.8;
+    controls.maxDistance = initialDistance * 1.2;
+    try {
+      // Touch: one finger rotate, two fingers dolly/pan (zoom)
+      (controls as unknown as { touches?: any }).touches.ONE = (THREE as any).TOUCH?.ROTATE ?? 0;
+      (controls as unknown as { touches?: any }).touches.TWO = (THREE as any).TOUCH?.DOLLY_PAN ?? 0;
+    } catch {}
 
     // Cursor style
     mount.style.cursor = 'grab';
@@ -396,6 +414,7 @@ const GlobeComponent: React.FC = () => {
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
+      setNodeRadius(computeNodeRadius());
     };
 
     // Observe container resize to avoid window-based sizing
@@ -474,7 +493,7 @@ const GlobeComponent: React.FC = () => {
                   <circle ref={(el) => {
                     const slot = nodeElementMapRef.current[n.id];
                     if (slot) slot.circle = el;
-                  }} r={3.5} fill="var(--teal)" stroke="#fff" strokeWidth={1} style={{ pointerEvents: 'auto' }} tabIndex={0} aria-label={`${n.name}, from ${n.countryCode}`} />
+                  }} r={nodeRadius} fill="var(--teal)" stroke="#fff" strokeWidth={1} style={{ pointerEvents: 'auto' }} tabIndex={0} aria-label={`${n.name}, from ${n.countryCode}`} />
                   <text ref={(el) => {
                     const slot = nodeElementMapRef.current[n.id];
                     if (slot) slot.text = el;

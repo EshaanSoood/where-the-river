@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getSupabase } from "@/lib/supabaseClient";
 import { useUser } from "@/hooks/useUser";
 import Hero from "@/components/Hero";
 import BandcampEmbed from "@/components/BandcampEmbed";
@@ -12,6 +13,16 @@ const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
 
 export default function BelowMap() {
   const router = useRouter();
+  const [guestStep, setGuestStep] = useState<"menu" | "signup_email" | "signup_code" | "login_email" | "login_code">("menu");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [country, setCountry] = useState("");
+  const [favoriteSong, setFavoriteSong] = useState("");
+  const [boatColor, setBoatColor] = useState<string>("#135E66");
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState<string | null>(null);
 
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
@@ -136,7 +147,7 @@ export default function BelowMap() {
                 id="panel-dashboard"
                 role="dialog"
                 aria-modal="true"
-                className="absolute top-14 left-3 z-50 w-[88vw] md:w-[420px] bg-white rounded-lg shadow-xl border border-purple-200"
+                className={`absolute top-14 left-3 z-50 w-[88vw] ${guestStep === 'menu' ? 'md:w-[420px]' : 'md:w-[520px]'} bg-white rounded-lg shadow-xl border border-purple-200`}
                 tabIndex={-1}
                 ref={dashboardRef}
                 onKeyDown={(e) => {
@@ -154,28 +165,234 @@ export default function BelowMap() {
                     >
                       ✕
                     </button>
-                    <div className="flex flex-col items-center justify-center gap-3 py-4">
-                      <button
-                        className="font-seasons rounded-md px-4 py-3 w-3/4"
-                        style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
-                        onClick={() => {
-                          setDashboardOpen(false);
-                          router.push("/participate");
-                        }}
-                      >
-                        Start Your Boat
-                      </button>
-                      <button
-                        className="font-seasons rounded-md px-4 py-3 w-3/4"
-                        style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
-                        onClick={() => {
-                          setDashboardOpen(false);
-                          router.push("/participate");
-                        }}
-                      >
-                        Resume Your River
-                      </button>
-                    </div>
+                    {guestStep === 'menu' && (
+                      <div className="flex flex-col items-center justify-center gap-3 py-4">
+                        <button
+                          className="font-seasons rounded-md px-4 py-3 w-3/4"
+                          style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
+                          onClick={() => setGuestStep('signup_email')}
+                        >
+                          Start Your Boat
+                        </button>
+                        <button
+                          className="font-seasons rounded-md px-4 py-3 w-3/4"
+                          style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
+                          onClick={() => setGuestStep('login_email')}
+                        >
+                          Resume Your River
+                        </button>
+                      </div>
+                    )}
+
+                    {guestStep === 'signup_email' && (
+                      <div className="space-y-3">
+                        <h2 className="font-seasons text-xl" style={{ color: "var(--teal)" }}>Start Your River</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                          <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                        </div>
+                        <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={country} onChange={(e) => setCountry(e.target.value)} required>
+                            <option value="" disabled>Select your country</option>
+                            <option value="US">United States</option>
+                            <option value="GB">United Kingdom</option>
+                            <option value="CA">Canada</option>
+                            <option value="IN">India</option>
+                            <option value="AU">Australia</option>
+                            <option value="DE">Germany</option>
+                            <option value="FR">France</option>
+                            <option value="ES">Spain</option>
+                            <option value="IT">Italy</option>
+                            <option value="BR">Brazil</option>
+                            <option value="SG">Singapore</option>
+                            <option value="ZA">South Africa</option>
+                            <option value="NG">Nigeria</option>
+                            <option value="MX">Mexico</option>
+                            <option value="JP">Japan</option>
+                            <option value="CN">China</option>
+                            <option value="TR">Turkey</option>
+                          </select>
+                          <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={favoriteSong} onChange={(e) => setFavoriteSong(e.target.value)} required>
+                            <option value="" disabled>Favourite Song</option>
+                            <option>Mountain Muse</option>
+                            <option>Glass Blown Acquaintances</option>
+                            <option>Miss Lightning</option>
+                            <option>If Our Hearts Could Talk</option>
+                            <option>Plea For Forgiveness</option>
+                            <option>Here For A Good Time</option>
+                            <option>Hexes and Spells</option>
+                            <option>Sailing Through Dream River</option>
+                          </select>
+                        </div>
+                        <section aria-label="Choose your boat" className="mt-2">
+                          <h3 className="font-seasons text-lg mb-2" style={{ color: "var(--teal)" }}>Choose your boat</h3>
+                          <div className="flex items-center gap-3">
+                            <div className="rounded-full size-16 flex items-center justify-center border" style={{ background: "var(--white-soft)", borderColor: "var(--mist)" }} aria-label="Boat preview">
+                              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M3 15l9-9 9 9-9 3-9-3z" fill={boatColor} />
+                              </svg>
+                            </div>
+                            <input type="color" aria-label="Boat color" value={boatColor} onChange={(e) => setBoatColor(e.target.value)} className="h-10 w-10 rounded-full border" style={{ borderColor: "var(--mist)", background: "var(--white-soft)" }} />
+                          </div>
+                        </section>
+                        <div className="flex items-center gap-3">
+                          <button
+                            className="rounded-md px-4 py-3 btn font-seasons flex-1"
+                            disabled={loading || !firstName || !lastName || !email || !country || !favoriteSong}
+                            onClick={async () => {
+                              setLoading(true);
+                              setAlert(null);
+                              try {
+                                const supabase = getSupabase();
+                                const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+                                if (error) throw error;
+                                setGuestStep('signup_code');
+                                setAlert('We emailed you a 6-digit code. Enter it below.');
+                              } catch (err: unknown) {
+                                const msg = err instanceof Error ? err.message : 'Something went wrong';
+                                setAlert(msg);
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                          >
+                            {loading ? 'Sending…' : 'Send Code'}
+                          </button>
+                          <button className="text-sm underline" onClick={() => setGuestStep('menu')}>Back</button>
+                        </div>
+                        {alert && <p className="text-sm">{alert}</p>}
+                      </div>
+                    )}
+
+                    {guestStep === 'signup_code' && (
+                      <div className="space-y-3">
+                        <h2 className="font-seasons text-xl">Enter Code</h2>
+                        <input className="border rounded-md px-3 py-2 bg-background tracking-widest text-center" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="••••••" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+                        <div className="flex items-center gap-3">
+                          <button
+                            className="rounded-md px-4 py-3 btn flex-1"
+                            disabled={loading || code.length !== 6}
+                            onClick={async () => {
+                              setLoading(true);
+                              setAlert(null);
+                              try {
+                                const supabase = getSupabase();
+                                const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
+                                if (error) throw error;
+                                if (data?.user) {
+                                  const name = `${firstName} ${lastName}`.trim();
+                                  const referral_id = Math.random().toString(36).slice(2, 10);
+                                  await fetch('/api/users/upsert', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      name,
+                                      email,
+                                      country_code: country,
+                                      message: favoriteSong,
+                                      photo_url: null,
+                                      referral_id,
+                                      referred_by: null,
+                                      boat_color: boatColor,
+                                    }),
+                                  });
+                                  setAlert('Verified! You are in.');
+                                  setTimeout(() => setDashboardOpen(false), 900);
+                                  return;
+                                }
+                                setAlert('Invalid code. Please try again.');
+                              } catch (err: unknown) {
+                                const msg = err instanceof Error ? err.message : 'Something went wrong';
+                                setAlert(msg);
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                          >
+                            {loading ? 'Verifying…' : 'Verify'}
+                          </button>
+                          <button className="text-sm underline" onClick={() => setGuestStep('signup_email')}>Back</button>
+                        </div>
+                        {alert && <p className="text-sm">{alert}</p>}
+                      </div>
+                    )}
+
+                    {guestStep === 'login_email' && (
+                      <div className="space-y-3">
+                        <h2 className="font-seasons text-xl">Resume your River</h2>
+                        <input className="border rounded-md px-3 py-2 bg-background" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                        <div className="flex items-center gap-3">
+                          <button
+                            className="rounded-md px-4 py-3 btn flex-1"
+                            disabled={loading || !email}
+                            onClick={async () => {
+                              setLoading(true);
+                              setAlert(null);
+                              try {
+                                const res = await fetch('/api/users/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+                                const json = await res.json();
+                                if (!json.exists) {
+                                  setAlert('No rivers found with that email address.');
+                                  setGuestStep('signup_email');
+                                  return;
+                                }
+                                const supabase = getSupabase();
+                                const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+                                if (error) throw error;
+                                setGuestStep('login_code');
+                                setAlert('We emailed you a 6-digit code. Enter it below.');
+                              } catch (e) {
+                                setAlert('Unable to check river. Try again.');
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                          >
+                            {loading ? 'Sending…' : 'Send Code'}
+                          </button>
+                          <button className="text-sm underline" onClick={() => setGuestStep('menu')}>Back</button>
+                        </div>
+                        {alert && <p className="text-sm">{alert}</p>}
+                      </div>
+                    )}
+
+                    {guestStep === 'login_code' && (
+                      <div className="space-y-3">
+                        <h2 className="font-seasons text-xl">Enter Code</h2>
+                        <input className="border rounded-md px-3 py-2 bg-background tracking-widest text-center" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="••••••" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+                        <div className="flex items-center gap-3">
+                          <button
+                            className="rounded-md px-4 py-3 btn flex-1"
+                            disabled={loading || code.length !== 6}
+                            onClick={async () => {
+                              setLoading(true);
+                              setAlert(null);
+                              try {
+                                const supabase = getSupabase();
+                                const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
+                                if (error) throw error;
+                                if (data?.user) {
+                                  setAlert('Welcome back!');
+                                  setTimeout(() => setDashboardOpen(false), 900);
+                                  return;
+                                }
+                                setAlert('Invalid code. Please try again.');
+                              } catch (err: unknown) {
+                                const msg = err instanceof Error ? err.message : 'Something went wrong';
+                                setAlert(msg);
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                          >
+                            {loading ? 'Verifying…' : 'Verify'}
+                          </button>
+                          <button className="text-sm underline" onClick={() => setGuestStep('login_email')}>Back</button>
+                        </div>
+                        {alert && <p className="text-sm">{alert}</p>}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>
