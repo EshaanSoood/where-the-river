@@ -96,8 +96,8 @@ const GlobeComponent: React.FC = () => {
     controls.maxDistance = initialDistance * 1.2;
     try {
       // Touch: one finger rotate, two fingers dolly/pan (zoom)
-      (controls as unknown as { touches?: any }).touches.ONE = (THREE as any).TOUCH?.ROTATE ?? 0;
-      (controls as unknown as { touches?: any }).touches.TWO = (THREE as any).TOUCH?.DOLLY_PAN ?? 0;
+      controls.touches.ONE = THREE.TOUCH.ROTATE;
+      controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
     } catch {}
 
     // Cursor style
