@@ -1,24 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  /* New brand palette */
-  --outer-space: #323942; /* light black */
-  --gray-chateau: #95a2a7; /* grey */
-  --don-juan: #594546; /* dark brown */
-  --jungle-mist: #a8c5cd; /* light blue */
-  --kashmir-blue: #466e91; /* dark blue */
-  --waikawa-gray: #6672a0; /* grey blue */
-  --horizon: #5e85a4; /* light-dark blue */
+  /* Palette (original) */
+  --ink: #111111;
+  --ink-2: #444444;
+  --aqua: #2AA7B5;
+  --teal: #135E66; /* deep teal from original palette */
+  --mist: #8CA7B2; /* soft teal */
+  --parchment: #F7F0E4; /* parchment background */
+  --amber: #A66A2B; /* brownish amber divider */
   --white-soft: #FAF9F6; /* soft white */
-
-  /* Token mapping */
-  --ink: var(--outer-space);
-  --ink-2: var(--gray-chateau);
-  --aqua: var(--horizon);
-  --teal: var(--kashmir-blue);
-  --mist: var(--jungle-mist);
-  --parchment: var(--jungle-mist);
-  --amber: var(--don-juan);
 
   --background: var(--parchment);
   --foreground: var(--ink);

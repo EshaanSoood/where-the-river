@@ -229,7 +229,7 @@ export default function DashboardSheet({ open, onClose, mode = "guest" }: Props)
       <div className="absolute inset-0 flex items-start justify-start">
         <div
           className="relative w-full h-full lg:w-[360px] lg:h-screen rounded-none lg:rounded-none shadow-lg"
-          style={{ background: "var(--mist)" }}
+          style={{ background: "var(--parchment)" }}
         >
           {/* Close button (top-left), small italics 'x' in Seasons font and amber color */}
           <button
@@ -283,14 +283,14 @@ export default function DashboardSheet({ open, onClose, mode = "guest" }: Props)
 
               {step === "signup_email" && (
                 <div className="col-span-4 row-span-5 space-y-3">
-                  <h2 className="font-seasons text-xl" style={{ color: "var(--kashmir-blue)" }}>Start Your River</h2>
+                  <h2 className="font-seasons text-xl" style={{ color: "var(--teal)" }}>Start Your River</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--kashmir-blue)" }} placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
-                    <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--kashmir-blue)" }} placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                    <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                    <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
                   </div>
-                  <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--kashmir-blue)" }} type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--kashmir-blue)" }} value={country} onChange={(e) => setCountry(e.target.value)} required>
+                    <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={country} onChange={(e) => setCountry(e.target.value)} required>
                       <option value="" disabled>Select your country</option>
                       <option value="US">United States</option>
                       <option value="GB">United Kingdom</option>
@@ -310,7 +310,7 @@ export default function DashboardSheet({ open, onClose, mode = "guest" }: Props)
                       <option value="CN">China</option>
                       <option value="TR">Turkey</option>
                     </select>
-                    <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--kashmir-blue)" }} value={favoriteSong} onChange={(e) => setFavoriteSong(e.target.value)} required>
+                    <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={favoriteSong} onChange={(e) => setFavoriteSong(e.target.value)} required>
                       <option value="" disabled>Favourite Song</option>
                       <option>Mountain Muse</option>
                       <option>Glass Blown Acquaintances</option>
@@ -323,7 +323,7 @@ export default function DashboardSheet({ open, onClose, mode = "guest" }: Props)
                     </select>
                   </div>
                   <section aria-label="Choose your boat" className="mt-2">
-                    <h3 className="font-seasons text-lg mb-2" style={{ color: "var(--kashmir-blue)" }}>Choose your boat</h3>
+                    <h3 className="font-seasons text-lg mb-2" style={{ color: "var(--teal)" }}>Choose your boat</h3>
                     <div className="flex items-center gap-3">
                       <div className="rounded-full size-16 flex items-center justify-center border"
                         style={{ background: "var(--white-soft)", borderColor: "var(--mist)" }}

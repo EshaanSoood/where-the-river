@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/useUser";
 import Hero from "@/components/Hero";
 import BandcampEmbed from "@/components/BandcampEmbed";
@@ -10,6 +11,7 @@ import dynamic from "next/dynamic";
 const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
 
 export default function BelowMap() {
+  const router = useRouter();
 
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
@@ -86,8 +88,7 @@ export default function BelowMap() {
           <div className="absolute top-3 left-3 z-40">
             <button
               type="button"
-              className="px-3 py-2 rounded-md bg-white/90 shadow-sm text-sm md:text-base btn"
-              style={{ borderColor: "var(--mist)", color: "var(--ink)" }}
+              className="px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm md:text-base btn"
               aria-controls="panel-dashboard"
               aria-expanded={dashboardOpen}
               onClick={() => {
@@ -111,8 +112,7 @@ export default function BelowMap() {
             type="button"
             aria-controls="panel-leaderboard"
             aria-expanded={leaderboardOpen}
-            className="px-3 py-2 rounded-md bg-white/90 shadow-sm text-sm"
-            style={{ borderColor: "var(--mist)", color: "var(--ink)" }}
+            className="px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
             onClick={() => setLeaderboardOpen((v) => !v)}
             onKeyDown={(e) => { if (e.key === "Escape") setLeaderboardOpen(false); }}
           >
@@ -136,8 +136,7 @@ export default function BelowMap() {
                 id="panel-dashboard"
                 role="dialog"
                 aria-modal="true"
-                className="absolute top-14 left-3 z-50 w-[88vw] md:w-[420px] bg-white rounded-lg shadow-xl border"
-                style={{ borderColor: "var(--mist)" }}
+                className="absolute top-14 left-3 z-50 w-[88vw] md:w-[420px] bg-white rounded-lg shadow-xl border border-purple-200"
                 tabIndex={-1}
                 ref={dashboardRef}
                 onKeyDown={(e) => {
@@ -158,15 +157,21 @@ export default function BelowMap() {
                     <div className="flex flex-col items-center justify-center gap-3 py-4">
                       <button
                         className="font-seasons rounded-md px-4 py-3 w-3/4"
-                        style={{ background: "var(--kashmir-blue)", color: "var(--white-soft)", boxShadow: "0 6px 16px var(--mist)" }}
-                        onClick={() => setDashboardMode("guest")}
+                        style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
+                        onClick={() => {
+                          setDashboardOpen(false);
+                          router.push("/participate");
+                        }}
                       >
-                        Start Your River
+                        Start Your Boat
                       </button>
                       <button
                         className="font-seasons rounded-md px-4 py-3 w-3/4"
-                        style={{ background: "var(--kashmir-blue)", color: "var(--white-soft)", boxShadow: "0 6px 16px var(--mist)" }}
-                        onClick={() => setDashboardMode("guest")}
+                        style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
+                        onClick={() => {
+                          setDashboardOpen(false);
+                          router.push("/participate");
+                        }}
                       >
                         Resume Your River
                       </button>
@@ -174,11 +179,11 @@ export default function BelowMap() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--mist)" }}>
-                      <h3 className="font-semibold" style={{ color: "var(--ink)" }}>Dashboard</h3>
-                      <button aria-label="Close dashboard" onClick={() => setDashboardOpen(false)} style={{ color: "var(--ink-2)" }}>✕</button>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-purple-100">
+                      <h3 className="text-purple-900 font-semibold">Dashboard</h3>
+                      <button aria-label="Close dashboard" onClick={() => setDashboardOpen(false)} className="text-purple-800">✕</button>
                     </div>
-                    <div className="p-4 text-sm" style={{ color: "var(--ink)" }}>
+                    <div className="p-4 text-sm text-purple-900/80">
                       <DashboardContent mode={dashboardMode} onAuthenticated={() => setDashboardMode("user")} />
                     </div>
                   </>
@@ -190,8 +195,7 @@ export default function BelowMap() {
                 id="panel-leaderboard"
                 role="dialog"
                 aria-modal="true"
-                className="absolute top-14 right-3 z-50 w-[88vw] md:w-[420px] bg-white rounded-lg shadow-xl border"
-                style={{ borderColor: "var(--mist)" }}
+                className="absolute top-14 right-3 z-50 w-[88vw] md:w-[420px] bg-white rounded-lg shadow-xl border border-purple-200"
                 tabIndex={-1}
                 ref={leaderboardRef}
                 onKeyDown={(e) => {
@@ -206,7 +210,7 @@ export default function BelowMap() {
                 <div className="p-6" style={{ color: "var(--ink)" }}>
                   <div className="text-center mb-4">
                     <div className="font-seasons text-2xl mb-1">Total Boats</div>
-                    <div className="text-4xl font-bold" style={{ color: "var(--kashmir-blue)" }}>{globalBoats ?? "—"}</div>
+                    <div className="text-4xl font-bold" style={{ color: "var(--teal)" }}>{globalBoats ?? "—"}</div>
                   </div>
                   <ol className="space-y-2">
                     {top5.map((row, idx) => {
@@ -232,7 +236,7 @@ export default function BelowMap() {
                               <div className="text-xs" style={{ color: 'var(--ink-2)' }}>{row.country_code}</div>
                             </div>
                           </div>
-                          <div className="font-bold" style={{ color: 'var(--kashmir-blue)' }}>{row.boats_total}</div>
+                          <div className="font-bold" style={{ color: 'var(--teal)' }}>{row.boats_total}</div>
                         </li>
                       );
                     })}

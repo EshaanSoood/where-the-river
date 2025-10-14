@@ -100,7 +100,7 @@ const GlobeComponent: React.FC = () => {
     // Ocean sphere (simplified)
     const oceanGeometry = new THREE.IcosahedronGeometry(globeRadius - 0.5, 30);
     const oceanMaterial = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--horizon').trim() || '#5e85a4'),
+        color: 0x1e90ff,
         roughness: 0.9,
         metalness: 0.1,
         transparent: true,
@@ -151,7 +151,7 @@ const GlobeComponent: React.FC = () => {
     };
     
     const renderWorldFromGeoJson = (geoJson: FeatureCollection) => {
-        const landMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--waikawa-gray').trim() || '#6672a0'), roughness: 0.8 });
+        const landMaterial = new THREE.MeshStandardMaterial({ color: 0xffc700, roughness: 0.8 });
 
         const createLandMesh = (polygon: number[][][], elevation: number) => {
             if (!polygon || polygon.length === 0) return null;
@@ -499,8 +499,7 @@ const GlobeComponent: React.FC = () => {
       {isFullscreen && (
         <div className="fixed inset-0 z-[60] bg-white">
           <button
-            className="absolute top-3 right-3 z-[70] px-3 py-2 rounded-md bg-white/90 shadow border"
-            style={{ borderColor: 'var(--mist)', color: 'var(--ink)' }}
+            className="absolute top-3 right-3 z-[70] px-3 py-2 rounded-md bg-white/90 shadow border border-purple-200 text-purple-900"
             aria-label="Close fullscreen globe"
             onClick={() => setIsFullscreen(false)}
           >
