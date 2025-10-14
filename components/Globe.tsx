@@ -5,9 +5,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as topojson from 'topojson-client';
 import type { FeatureCollection } from '../types';
+import { fetchGlobeData } from '@/lib/globeData';
 
 const GlobeComponent: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
+  const overlaySvgRef = useRef<SVGSVGElement | null>(null);
+  const debugRef = useRef<HTMLDivElement | null>(null);
+  const nodeElementMapRef = useRef<Record<string, { g: SVGGElement | null; circle: SVGCircleElement | null; text: SVGTextElement | null }>>({});
   const lastTapRef = useRef<number>(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [tooltip, setTooltip] = useState<{
@@ -15,6 +19,14 @@ const GlobeComponent: React.FC = () => {
     x: number;
     y: number;
   }>({ content: null, x: 0, y: 0 });
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const nodesRef = useRef<{ id: string; name: string; countryCode: string; lat: number; lng: number }[]>([]);
+  const linksRef = useRef<{ source: string; target: string }[]>([]);
+  const countersRef = useRef<{ fetched: number; drawnNodes: number; drawnEdges: number; missingCentroid: number }>({ fetched: 0, drawnNodes: 0, drawnEdges: 0, missingCentroid: 0 });
+  const [overlay, setOverlay] = useState<{
+    nodes: { id: string; name: string; countryCode: string; lat: number; lng: number }[];
+    links: { source: string; target: string }[];
+  }>({ nodes: [], links: [] });
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -47,6 +59,12 @@ const GlobeComponent: React.FC = () => {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(initialWidth, initialHeight);
     mount.appendChild(renderer.domElement);
+    // Accessibility: treat globe as decorative to avoid trapping focus
+    try {
+      renderer.domElement.setAttribute('aria-hidden', 'true');
+      renderer.domElement.setAttribute('role', 'presentation');
+      renderer.domElement.setAttribute('tabindex', '-1');
+    } catch {}
     
     // Lighting
     scene.add(new THREE.AmbientLight(0xffffff, 0.9));
@@ -82,7 +100,7 @@ const GlobeComponent: React.FC = () => {
     // Ocean sphere (simplified)
     const oceanGeometry = new THREE.IcosahedronGeometry(globeRadius - 0.5, 30);
     const oceanMaterial = new THREE.MeshStandardMaterial({
-        color: 0x1e90ff,
+        color: new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--horizon').trim() || '#5e85a4'),
         roughness: 0.9,
         metalness: 0.1,
         transparent: true,
@@ -133,7 +151,7 @@ const GlobeComponent: React.FC = () => {
     };
     
     const renderWorldFromGeoJson = (geoJson: FeatureCollection) => {
-        const landMaterial = new THREE.MeshStandardMaterial({ color: 0xffc700, roughness: 0.8 });
+        const landMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--waikawa-gray').trim() || '#6672a0'), roughness: 0.8 });
 
         const createLandMesh = (polygon: number[][][], elevation: number) => {
             if (!polygon || polygon.length === 0) return null;
@@ -217,6 +235,81 @@ const GlobeComponent: React.FC = () => {
     };
 
     loadAndDrawGlobe();
+
+    const projectLatLngToScreen = (lat: number, lon: number) => {
+      const vec = latLonToVector3(lat, lon, globeRadius + 2.0);
+      const surfaceNormal = vec.clone().normalize();
+      const toCameraVector = new THREE.Vector3().subVectors(camera.position, vec).normalize();
+      const facing = surfaceNormal.dot(toCameraVector) > 0.0;
+      const { width, height } = getContainerSize();
+      const projected = vec.clone().project(camera);
+      const x = (projected.x * 0.5 + 0.5) * width;
+      const y = (-projected.y * 0.5 + 0.5) * height;
+      return { x, y, facing };
+    };
+
+    const updateOverlayPositions = () => {
+      const svg = overlaySvgRef.current;
+      if (!svg) return;
+      const nodes = nodesRef.current;
+      const links = linksRef.current;
+      let drawnNodes = 0;
+      let drawnEdges = 0;
+      const missingCentroid = 0;
+
+      // Edges
+      const edgeLayer = svg.querySelector('#edges') as SVGGElement | null;
+      if (edgeLayer) {
+        while (edgeLayer.firstChild) edgeLayer.removeChild(edgeLayer.firstChild);
+        links.forEach((l) => {
+          const a = nodes.find((n) => n.id === l.source);
+          const b = nodes.find((n) => n.id === l.target);
+          if (!a || !b) return;
+          const pa = projectLatLngToScreen(a.lat, a.lng);
+          const pb = projectLatLngToScreen(b.lat, b.lng);
+          if (!pa.facing || !pb.facing) return;
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', String(pa.x));
+          line.setAttribute('y1', String(pa.y));
+          line.setAttribute('x2', String(pb.x));
+          line.setAttribute('y2', String(pb.y));
+          line.setAttribute('stroke', 'rgba(0,0,0,0.25)');
+          line.setAttribute('stroke-width', '1');
+          line.setAttribute('vector-effect', 'non-scaling-stroke');
+          edgeLayer.appendChild(line);
+          drawnEdges++;
+        });
+      }
+
+      // Nodes + labels
+      nodes.forEach((n) => {
+        const ent = nodeElementMapRef.current[n.id];
+        if (!ent || !ent.circle || !ent.text || !ent.g) return;
+        const p = projectLatLngToScreen(n.lat, n.lng);
+        if (!p.facing) {
+          ent.g.setAttribute('display', 'none');
+          return;
+        }
+        ent.g.removeAttribute('display');
+        ent.circle.setAttribute('cx', String(p.x));
+        ent.circle.setAttribute('cy', String(p.y));
+        ent.text.setAttribute('x', String(p.x));
+        ent.text.setAttribute('y', String(p.y + 10));
+        drawnNodes++;
+      });
+
+      countersRef.current = {
+        fetched: nodes.length,
+        drawnNodes,
+        drawnEdges,
+        missingCentroid,
+      };
+
+      if (debugRef.current) {
+        const c = countersRef.current;
+        debugRef.current.textContent = `profiles fetched: ${c.fetched}, nodes drawn: ${c.drawnNodes}, edges: ${c.drawnEdges}` + (c.missingCentroid ? `, missing centroid: ${c.missingCentroid}` : '');
+      }
+    };
     
     // No boat in simplified look
 
@@ -241,7 +334,24 @@ const GlobeComponent: React.FC = () => {
 
             if (dotProduct > 0.1) {
               const countryName = countryIntersect.object.userData.countryName;
-              setTooltip({ content: countryName, x: event.clientX, y: event.clientY });
+              const { width, height } = getContainerSize();
+              const offset = 12;
+              let tipW = 120;
+              let tipH = 28;
+              if (tooltipRef.current) {
+                const bb = tooltipRef.current.getBoundingClientRect();
+                if (bb.width) tipW = Math.ceil(bb.width);
+                if (bb.height) tipH = Math.ceil(bb.height);
+              }
+              let x = event.clientX - rect.left + offset;
+              let y = event.clientY - rect.top + offset;
+              x = Math.min(Math.max(0, x), Math.max(0, width - tipW - 1));
+              y = Math.min(Math.max(0, y), Math.max(0, height - tipH - 1));
+              setTooltip({
+                content: countryName,
+                x,
+                y,
+              });
               mount.style.cursor = 'pointer';
               return;
             }
@@ -277,6 +387,7 @@ const GlobeComponent: React.FC = () => {
       clouds2.rotation.x += delta * 0.002;
       controls.update();
       renderer.render(scene, camera);
+      if (nodesRef.current.length > 0) updateOverlayPositions();
     };
     animate();
 
@@ -321,35 +432,92 @@ const GlobeComponent: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const isDebug = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
+    fetchGlobeData('all')
+      .then(({ nodes, links }) => {
+        if (cancelled) return;
+        const n = nodes && nodes.length ? nodes : [{ id: 'test', name: 'Test Node', countryCode: 'ZZ', lat: 0, lng: 0 }];
+        nodesRef.current = n;
+        linksRef.current = links || [];
+        setOverlay({ nodes: n, links: links || [] });
+        if (isDebug && debugRef.current) {
+          const c = countersRef.current;
+          debugRef.current.textContent = `profiles fetched: ${n.length}, nodes drawn: ${c.drawnNodes}, edges: ${c.drawnEdges}`;
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const n = [{ id: 'test', name: 'Test Node', countryCode: 'ZZ', lat: 0, lng: 0 }];
+        nodesRef.current = n;
+        linksRef.current = [];
+        setOverlay({ nodes: n, links: [] });
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <>
       {/* Normal placement: fills parent container */}
       {!isFullscreen && (
-        <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
+        <div className="relative" style={{ width: '100%', height: '100%' }}>
+          <div ref={mountRef} style={{ position: 'absolute', inset: 0 }} />
+          <svg ref={overlaySvgRef} aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+            <g id="edges" />
+            <g id="nodes">
+              {overlay.nodes.map((n) => (
+                <g key={n.id} ref={(el) => {
+                  if (!nodeElementMapRef.current[n.id]) nodeElementMapRef.current[n.id] = { g: null, circle: null, text: null };
+                  if (nodeElementMapRef.current[n.id]) nodeElementMapRef.current[n.id].g = el;
+                }}>
+                  <circle ref={(el) => {
+                    const slot = nodeElementMapRef.current[n.id];
+                    if (slot) slot.circle = el;
+                  }} r={3.5} fill="var(--teal)" stroke="#fff" strokeWidth={1} style={{ pointerEvents: 'auto' }} tabIndex={0} aria-label={`${n.name}, from ${n.countryCode}`} />
+                  <text ref={(el) => {
+                    const slot = nodeElementMapRef.current[n.id];
+                    if (slot) slot.text = el;
+                  }} textAnchor="middle" fontSize={10} style={{ paintOrder: 'stroke', stroke: 'rgba(255,255,255,0.9)', strokeWidth: 3, fill: 'var(--ink)', pointerEvents: 'none' }}>{n.name}</text>
+                </g>
+              ))}
+            </g>
+          </svg>
+          <div ref={debugRef} style={{ position: 'absolute', top: 6, left: 6, fontSize: 11, background: 'rgba(255,255,255,0.8)', padding: '2px 6px', borderRadius: 4, color: 'var(--ink)', display: (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1') ? 'block' : 'none', pointerEvents: 'none' }} />
+          {tooltip.content && (
+            <div
+              ref={tooltipRef}
+              className="absolute bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md shadow-lg pointer-events-none"
+              style={{ top: `${tooltip.y}px`, left: `${tooltip.x}px`, zIndex: 30 }}
+            >
+              <p className="font-mono text-sm text-gray-800">{tooltip.content}</p>
+            </div>
+          )}
+        </div>
       )}
       {/* Fullscreen overlay on mobile double-tap (or double-click) */}
       {isFullscreen && (
         <div className="fixed inset-0 z-[60] bg-white">
-            <button
-            className="absolute top-3 right-3 z-[70] px-3 py-2 rounded-md bg-white/90 shadow border border-purple-200 text-purple-900"
+          <button
+            className="absolute top-3 right-3 z-[70] px-3 py-2 rounded-md bg-white/90 shadow border"
+            style={{ borderColor: 'var(--mist)', color: 'var(--ink)' }}
             aria-label="Close fullscreen globe"
             onClick={() => setIsFullscreen(false)}
-            >
+          >
             Close
-            </button>
-          <div ref={mountRef} className="relative w-full h-full" />
-        </div>
-      )}
-      {tooltip.content && (
-        <div 
-          className="absolute bg-white/80 backdrop-blur-sm p-3 rounded-md shadow-lg pointer-events-none transition-opacity duration-300"
-          style={{
-            top: `${tooltip.y}px`,
-            left: `${tooltip.x}px`,
-            transform: 'translate(15px, -30px)'
-          }}
-        >
-          <p className="font-mono font-bold text-lg text-gray-800">{tooltip.content}</p>
+          </button>
+          <div className="relative w-full h-full">
+            <div ref={mountRef} className="absolute inset-0" />
+            {tooltip.content && (
+              <div
+                ref={tooltipRef}
+                className="absolute bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md shadow-lg pointer-events-none"
+                style={{ top: `${tooltip.y}px`, left: `${tooltip.x}px`, zIndex: 70 }}
+              >
+                <p className="font-mono text-sm text-gray-800">{tooltip.content}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </>

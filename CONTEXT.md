@@ -7,16 +7,18 @@ Purpose: This file helps the AI assistant instantly pick up where we left off.
 - Supabase client via `lib/supabaseClient.ts` (client-side helper `getSupabase`).
 - Pages:
   - `/` landing (marketing) + Globe component (Three.js)
-  - `/participate` (magic link OTP; country-only form)
-  - `/dashboard` (badge placeholder)
+  - `/participate` (magic link OTP)
+  - `/dashboard` (overlay panel; auth-aware)
   - `/r/[referral]` (referral landing)
   - `/admin` (placeholder)
 - API:
   - `app/api/referral/route.ts` (basic referral creation placeholder)
   - `app/api/users/check/route.ts` (check by email)
   - `app/api/users/upsert/route.ts` (create/update with `country_code`)
-- DB scaffolding: `db/schema.sql` (users, referrals, leaderboard) – to run in Supabase SQL editor.
-  - Added `country_code CHAR(2) not null`; `city` deprecated.
+  - `app/api/my-referral-link/route.ts` (scaffold; will return share URL when auth wired)
+- DB:
+  - Legacy: `db/schema.sql` (deprecated scaffold)
+  - New: `supabase/migrations/*` implements `public.profiles`, `public.referral_awards`, RLS, RPC `finalize_join`, referral code generator/triggers, and seed
 - Analytics: Plausible via `app/providers.tsx`.
 
 ## Env Vars Needed
@@ -24,38 +26,41 @@ Purpose: This file helps the AI assistant instantly pick up where we left off.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` (server-only)
 - `PLAUSIBLE_DOMAIN`
+- `PUBLIC_APP_BASE_URL` (e.g., `https://riverflowseshaan.vercel.app`)
 
 Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
 
 ## Open Threads / Next Actions
-- Implement RLS and finalize schema for `users`, `referrals`, `leaderboard`.
-- Auth flow: after magic link, collect name/country/message/photo; upsert user and generate `referral_id`.
-- Referral attribution: read inviter token from `/r/[referral]`, store as `referred_by` when signing up.
-- Dashboard: show counts, share panel, generate share URL `/r/[id]`.
-- Leaderboard + map enhancements per PRD.
-- Admin panel: moderation, exports, flags.
+- Wire `/api/my-referral-link` to authenticated user and return `${PUBLIC_APP_BASE_URL || stable}/r/<referral_code>`
+- Add `/r/[referral]` landing + attribution on signup (`parent_user_id`)
+- Dashboard: counts, share panel, copy/share; call `finalize_join` after verification
+- Leaderboard + map enhancements per PRD
+- Admin panel: moderation, exports, flags
 
 ## Decisions So Far
 - Stack: Next.js 15, Tailwind v4, Supabase, Plausible. Three.js for globe (OrbitControls), TopoJSON for world data.
 - Safe client init: `getSupabase()` avoids build-time crash if envs absent.
 - Turbopack used for dev/build; workspace root warning acceptable for now.
-- Globe now uses Three.js (glass ocean, rotating clouds, extruded land, animated river tubes, markers, boat). Double‑tap (mobile) or double‑click toggles fullscreen globe overlay.
+- Globe now uses Three.js (blue ocean, amber extruded land, dual cloud layers). Double‑tap (mobile) or double‑click toggles fullscreen; aria-hidden to avoid focus trap; tooltip follows cursor.
 - Country-only geography; ISO-2 required; pins jittered within country centroid.
 
 ## Today’s Changes
-- Replaced D3 canvas globe with Three.js implementation from local prototype; integrated exactly, no extra files.
-- Layout overhaul (`components/BelowMap.tsx`):
-  - Desktop: 25px global side padding; Dashboard (top-left) and Leaderboard (top-right) chips above the centered globe; 15px gap below globe, then two columns (left text/Hero, right Bandcamp).
-  - Mobile: Globe dominates; top-left/right hamburger chips for Dashboard/Leaderboard open as overlay panels with shadow and close; double‑tap globe for fullscreen overlay with close; below globe, heading/text then Bandcamp.
-- Globe enhancements (`components/Globe.tsx`): fullscreen overlay behavior; tooltips on country hover; OrbitControls with auto-rotate.
-- Added `web/types.ts` for GeoJSON typings.
-- Dependencies: added `three`, `topojson-client`; dev types `@types/three`, `@types/topojson-client`.
+- Colors (`app/globals.css`): palette aligned to new CSS (kept Typekit). `--teal` is `#135E66`, `--aqua` is `#2AA7B5`. Global link color uses `var(--aqua)`.
+- Hero/layout (`components/BelowMap.tsx`):
+  - Consolidated controls to page corners: top-left shows Dashboard when logged-in, Participate/Login when logged-out; top-right shows Leaderboard (collapsed by default). Removed rim-adjacent buttons to avoid overlapping the globe.
+  - Ensured globe sits centered on its own layer; controls are outside canvas hit area. Retain two-column layout: left text (`Hero`), right Bandcamp embed.
+  - Exactly one H1 remains via `Hero`; headings maintain proper hierarchy.
+- Globe (`components/Globe.tsx`): marked canvas as decorative (`aria-hidden`, `role=presentation`, `tabindex=-1`) to prevent focus trapping; retains visuals and tooltips.
+- Globe overlay: lightweight SVG layer for nodes, labels, and straight edges. Overlay now renders from React state (post-fetch) with refs for per-frame positioning. Fallback “Test Node” when dataset empty. Debug overlay via `?debug=1` shows counts (profiles, nodes, edges).
+- Cleanup: pruned unused rim controls; kept referral/auth logic intact. Identified unused placeholders (`DesktopSidebar.tsx`, `AlbumPlayer.tsx`) for removal when safe.
+- DB (Supabase): unchanged.
+- API: unchanged (`/api/my-referral-link` wiring still pending).
 
 ## Deployment
 - Vercel project linked: `riverflows` (org: eshaans-projects-d91d58e1)
-- Deployed directly from local (no git push):
-  - Live URL: https://riverflows-7fkwo9qch-eshaans-projects-d91d58e1.vercel.app
-  - CLI: `vercel pull --yes --environment=production && vercel build --prod && vercel deploy --prebuilt --prod`
+- Stable domain: `https://riverflowseshaan.vercel.app` (alias)
+ - Latest Production: `https://riverflows-oyhlljgwr-eshaans-projects-d91d58e1.vercel.app` (current)
+- CLI flow: `vercel --prod --yes` then `vercel alias set <prod_url> riverflowseshaan.vercel.app`
 
 ## Useful Commands
 - Dev: `npm run dev` (in `web/`)

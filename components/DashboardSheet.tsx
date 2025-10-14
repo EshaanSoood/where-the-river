@@ -7,6 +7,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   isLoggedIn?: boolean;
+  mode?: "guest" | "user";
 };
 
 type Step =
@@ -25,14 +26,14 @@ type Profile = {
   referral_id: string;
 };
 
-export default function DashboardSheet({ open, onClose }: Props) {
+export default function DashboardSheet({ open, onClose, mode = "guest" }: Props) {
   const [step, setStep] = useState<Step>("home");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [country, setCountry] = useState("");
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [userMessage, setUserMessage] = useState("");
+  const [favoriteSong, setFavoriteSong] = useState("");
+  const [boatColor, setBoatColor] = useState<string>("#466e91");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
@@ -46,8 +47,15 @@ export default function DashboardSheet({ open, onClose }: Props) {
       setCode("");
       setAlert(null);
       setProfile(null);
+      return;
     }
-  }, [open]);
+    // Initialize step based on desired mode
+    if (mode === "user") {
+      setStep("login_email");
+    } else {
+      setStep("home");
+    }
+  }, [open, mode]);
 
   useEffect(() => {
     if (!open) return;
@@ -89,6 +97,7 @@ export default function DashboardSheet({ open, onClose }: Props) {
                   message: j.user.message ?? null,
                   referral_id: j.user.referral_id,
                 });
+                // Stay open and switch to user mode/profile without stealing focus
                 setStep("profile");
               }
             })
@@ -145,10 +154,11 @@ export default function DashboardSheet({ open, onClose }: Props) {
           name,
           email: verifiedEmail,
           country_code: country,
-          message: userMessage,
+          message: favoriteSong,
           photo_url: null as unknown as string | null,
           referral_id: randomToken(8),
           referred_by: null as unknown as string | null,
+          boat_color: boatColor,
         };
         try {
           const res = await fetch("/api/users/upsert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -158,7 +168,7 @@ export default function DashboardSheet({ open, onClose }: Props) {
               name: json.user.name ?? name,
               email: json.user.email,
               city: json.user.city ?? null,
-              message: json.user.message ?? userMessage,
+              message: json.user.message ?? favoriteSong,
               referral_id: json.user.referral_id,
             });
             setStep("profile");
@@ -219,7 +229,7 @@ export default function DashboardSheet({ open, onClose }: Props) {
       <div className="absolute inset-0 flex items-start justify-start">
         <div
           className="relative w-full h-full lg:w-[360px] lg:h-screen rounded-none lg:rounded-none shadow-lg"
-          style={{ background: "var(--parchment)" }}
+          style={{ background: "var(--mist)" }}
         >
           {/* Close button (top-left), small italics 'x' in Seasons font and amber color */}
           <button
@@ -241,8 +251,8 @@ export default function DashboardSheet({ open, onClose }: Props) {
                     <div className="text-sm text-muted-foreground">Sign in or join without leaving the page</div>
                   </div>
                   <div className="divider-amber" />
-                  <button className="w-full rounded-md px-4 py-3 btn" onClick={() => setStep("signup_email")}>Join The Experiment</button>
-                  <button className="w-full rounded-md px-4 py-3 btn font-sans" onClick={() => setStep("login_email")}>Resume your River</button>
+                  <button className="w-full rounded-md px-4 py-3 btn" onClick={() => setStep("signup_email")}>Start Your River</button>
+                  <button className="w-full rounded-md px-4 py-3 btn font-sans" onClick={() => setStep("login_email")}>Resume Your River</button>
                 </div>
               )}
 
@@ -273,14 +283,14 @@ export default function DashboardSheet({ open, onClose }: Props) {
 
               {step === "signup_email" && (
                 <div className="col-span-4 row-span-5 space-y-3">
-                  <h2 className="font-seasons text-xl">Join The Experiment</h2>
+                  <h2 className="font-seasons text-xl" style={{ color: "var(--kashmir-blue)" }}>Start Your River</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input className="border rounded-md px-3 py-2 bg-background" placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
-                    <input className="border rounded-md px-3 py-2 bg-background" placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                    <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--kashmir-blue)" }} placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                    <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--kashmir-blue)" }} placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
                   </div>
-                  <input className="border rounded-md px-3 py-2 bg-background" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--kashmir-blue)" }} type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <select className="border rounded-md px-3 py-2 bg-background" value={country} onChange={(e) => setCountry(e.target.value)} required>
+                    <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--kashmir-blue)" }} value={country} onChange={(e) => setCountry(e.target.value)} required>
                       <option value="" disabled>Select your country</option>
                       <option value="US">United States</option>
                       <option value="GB">United Kingdom</option>
@@ -300,10 +310,41 @@ export default function DashboardSheet({ open, onClose }: Props) {
                       <option value="CN">China</option>
                       <option value="TR">Turkey</option>
                     </select>
+                    <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--kashmir-blue)" }} value={favoriteSong} onChange={(e) => setFavoriteSong(e.target.value)} required>
+                      <option value="" disabled>Favourite Song</option>
+                      <option>Mountain Muse</option>
+                      <option>Glass Blown Acquaintances</option>
+                      <option>Miss Lightning</option>
+                      <option>If Our Hearts Could Talk</option>
+                      <option>Plea For Forgiveness</option>
+                      <option>Here For A Good Time</option>
+                      <option>Hexes and Spells</option>
+                      <option>Sailing Through Dream River</option>
+                    </select>
                   </div>
-                  <input className="border rounded-md px-3 py-2 bg-background" type="file" accept="image/*" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPhoto(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
-                  <textarea className="border rounded-md px-3 py-2 bg-background" rows={3} placeholder="Message (optional)" value={userMessage} onChange={(e) => setUserMessage(e.target.value)} />
-                  <button className="w-full rounded-md px-4 py-3 btn" disabled={loading || !firstName || !lastName || !email || !country} onClick={sendOtp}>{loading ? "Sending..." : "Send Code"}</button>
+                  <section aria-label="Choose your boat" className="mt-2">
+                    <h3 className="font-seasons text-lg mb-2" style={{ color: "var(--kashmir-blue)" }}>Choose your boat</h3>
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-full size-16 flex items-center justify-center border"
+                        style={{ background: "var(--white-soft)", borderColor: "var(--mist)" }}
+                        aria-label="Boat preview"
+                      >
+                        {/* Placeholder circle with boat icon; tint via boatColor */}
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M3 15l9-9 9 9-9 3-9-3z" fill={boatColor} />
+                        </svg>
+                      </div>
+                      <input
+                        type="color"
+                        aria-label="Boat color"
+                        value={boatColor}
+                        onChange={(e) => setBoatColor(e.target.value)}
+                        className="h-10 w-10 rounded-full border"
+                        style={{ borderColor: "var(--mist)", background: "var(--white-soft)" }}
+                      />
+                    </div>
+                  </section>
+                  <button className="w-full rounded-md px-4 py-3 btn font-seasons" disabled={loading || !firstName || !lastName || !email || !country || !favoriteSong} onClick={sendOtp}>{loading ? "Sending..." : "Send Code"}</button>
                   {alert && <p className="text-sm">{alert}</p>}
                   <button className="text-sm underline" onClick={() => setStep("home")}>Back</button>
                 </div>

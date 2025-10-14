@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
     const { data, error } = await supabaseServer
       .from("users")
-      .select("id,name,email,city,message,referral_id,country_code")
+      .select("id,name,email,city,message,referral_id,country_code,boat_color")
       .eq("email", email)
       .maybeSingle();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

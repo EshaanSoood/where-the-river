@@ -4,7 +4,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, email, country_code, message, photo_url, referral_id, referred_by } = body || {};
+    const { name, email, country_code, message, photo_url, referral_id, referred_by, boat_color } = body || {};
     if (!email || !country_code || !referral_id) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
     const { data, error } = await supabaseServer
@@ -19,6 +19,7 @@ export async function POST(req: Request) {
           referral_id,
           referred_by: referred_by ?? null,
           otp_verified: true,
+          boat_color: boat_color ?? null,
         },
         { onConflict: "email" }
       )
