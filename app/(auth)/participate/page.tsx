@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
+import { fetchCountries110m, type Country } from "@/lib/countries";
 
 export default function ParticipatePage() {
   const router = useRouter();
@@ -16,6 +17,13 @@ export default function ParticipatePage() {
   const [step, setStep] = useState<"email" | "code" | "done">("email");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [countries, setCountries] = useState<Country[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchCountries110m().then((list) => { if (isMounted) setCountries(list); }).catch(() => setCountries([]));
+    return () => { isMounted = false; };
+  }, []);
 
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -133,23 +141,9 @@ export default function ParticipatePage() {
                 required
               >
                 <option value="" disabled>Select your country</option>
-                <option value="US">United States</option>
-                <option value="GB">United Kingdom</option>
-                <option value="CA">Canada</option>
-                <option value="IN">India</option>
-                <option value="AU">Australia</option>
-                <option value="DE">Germany</option>
-                <option value="FR">France</option>
-                <option value="ES">Spain</option>
-                <option value="IT">Italy</option>
-                <option value="BR">Brazil</option>
-                <option value="SG">Singapore</option>
-                <option value="ZA">South Africa</option>
-                <option value="NG">Nigeria</option>
-                <option value="MX">Mexico</option>
-                <option value="JP">Japan</option>
-                <option value="CN">China</option>
-                <option value="TR">Turkey</option>
+                {countries.map((c) => (
+                  <option key={c.name} value={c.name}>{c.name}</option>
+                ))}
               </select>
             </div>
           </div>

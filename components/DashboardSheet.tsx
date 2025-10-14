@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabaseClient";
+import { fetchCountries110m, type Country } from "@/lib/countries";
 
 type Props = {
   open: boolean;
@@ -39,6 +40,7 @@ export default function DashboardSheet({ open, onClose, mode = "guest" }: Props)
   const [alert, setAlert] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [countries, setCountries] = useState<Country[]>([]);
 
   useEffect(() => {
     if (!open) {
@@ -56,6 +58,12 @@ export default function DashboardSheet({ open, onClose, mode = "guest" }: Props)
       setStep("home");
     }
   }, [open, mode]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchCountries110m().then((list) => { if (isMounted) setCountries(list); }).catch(() => setCountries([]));
+    return () => { isMounted = false; };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -292,23 +300,9 @@ export default function DashboardSheet({ open, onClose, mode = "guest" }: Props)
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={country} onChange={(e) => setCountry(e.target.value)} required>
                       <option value="" disabled>Select your country</option>
-                      <option value="US">United States</option>
-                      <option value="GB">United Kingdom</option>
-                      <option value="CA">Canada</option>
-                      <option value="IN">India</option>
-                      <option value="AU">Australia</option>
-                      <option value="DE">Germany</option>
-                      <option value="FR">France</option>
-                      <option value="ES">Spain</option>
-                      <option value="IT">Italy</option>
-                      <option value="BR">Brazil</option>
-                      <option value="SG">Singapore</option>
-                      <option value="ZA">South Africa</option>
-                      <option value="NG">Nigeria</option>
-                      <option value="MX">Mexico</option>
-                      <option value="JP">Japan</option>
-                      <option value="CN">China</option>
-                      <option value="TR">Turkey</option>
+                      {countries.map((c) => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
                     </select>
                     <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={favoriteSong} onChange={(e) => setFavoriteSong(e.target.value)} required>
                       <option value="" disabled>Favourite Song</option>

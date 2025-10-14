@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
+import { fetchCountries110m, type Country } from "@/lib/countries";
 import { useUser } from "@/hooks/useUser";
 import Hero from "@/components/Hero";
 import BandcampEmbed from "@/components/BandcampEmbed";
@@ -23,12 +24,15 @@ export default function BelowMap() {
   const [code, setCode] = useState("");
   const [uiLoading, setUiLoading] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
+  const [countries, setCountries] = useState<Country[]>([]);
 
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [globalBoats, setGlobalBoats] = useState<number | null>(null);
   const [top5, setTop5] = useState<{ first_name: string; country_code: string; boats_total: number }[]>([]);
   const [dashboardMode, setDashboardMode] = useState<"guest" | "user">("guest");
+  const [userProfile, setUserProfile] = useState<{ name: string | null; country_code: string | null; message: string | null; boat_color: string | null } | null>(null);
+  const [boatsTotal, setBoatsTotal] = useState<number>(0);
   const dashboardRef = useRef<HTMLDivElement | null>(null);
   const leaderboardRef = useRef<HTMLDivElement | null>(null);
   const { user, loading } = useUser();
@@ -54,6 +58,33 @@ export default function BelowMap() {
       })
       .catch(() => setGlobalBoats(null));
   }, [leaderboardOpen]);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchCountries110m().then((list) => { if (isMounted) setCountries(list); }).catch(() => setCountries([]));
+    return () => { isMounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!dashboardOpen || dashboardMode !== 'user' || !user?.email) return;
+    try {
+      fetch('/api/users/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email }) })
+        .then((r) => r.json())
+        .then((j) => {
+          if (j?.user) {
+            setUserProfile({
+              name: j.user.name ?? null,
+              country_code: j.user.country_code ?? null,
+              message: j.user.message ?? null,
+              boat_color: j.user.boat_color ?? null,
+            });
+          }
+        })
+        .catch(() => {});
+      // TODO: If needed, fetch boats_total from a profiles endpoint; default to 0 for now
+      setBoatsTotal((v) => v || 0);
+    } catch {}
+  }, [dashboardOpen, dashboardMode, user?.email]);
 
   const trapFocus = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Tab") return;
@@ -195,23 +226,9 @@ export default function BelowMap() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={country} onChange={(e) => setCountry(e.target.value)} required>
                             <option value="" disabled>Select your country</option>
-                            <option value="US">United States</option>
-                            <option value="GB">United Kingdom</option>
-                            <option value="CA">Canada</option>
-                            <option value="IN">India</option>
-                            <option value="AU">Australia</option>
-                            <option value="DE">Germany</option>
-                            <option value="FR">France</option>
-                            <option value="ES">Spain</option>
-                            <option value="IT">Italy</option>
-                            <option value="BR">Brazil</option>
-                            <option value="SG">Singapore</option>
-                            <option value="ZA">South Africa</option>
-                            <option value="NG">Nigeria</option>
-                            <option value="MX">Mexico</option>
-                            <option value="JP">Japan</option>
-                            <option value="CN">China</option>
-                            <option value="TR">Turkey</option>
+                            {countries.map((c) => (
+                              <option key={c.name} value={c.name}>{c.name}</option>
+                            ))}
                           </select>
                           <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={favoriteSong} onChange={(e) => setFavoriteSong(e.target.value)} required>
                             <option value="" disabled>Favourite Song</option>
@@ -400,8 +417,64 @@ export default function BelowMap() {
                       <h3 className="text-purple-900 font-semibold">Dashboard</h3>
                       <button aria-label="Close dashboard" onClick={() => setDashboardOpen(false)} className="text-purple-800">✕</button>
                     </div>
-                    <div className="p-4 text-sm text-purple-900/80">
-                      <DashboardContent mode={dashboardMode} onAuthenticated={() => setDashboardMode("user")} />
+                    <div className="p-4">
+                      <div className="space-y-4 md:space-y-5">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="w-14 h-14 rounded-full overflow-hidden border" style={{ borderColor: 'var(--mist)' }} aria-label="Boat badge">
+                            <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--white-soft)' }}>
+                              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M3 15l9-9 9 9-9 3-9-3z" fill={userProfile?.boat_color || '#135E66'} />
+                              </svg>
+                            </div>
+                          </div>
+                          <div className="flex flex-col leading-tight">
+                            <div className="font-seasons text-lg md:text-xl">{(userProfile?.name || user?.email || '').split(' ')[0] || 'Friend'}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-sans font-extrabold text-base md:text-lg">{boatsTotal}</span>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[color:var(--ink-2)]">
+                                <path d="M3 15l9-9 9 9-9 3-9-3z" fill="currentColor" />
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="font-sans text-sm md:text-base">Country : {userProfile?.country_code || '—'}</div>
+
+                        <div className="font-seasons text-base md:text-lg">{userProfile?.message || '—'}</div>
+
+                        <div className="space-y-2">
+                          <button className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons" aria-label="Share Your Boat">
+                            Share Your Boat
+                          </button>
+                          <div className="font-sans text-xs md:text-sm opacity-80">
+                            Share your boat using this button to extend your river.
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="font-seasons text-base md:text-lg">Stream The Album</div>
+                          <div className="mt-2 flex items-center gap-4 md:gap-6 flex-wrap">
+                            <div className="h-6 md:h-7 flex items-center" aria-label="Spotify">
+                              <span className="font-sans text-sm">Spotify</span>
+                            </div>
+                            <div className="h-6 md:h-7 flex items-center" aria-label="Apple Music">
+                              <span className="font-sans text-sm">Apple Music</span>
+                            </div>
+                            <div className="h-6 md:h-7 flex items-center" aria-label="YouTube Music">
+                              <span className="font-sans text-sm">YouTube Music</span>
+                            </div>
+                            <div className="h-6 md:h-7 flex items-center" aria-label="Amazon Music">
+                              <span className="font-sans text-sm">Amazon Music</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <button className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons" aria-label="Redeem Rewards">
+                            Redeem Rewards
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}
