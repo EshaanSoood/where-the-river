@@ -10,7 +10,7 @@ import BandcampEmbed from "@/components/BandcampEmbed";
 import dynamic from "next/dynamic";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 
-const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
+  const Globe = dynamic(() => import("@/components/GlobeRG"), { ssr: false });
 
 export default function BelowMap() {
   const router = useRouter();
@@ -165,8 +165,10 @@ export default function BelowMap() {
         {/* Centered globe with adjacent collapsible toggles */}
         <div className="mx-auto max-w-5xl">
           <div className="relative aspect-square md:aspect-[16/10]">
-            {/* Globe container: fills this box; Globe component sizes to parent */}
+            {/* Globe container: fills this box; Globe component sizes to parent */
             <div className="absolute inset-0">
+              {/* SR-only live summary for screen readers */}
+              <GlobeSummarySR />
               <Globe />
             </div>
 

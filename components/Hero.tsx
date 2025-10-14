@@ -1,7 +1,11 @@
 export default function Hero() {
   return (
     <section id="hero" className="relative max-w-2xl mx-auto p-6 space-y-4 rounded-xl">
-      <div className="absolute inset-0 rounded-xl backdrop-blur-sm" style={{ background: "var(--aqua)", opacity: 0.25 }} />
+      <div
+        className="absolute inset-0 rounded-xl backdrop-blur"
+        style={{ background: "var(--aqua)", opacity: 0.3, boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.06)" }}
+        aria-hidden="true"
+      />
       <div className="relative">
         <h1 className="text-2xl font-seasons">Where The River Flows</h1>
         <p className="italic text-sm text-muted-foreground">A social experiment to see just how connected we really are.</p>

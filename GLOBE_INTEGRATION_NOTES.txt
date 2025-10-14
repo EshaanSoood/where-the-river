@@ -1,0 +1,49 @@
+Globe integration - required changes to incorporate the new globe (with visuals)
+
+Client component integration
+- Convert the provided globe file into a pure client React component (add "use client"; remove ReactDOM.createRoot and #root mounting).
+- Export a component usable via Next dynamic import with ssr: false; render inside our existing BelowMap container, not full-screen.
+
+Container/layout
+- Replace hard-coded 100vw/100vh and black background with styles that size to the parent (absolute inset-0), preserving our overlay panels and page grid.
+- Keep the globe canvas behind UI (z-index) and aria-hidden to avoid focus traps; preserve our tooltip and dashboard/leaderboard layers.
+
+Dependencies and types
+- Add and pin: react-globe.gl, topojson-client, d3-geo (we already have three).
+- Fix any "any" types to satisfy ESLint/TS rules; avoid module-scope DOM calls to keep SSR happy.
+- Ensure proper cleanups for event listeners and scene objects to prevent leaks.
+
+Visual parity and theming
+- Map colors to our tokens: yellow/blue to --amber/--aqua (or keep new palette behind a feature flag).
+- Keep “no borders” look; ensure hover raise altitude works with our scale and shading.
+- Atmosphere/stars/comets: add to scene with mobile-safe counts; gate heavy effects behind a perf flag.
+
+Controls and gestures
+- Align zoom limits to our policy: allow ~20% zoom-in; prevent zoom-out beyond original; ensure auto-rotate pauses on user interaction and resumes after inactivity.
+- Apply touch-action: none and overscroll-behavior: contain on the globe container to block page pinch-zoom conflicts; keep our pinch fixes.
+
+Tooltip behavior
+- Unify tooltips: either keep the new globe tooltip or route hover names into our existing tooltip system.
+- Clamp tooltip to container, offset from cursor, and ensure proper z-index above the canvas but below panels.
+
+Data and layers
+- Countries: continue fetching via world-atlas; ensure low/high LOD switching works with our container scale.
+- Nodes/edges: port our SVG overlay to react-globe.gl layers (points/arcs) or keep the SVG overlay and project positions using the globe’s camera/renderer helpers.
+- Rivers on click: replace the demo click-spawn logic with data-driven paths (from our Supabase inputs) and buffer clicks behind a debug mode.
+
+Boat model/animation
+- Keep paper boat geometry/animation but permit tinting via user boat_color for per-user renderables (distinct from untinted icons in counts).
+- Ensure boats travel above land polygons (altitude) and dispose meshes on unmount.
+
+Performance safeguards
+- Lower star count and comet spawn rate on small screens; throttle animations to maintain ≥30–60fps.
+- Use requestAnimationFrame loops conservatively; reuse materials/geometries; dispose textures on cleanup.
+
+Accessibility
+- Mark decorative canvas aria-hidden, role=presentation, tabIndex=-1.
+- Preserve keyboard navigation for overlay buttons and dialogs.
+
+Build and QA
+- Add dependency installs and update lockfile; verify Turbopack build with ESLint/TS clean.
+- Cross-test desktop/mobile (pinch, rotate, tooltip, overlays); confirm no layout overflow and no scrolling issues.
+- Remove FPS/stats counter in production; show only in debug mode.
