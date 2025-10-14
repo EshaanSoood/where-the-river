@@ -7,14 +7,21 @@ export async function fetchCountries110m(): Promise<Country[]> {
   if (!res.ok) return [];
   const topo: unknown = await res.json();
   const topojson = await import('topojson-client');
-  const fc = topojson.feature(
-    topo as never,
-    (topo as { objects: { countries: unknown } }).objects.countries as never
-  ) as FeatureCollection;
+  const result = topojson.feature(
+    topo as unknown as Parameters<typeof topojson.feature>[0],
+    (topo as { objects: { countries: unknown } }).objects.countries as unknown as Parameters<typeof topojson.feature>[1]
+  ) as unknown;
 
   const names = new Set<string>();
   const countries: Country[] = [];
-  for (const f of fc.features as Feature[]) {
+  let features: Feature[] = [];
+  if (typeof result === 'object' && result !== null && 'type' in result) {
+    const r = result as { type: string; features?: Feature[] };
+    if (r.type === 'FeatureCollection' && Array.isArray(r.features)) {
+      features = r.features as Feature[];
+    }
+  }
+  for (const f of features) {
     const name = (f.properties as { name?: string } | null)?.name;
     if (name && !names.has(name)) {
       names.add(name);
