@@ -1,10 +1,11 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactGlobe from "react-globe.gl";
 import * as THREE from "three";
 import * as topojson from "topojson-client";
-import { geoCentroid } from "d3-geo";
+// import { geoCentroid } from "d3-geo";
 import { fetchGlobeData } from "@/lib/globeData";
 
 type ArcData = { startLat: number; startLng: number; endLat: number; endLng: number };
