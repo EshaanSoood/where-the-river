@@ -35,9 +35,11 @@ export default function GlobeSummarySR() {
       } catch {}
     };
 
-    // initial and every 10 minutes
+    // initial and every 10 minutes; also attempt refresh on visibility change
     compute();
     timer = window.setInterval(compute, 10 * 60 * 1000);
+    const vis = () => { if (!document.hidden) compute(); };
+    document.addEventListener('visibilitychange', vis, { passive: true });
     return () => { cancelled = true; if (timer) window.clearInterval(timer); };
   }, []);
 

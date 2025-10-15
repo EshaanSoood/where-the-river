@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
-import { fetchCountries110m, type Country } from "@/lib/countries";
+import { getIsoCountries, type IsoCountry } from "@/lib/countryList";
 import { useUser } from "@/hooks/useUser";
 import Hero from "@/components/Hero";
 import BandcampEmbed from "@/components/BandcampEmbed";
 import dynamic from "next/dynamic";
 import GlobeSummarySR from "@/components/GlobeSummarySR";
+import ShareTiles from "@/components/ShareTiles";
+import ColorChips from "@/components/ColorChips";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 
   const Globe = dynamic(() => import("@/components/GlobeRG"), { ssr: false });
@@ -25,7 +27,7 @@ export default function BelowMap() {
   const [code, setCode] = useState("");
   const [uiLoading, setUiLoading] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
-  const [countries, setCountries] = useState<Country[]>([]);
+  const [countries, setCountries] = useState<IsoCountry[]>([]);
 
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
@@ -34,6 +36,11 @@ export default function BelowMap() {
   const [dashboardMode, setDashboardMode] = useState<"guest" | "user">("guest");
   const [userProfile, setUserProfile] = useState<{ name: string | null; country_code: string | null; message: string | null; boat_color: string | null } | null>(null);
   const [boatsTotal, setBoatsTotal] = useState<number>(0);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareMessage, setShareMessage] = useState("Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I’ve been listening to Dream River by them lately and I think you’ll enjoy it too.");
+  const [referralUrl, setReferralUrl] = useState("");
+  const [userFullName, setUserFullName] = useState("");
+  const [announce, setAnnounce] = useState("");
   const dashboardRef = useRef<HTMLDivElement | null>(null);
   const leaderboardRef = useRef<HTMLDivElement | null>(null);
   const { user, loading } = useUser();
@@ -62,7 +69,10 @@ export default function BelowMap() {
 
   useEffect(() => {
     let isMounted = true;
-    fetchCountries110m().then((list) => { if (isMounted) setCountries(list); }).catch(() => setCountries([]));
+    try {
+      const list = getIsoCountries();
+      if (isMounted) setCountries(list);
+    } catch { setCountries([]); }
     return () => { isMounted = false; };
   }, []);
 
@@ -84,6 +94,18 @@ export default function BelowMap() {
         .catch(() => {});
       // TODO: If needed, fetch boats_total from a profiles endpoint; default to 0 for now
       setBoatsTotal((v) => v || 0);
+      // fetch ref_code_8 and name for share URL
+      fetch('/api/profiles/by-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email }) })
+        .then(r => r.json())
+        .then(j => {
+          if (!j?.profile) return;
+          const code = j.profile.ref_code_8;
+          const name = j.profile.name || '';
+          const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+          setReferralUrl(`${base}/?ref=${code}`);
+          setUserFullName(name);
+        })
+        .catch(() => {});
     } catch {}
   }, [dashboardOpen, dashboardMode, user?.email]);
 
@@ -165,7 +187,10 @@ export default function BelowMap() {
 
         {/* Centered globe with adjacent collapsible toggles */}
         <div className="mx-auto max-w-5xl">
-          <div className="relative aspect-square md:aspect-[16/10]">
+          <div
+            className="relative globe-container overflow-hidden"
+            style={{ height: "clamp(45vh, 60vh, 70vh)" }}
+          >
             {/* Globe container: fills this box; Globe component sizes to parent */}
             <div className="absolute inset-0">
               {/* SR-only live summary for screen readers */}
@@ -199,12 +224,15 @@ export default function BelowMap() {
                     >
                       ✕
                     </button>
-                    {guestStep === 'menu' && (
+                        {guestStep === 'menu' && (
                       <div className="flex flex-col items-center justify-center gap-3 py-4">
                         <button
                           className="font-seasons rounded-md px-4 py-3 w-3/4"
                           style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
-                          onClick={() => setGuestStep('signup_email')}
+                              onClick={() => { setGuestStep('signup_email'); setTimeout(() => {
+                                const el = document.getElementById('firstNameField');
+                                if (el) (el as HTMLInputElement).focus();
+                              }, 0); }}
                         >
                           Start Your Boat
                         </button>
@@ -218,11 +246,11 @@ export default function BelowMap() {
                       </div>
                     )}
 
-                    {guestStep === 'signup_email' && (
+                        {guestStep === 'signup_email' && (
                       <div className="space-y-3">
                         <h2 className="font-seasons text-xl" style={{ color: "var(--teal)" }}>Start Your River</h2>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                              <input id="firstNameField" className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
                           <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
                         </div>
                         <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -230,7 +258,7 @@ export default function BelowMap() {
                           <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={country} onChange={(e) => setCountry(e.target.value)} required>
                             <option value="" disabled>Select your country</option>
                             {countries.map((c) => (
-                              <option key={c.name} value={c.name}>{c.name}</option>
+                              <option key={c.code} value={c.code}>{c.name}</option>
                             ))}
                           </select>
                           <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={favoriteSong} onChange={(e) => setFavoriteSong(e.target.value)} required>
@@ -247,14 +275,12 @@ export default function BelowMap() {
                         </div>
                         <section aria-label="Choose your boat" className="mt-2">
                           <h3 className="font-seasons text-lg mb-2" style={{ color: "var(--teal)" }}>Choose your boat</h3>
-                          <div className="flex items-center gap-3">
-                            <div className="rounded-full size-16 flex items-center justify-center border" style={{ background: "var(--white-soft)", borderColor: "var(--mist)" }} aria-label="Boat preview">
-                              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M3 15l9-9 9 9-9 3-9-3z" fill={boatColor} />
-                              </svg>
-                            </div>
-                            <input type="color" aria-label="Boat color" value={boatColor} onChange={(e) => setBoatColor(e.target.value)} className="h-10 w-10 rounded-full border" style={{ borderColor: "var(--mist)", background: "var(--white-soft)" }} />
+                          <div className="rounded-full size-16 mb-3 flex items-center justify-center border" style={{ background: "var(--white-soft)", borderColor: "var(--mist)" }} aria-label="Boat preview">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M3 15l9-9 9 9-9 3-9-3z" fill={boatColor} />
+                            </svg>
                           </div>
+                          <ColorChips boatColor={boatColor} setBoatColor={setBoatColor} />
                         </section>
                         <div className="flex items-center gap-3">
                           <button
@@ -431,7 +457,7 @@ export default function BelowMap() {
                             </div>
                           </div>
                           <div className="flex flex-col leading-tight">
-                            <div className="font-seasons text-lg md:text-xl">{(userProfile?.name || user?.email || '').split(' ')[0] || 'Friend'}</div>
+                            <div className="font-seasons text-lg md:text-xl">{(userProfile?.name || '').trim() || (user?.email ? user.email.split('@')[0] : 'Friend')}</div>
                             <div className="flex items-center gap-2">
                               <span className="font-sans font-extrabold text-base md:text-lg">{boatsTotal}</span>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[color:var(--ink-2)]">
@@ -441,14 +467,47 @@ export default function BelowMap() {
                           </div>
                         </div>
 
-                        <div className="font-sans text-sm md:text-base">Country : {userProfile?.country_code || '—'}</div>
+                        <div className="font-sans text-sm md:text-base">Country : {(userProfile?.country_code || country || '—')}</div>
 
                         <div className="font-seasons text-base md:text-lg">{userProfile?.message || '—'}</div>
 
                         <div className="space-y-2">
-                          <button className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons" aria-label="Share Your Boat">
-                            Share Your Boat
-                          </button>
+                          {!shareOpen && (
+                            <button
+                              className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons transition-all duration-300 ease-out"
+                              aria-label="Share Your Boat"
+                              onClick={() => setShareOpen(true)}
+                              disabled={!referralUrl}
+                            >
+                              Share Your Boat
+                            </button>
+                          )}
+                          {shareOpen && (
+                            <div className="transition-all duration-300 ease-out" aria-label="Share Your Boat" role="region">
+                              <div className="flex items-center justify-between mb-2">
+                                <button className="text-sm underline" onClick={() => setShareOpen(false)} aria-label="Back">Back</button>
+                                <div aria-live="polite" className="sr-only">{announce}</div>
+                              </div>
+                              <div className="hidden md:flex gap-4">
+                                <ShareTiles referralUrl={referralUrl} message={shareMessage} userFullName={userFullName} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4 md:hidden">
+                                <ShareTiles referralUrl={referralUrl} message={shareMessage} userFullName={userFullName} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                <label className="font-sans text-sm" htmlFor="shareMessage">Message</label>
+                                <textarea id="shareMessage" className="w-full border rounded-md px-3 py-2" rows={4} value={shareMessage} onChange={(e) => setShareMessage(e.target.value)} />
+                                <div className="flex items-center gap-2">
+                                  <input className="flex-1 border rounded-md px-3 py-2 bg-background" value={referralUrl} readOnly aria-label="Referral link" />
+                                  <button
+                                    type="button"
+                                    className="rounded-md px-3 py-2 btn"
+                                    onClick={async () => { try { await navigator.clipboard.writeText(`${shareMessage} ${referralUrl}`); setAnnounce('Copied invite to clipboard'); } catch {} }}
+                                  >Copy</button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                           <div className="font-sans text-xs md:text-sm opacity-80">
                             Share your boat using this button to extend your river.
                           </div>
@@ -457,18 +516,10 @@ export default function BelowMap() {
                         <div>
                           <div className="font-seasons text-base md:text-lg">Stream The Album</div>
                           <div className="mt-2 flex items-center gap-4 md:gap-6 flex-wrap">
-                            <div className="h-6 md:h-7 flex items-center" aria-label="Spotify">
-                              <span className="font-sans text-sm">Spotify</span>
-                            </div>
-                            <div className="h-6 md:h-7 flex items-center" aria-label="Apple Music">
-                              <span className="font-sans text-sm">Apple Music</span>
-                            </div>
-                            <div className="h-6 md:h-7 flex items-center" aria-label="YouTube Music">
-                              <span className="font-sans text-sm">YouTube Music</span>
-                            </div>
-                            <div className="h-6 md:h-7 flex items-center" aria-label="Amazon Music">
-                              <span className="font-sans text-sm">Amazon Music</span>
-                            </div>
+                            <img src="/logos/spotify.png" alt="Spotify" className="h-6 md:h-7 w-auto" />
+                            <img src="/logos/apple_music.png" alt="Apple Music" className="h-6 md:h-7 w-auto" />
+                            <img src="/logos/youtube_music.png" alt="YouTube Music" className="h-6 md:h-7 w-auto" />
+                            <img src="/logos/bandcamp.png" alt="Bandcamp" className="h-6 md:h-7 w-auto" />
                           </div>
                         </div>
 
@@ -537,6 +588,19 @@ export default function BelowMap() {
                 </div>
               </div>
             )}
+            {/* Responsive CSS variables for globe offset/scale */}
+            <style jsx>{`
+              .globe-container { --globe-offset-y: 16px; --globe-scale: 0.96; }
+              @media (min-width: 641px) { /* tablet */
+                .globe-container { --globe-offset-y: 12px; --globe-scale: 1.0; }
+              }
+              @media (min-width: 1025px) { /* desktop */
+                .globe-container { --globe-offset-y: 8px; --globe-scale: 1.05; }
+              }
+              @media (prefers-reduced-motion: reduce) {
+                .globe-container { /* no animation, vars remain static */ }
+              }
+            `}</style>
           </div>
         </div>
       </section>

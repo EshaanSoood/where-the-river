@@ -255,7 +255,12 @@ export default function GlobeRG() {
   };
 
   return (
-    <div ref={wrapRef} className="absolute inset-0" onMouseMove={handleMouseMove}>
+    <div
+      ref={wrapRef}
+      className="absolute inset-0"
+      onMouseMove={handleMouseMove}
+      style={{ transform: `translateY(var(--globe-offset-y)) scale(var(--globe-scale))`, transformOrigin: "center center" }}
+    >
       <ReactGlobe
         ref={globeEl}
         onGlobeReady={onGlobeReady}

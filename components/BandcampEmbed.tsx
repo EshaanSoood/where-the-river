@@ -22,7 +22,7 @@ export default function BandcampEmbed() {
       <div className="block md:hidden">
         <iframe
           title="Bandcamp player (mobile)"
-          style={{ border: 0, width: "100%", height: 42 }}
+          style={{ border: 0, width: "100%", height: 100 }}
           src={`https://bandcamp.com/EmbeddedPlayer/album=672398703/size=small/bgcol=${bg}/linkcol=${link}/transparent=true/`}
           seamless
           loading="lazy"
