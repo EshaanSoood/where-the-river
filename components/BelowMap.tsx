@@ -45,6 +45,7 @@ export default function BelowMap() {
   const leaderboardRef = useRef<HTMLDivElement | null>(null);
   const { user, loading } = useUser();
   const anyPanelOpen = dashboardOpen || leaderboardOpen;
+  const [accOpen, setAccOpen] = useState<{ how: boolean; why: boolean; who: boolean }>({ how: false, why: false, who: false });
 
   // Lock body scroll while a panel is open
   useEffect(() => {
@@ -168,10 +169,10 @@ export default function BelowMap() {
           <div className="h-12 flex items-center justify-center rounded-b-xl bg-white/50 backdrop-blur border border-white/40 shadow-sm">
             {/* Left button (desktop) */}
             {!loading && (
-              <div className="absolute left-2 lg:left-3">
+              <div className="absolute left-2 xl:left-3">
                 <button
                   type="button"
-                  className="hidden lg:inline-flex px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
+                  className="hidden xl:inline-flex px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
                   aria-label={user ? "Open Dashboard" : "Participate / Log in"}
                   aria-controls="panel-dashboard"
                   aria-expanded={dashboardOpen}
@@ -191,16 +192,16 @@ export default function BelowMap() {
             )}
             {/* Title */}
             <div className="text-center">
-              <h1 className="font-seasons text-base sm:text-lg">Where The River Flows</h1>
+              <h1 className="font-seasons text-base sm:text-lg">Dream River</h1>
             </div>
             {/* Right button (desktop) */}
-            <div className="absolute right-2 lg:right-3">
+            <div className="absolute right-2 xl:right-3">
               <button
                 type="button"
                 aria-label="Open Leaderboard"
                 aria-controls="panel-leaderboard"
                 aria-expanded={leaderboardOpen}
-                className="hidden lg:inline-flex px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
+                className="hidden xl:inline-flex px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
                 onClick={() => setLeaderboardOpen((v) => !v)}
                 onKeyDown={(e) => { if (e.key === "Escape") setLeaderboardOpen(false); }}
               >
@@ -213,10 +214,117 @@ export default function BelowMap() {
 
       {/* Content Wrapper */}
       <div className="mx-auto max-w-6xl mt-4 sm:mt-6">
-        {/* Grid: mobile single column; desktop 12-col */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-          {/* Bandcamp (desktop left) */}
-          <section aria-label="Bandcamp player" className="lg:col-span-3 lg:col-start-1 order-3 lg:order-none">
+        {/* Mobile / small-screen layout (≤1279px) */}
+        <div className="xl:hidden space-y-4">
+          {/* Buttons row */}
+          <div className="flex items-center justify-between gap-3">
+            {!loading && (
+              <button
+                type="button"
+                className="px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm flex-1"
+                aria-label={user ? "Open Dashboard" : "Participate / Log in"}
+                aria-controls="panel-dashboard"
+                aria-expanded={dashboardOpen}
+                onClick={() => {
+                  if (user) { setDashboardMode("user"); setDashboardOpen((v) => !v); }
+                  else { setDashboardMode("guest"); setDashboardOpen(true); }
+                }}
+              >
+                {user ? "Dashboard" : "Participate / Log in"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm flex-1"
+              aria-label="Open Leaderboard"
+              aria-controls="panel-leaderboard"
+              aria-expanded={leaderboardOpen}
+              onClick={() => setLeaderboardOpen((v) => !v)}
+              onKeyDown={(e) => { if (e.key === "Escape") setLeaderboardOpen(false); }}
+            >
+              Leaderboard
+            </button>
+          </div>
+
+          {/* Slim Bandcamp player */}
+          <div className="rounded-2xl bg-white/70 backdrop-blur-sm border border-white/40 shadow-sm overflow-hidden">
+            <div className="p-3">
+              <BandcampEmbed />
+            </div>
+          </div>
+
+          {/* Globe dominant section */}
+          <section aria-label="Global participation">
+            <div className="relative rounded-2xl bg-[#0c1220] shadow-md overflow-hidden">
+              {/* Globe container uses viewport height to dominate; add bottom padding to allow heading peek */}
+              <div className="relative w-full" style={{ height: "min(80vh, calc(100svh - 220px))" }}>
+                <div className="absolute inset-0">
+                  <GlobeSummarySR />
+                  <Globe />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Peeking heading under globe */}
+          <div className="-mt-12 pt-12">
+            <h2 className="font-seasons text-xl">Where The River Flows</h2>
+          </div>
+
+          {/* Accordions for remaining sections */}
+          <div className="space-y-3">
+            <div className="rounded-xl border bg-white/60 backdrop-blur p-2">
+              <button
+                className="w-full text-left px-2 py-2 font-semibold"
+                aria-expanded={accOpen.how}
+                aria-controls="acc-how"
+                onClick={() => setAccOpen((o) => ({ ...o, how: !o.how }))}
+              >
+                How it works
+              </button>
+              {accOpen.how && (
+                <div id="acc-how" role="region" aria-labelledby="acc-how-btn" className="px-2 pb-2 text-sm">
+                  When you sign up, you’ll get a unique link to share with your friends. Each time someone joins through your link, your river grows. When they listen to the album and invite their own friends, their river connects to yours. Together, we can trace where the music flows — and as your chain grows, you collect paper boats that unlock exclusive perks.
+                </div>
+              )}
+            </div>
+            <div className="rounded-xl border bg-white/60 backdrop-blur p-2">
+              <button
+                className="w-full text-left px-2 py-2 font-semibold"
+                aria-expanded={accOpen.why}
+                aria-controls="acc-why"
+                onClick={() => setAccOpen((o) => ({ ...o, why: !o.why }))}
+              >
+                Why
+              </button>
+              {accOpen.why && (
+                <div id="acc-why" role="region" aria-labelledby="acc-why-btn" className="px-2 pb-2 text-sm">
+                  I might be old school, but most of the music I treasure came from friends who shared it with me. While the internet keeps getting louder, I want to bring back that simple joy: discovering music from someone you know and trust.
+                </div>
+              )}
+            </div>
+            <div className="rounded-xl border bg-white/60 backdrop-blur p-2">
+              <button
+                className="w-full text-left px-2 py-2 font-semibold"
+                aria-expanded={accOpen.who}
+                aria-controls="acc-who"
+                onClick={() => setAccOpen((o) => ({ ...o, who: !o.who }))}
+              >
+                Who I am
+              </button>
+              {accOpen.who && (
+                <div id="acc-who" role="region" aria-labelledby="acc-who-btn" className="px-2 pb-2 text-sm">
+                  I’m Eshaan Sood, a storyteller from New Delhi now in New York. My debut album Dream River is out everywhere — and this is my way of sending the boat sailing to every corner of the world.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop layout (≥1280px): 3 columns ~ 2:5:3 -> 3:6:3 over 12 cols */}
+        <div className="hidden xl:grid xl:grid-cols-12 gap-6">
+          {/* Bandcamp (left) */}
+          <section aria-label="Bandcamp player" className="xl:col-span-3 xl:col-start-1">
             <div className="rounded-2xl bg-white/70 backdrop-blur-sm border border-white/40 shadow-sm overflow-hidden">
               <div className="p-3 sm:p-4">
                 <BandcampEmbed />
@@ -225,46 +333,9 @@ export default function BelowMap() {
           </section>
 
           {/* Globe (center) */}
-          <section aria-label="Global participation" className="lg:col-span-6 lg:col-start-4 order-1">
+          <section aria-label="Global participation" className="xl:col-span-6 xl:col-start-4">
             <div className="relative rounded-2xl bg-[#0c1220] shadow-md overflow-hidden">
-              {/* Floating buttons over globe on mobile */}
-              {!loading && (
-                <div className="lg:hidden">
-                  <button
-                    type="button"
-                    className="absolute z-20 top-3 left-3 px-3 py-2 rounded-lg bg-white/90 backdrop-blur-sm shadow-md border border-white/50 text-purple-900 text-sm"
-                    aria-label={user ? "Open Dashboard" : "Participate / Log in"}
-                    aria-controls="panel-dashboard"
-                    aria-expanded={dashboardOpen}
-                    onClick={() => {
-                      if (user) {
-                        setDashboardMode("user");
-                        setDashboardOpen((v) => !v);
-                      } else {
-                        setDashboardMode("guest");
-                        setDashboardOpen(true);
-                      }
-                    }}
-                  >
-                    {user ? "Dashboard" : "Participate / Log in"}
-                  </button>
-                </div>
-              )}
-              <div className="lg:hidden">
-                <button
-                  type="button"
-                  className="absolute z-20 top-10 right-3 px-3 py-2 rounded-lg bg-white/90 backdrop-blur-sm shadow-md border border-white/50 text-purple-900 text-sm"
-                  aria-label="Open Leaderboard"
-                  aria-controls="panel-leaderboard"
-                  aria-expanded={leaderboardOpen}
-                  onClick={() => setLeaderboardOpen((v) => !v)}
-                  onKeyDown={(e) => { if (e.key === "Escape") setLeaderboardOpen(false); }}
-                >
-                  Leaderboard
-                </button>
-              </div>
-
-              {/* Globe square container */}
+              {/* Globe square container keeps perfect circle */}
               <div className="relative w-full aspect-square">
                 <div className="absolute inset-0">
                   <GlobeSummarySR />
@@ -274,9 +345,8 @@ export default function BelowMap() {
             </div>
           </section>
 
-          {/* Text block (desktop right) */}
-          <section aria-label="Project intro" className="lg:col-span-3 lg:col-start-10 order-2 lg:order-none">
-            {/* Frosted card on all breakpoints */}
+          {/* Text block (right) */}
+          <section aria-label="Project intro" className="xl:col-span-3 xl:col-start-10">
             <div className="rounded-2xl border bg-white/55 backdrop-blur-md border-white/50 shadow-md p-4 sm:p-6">
               <Hero />
             </div>

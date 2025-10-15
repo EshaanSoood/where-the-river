@@ -184,8 +184,13 @@ export default function GlobeRG() {
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.25;
     controls.enableZoom = true;
-    controls.minDistance = 200;
-    controls.maxDistance = 250;
+    // Enforce minimum zoom = 1× (no zooming out beyond the baseline distance)
+    const baselineDistance = camera.position.length();
+    controls.maxDistance = baselineDistance; // prevent zooming out smaller than baseline
+    controls.minDistance = Math.max(120, baselineDistance * 0.6); // allow zooming in, but not excessively
+    if (camera.position.length() > baselineDistance) {
+      camera.position.setLength(baselineDistance);
+    }
     const canvasEl = globeEl.current.renderer().domElement as HTMLCanvasElement;
     (canvasEl.style as CSSStyleDeclaration).touchAction = "none";
     try {
