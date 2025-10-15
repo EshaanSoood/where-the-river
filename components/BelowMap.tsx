@@ -8,6 +8,7 @@ import { useUser } from "@/hooks/useUser";
 import Hero from "@/components/Hero";
 import BandcampEmbed from "@/components/BandcampEmbed";
 import dynamic from "next/dynamic";
+import GlobeSummarySR from "@/components/GlobeSummarySR";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 
   const Globe = dynamic(() => import("@/components/GlobeRG"), { ssr: false });
@@ -165,7 +166,7 @@ export default function BelowMap() {
         {/* Centered globe with adjacent collapsible toggles */}
         <div className="mx-auto max-w-5xl">
           <div className="relative aspect-square md:aspect-[16/10]">
-            {/* Globe container: fills this box; Globe component sizes to parent */
+            {/* Globe container: fills this box; Globe component sizes to parent */}
             <div className="absolute inset-0">
               {/* SR-only live summary for screen readers */}
               <GlobeSummarySR />
