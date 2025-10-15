@@ -1,49 +1,213 @@
-Globe integration - required changes to incorporate the new globe (with visuals)
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-Client component integration
-- Convert the provided globe file into a pure client React component (add "use client"; remove ReactDOM.createRoot and #root mounting).
-- Export a component usable via Next dynamic import with ssr: false; render inside our existing BelowMap container, not full-screen.
+/* ========== Base layer ========== */
+@layer base {
+  :root {
+    /* expect these to already exist in your project; leave as-is to keep your palette
+       (you can keep your current values; this just documents what we rely on) */
+    /* --color-surface: 245 245 246;
+       --color-ink: 25 25 28;
+       --color-accent: 42 167 181; // example from your notes
+       --color-accent-muted: 42 167 181 / .15;
+       --color-backdrop: 243 244 246;
+       --color-background-offwhite: 250 250 252;
+       --color-border: 216 217 220; */
 
-Container/layout
-- Replace hard-coded 100vw/100vh and black background with styles that size to the parent (absolute inset-0), preserving our overlay panels and page grid.
-- Keep the globe canvas behind UI (z-index) and aria-hidden to avoid focus traps; preserve our tooltip and dashboard/leaderboard layers.
+    --ch: 14px;           /* chamfer amount */
+    --nav-stripe: 10px;   /* thickness of angled nav lines */
+  }
 
-Dependencies and types
-- Add and pin: react-globe.gl, topojson-client, d3-geo (we already have three).
-- Fix any "any" types to satisfy ESLint/TS rules; avoid module-scope DOM calls to keep SSR happy.
-- Ensure proper cleanups for event listeners and scene objects to prevent leaks.
+  html { @apply scroll-smooth; }
+  body { @apply bg-offwhite text-ink font-body antialiased; }
+}
 
-Visual parity and theming
-- Map colors to our tokens: yellow/blue to --amber/--aqua (or keep new palette behind a feature flag).
-- Keep “no borders” look; ensure hover raise altitude works with our scale and shading.
-- Atmosphere/stars/comets: add to scene with mobile-safe counts; gate heavy effects behind a perf flag.
+/* ========== Component layer ========== */
+@layer components {
+  /* Site container & gutters that start under the logo */
+  .site-container {
+    @apply mx-auto px-4 md:px-6 lg:px-8 max-w-screen-2xl;
+  }
+  .site-frame {
+    @apply relative bg-surface rounded-2xl shadow-soft;
+  }
 
-Controls and gestures
-- Align zoom limits to our policy: allow ~20% zoom-in; prevent zoom-out beyond original; ensure auto-rotate pauses on user interaction and resumes after inactivity.
-- Apply touch-action: none and overscroll-behavior: contain on the globe container to block page pinch-zoom conflicts; keep our pinch fixes.
+  /* Logo + Navbar bar that “contains” the page */
+  .brand-bar {
+    @apply relative z-10 bg-surface/90 backdrop-blur-md border border-border rounded-2xl;
+  }
+  .brand-row {
+    @apply flex items-center justify-between gap-4 px-4 md:px-6 py-3;
+  }
 
-Tooltip behavior
-- Unify tooltips: either keep the new globe tooltip or route hover names into our existing tooltip system.
-- Clamp tooltip to container, offset from cursor, and ensure proper z-index above the canvas but below panels.
+  /* Spotlight glow under the logo edge */
+  .logo-spotlight {
+    position: relative;
+  }
+  .logo-spotlight::after {
+    content:"";
+    position:absolute;
+    left:-8px; bottom:-8px;
+    width:160px; height:80px;
+    background: radial-gradient(100px 40px at 30% 60%, rgba(255,255,255,.35), transparent 70%);
+    filter: blur(6px);
+    pointer-events:none;
+  }
 
-Data and layers
-- Countries: continue fetching via world-atlas; ensure low/high LOD switching works with our container scale.
-- Nodes/edges: port our SVG overlay to react-globe.gl layers (points/arcs) or keep the SVG overlay and project positions using the globe’s camera/renderer helpers.
-- Rivers on click: replace the demo click-spawn logic with data-driven paths (from our Supabase inputs) and buffer clicks behind a debug mode.
+  /* Nav with angled separators and trapezoid active marker */
+  .nav {
+    @apply relative flex items-center gap-2 md:gap-4 text-sm md:text-base;
+  }
 
-Boat model/animation
-- Keep paper boat geometry/animation but permit tinting via user boat_color for per-user renderables (distinct from untinted icons in counts).
-- Ensure boats travel above land polygons (altitude) and dispose meshes on unmount.
+  .nav-link {
+    @apply relative px-3 py-2 rounded-lg text-ink/80 hover:text-ink transition-colors;
+  }
 
-Performance safeguards
-- Lower star count and comet spawn rate on small screens; throttle animations to maintain ≥30–60fps.
-- Use requestAnimationFrame loops conservatively; reuse materials/geometries; dispose textures on cleanup.
+  /* angled separators between items */
+  .nav-link + .nav-link {
+    position: relative;
+  }
+  .nav-link + .nav-link::before {
+    content:"";
+    position:absolute;
+    left:-10px; top:50%;
+    width: var(--nav-stripe);
+    height: 1px;
+    background: linear-gradient(135deg, rgba(0,0,0,.10), rgba(0,0,0,0));
+    transform: translateY(-50%) rotate(-18deg);
+  }
 
-Accessibility
-- Mark decorative canvas aria-hidden, role=presentation, tabIndex=-1.
-- Preserve keyboard navigation for overlay buttons and dialogs.
+  /* trapezoid active underline */
+  .nav-link.is-active {
+    @apply text-ink;
+  }
+  .nav-link.is-active::after {
+    content:"";
+    position:absolute;
+    left: 10%;
+    right: 10%;
+    bottom: -8px;
+    height: 6px;
+    background: linear-gradient(90deg, rgba(0,0,0,.05), rgba(0,0,0,.12), rgba(0,0,0,.05));
+    /* trapezoid illusion via skew */
+    transform: skewX(-18deg);
+    border-radius: 2px;
+  }
 
-Build and QA
-- Add dependency installs and update lockfile; verify Turbopack build with ESLint/TS clean.
-- Cross-test desktop/mobile (pinch, rotate, tooltip, overlays); confirm no layout overflow and no scrolling issues.
-- Remove FPS/stats counter in production; show only in debug mode.
+  /* Hero section with subtle animation */
+  .hero {
+    @apply relative overflow-hidden rounded-2xl border border-border bg-surface;
+  }
+  .hero-inner {
+    @apply grid md:grid-cols-2 gap-6 md:gap-10 p-6 md:p-10;
+  }
+  .hero-title {
+    @apply font-brand text-3xl md:text-5xl tracking-tight;
+  }
+  .hero-kicker {
+    @apply text-accent/90 font-medium;
+  }
+  .hero-anim {
+    @apply animate-float;
+  }
+
+  /* “Special heading” (mimic logo treatment) for page titles */
+  .brand-heading {
+    @apply font-brand text-4xl md:text-5xl tracking-tight text-ink;
+    text-shadow: 0 1px 0 rgba(255,255,255,.5), 0 4px 20px rgba(0,0,0,.08);
+  }
+
+  /* Chamfered card utility (clip the corners into a chamfer) */
+  .chamfer {
+    /* visually consistent chamfer regardless of radius utilities */
+    clip-path: polygon(
+      var(--ch) 0%, calc(100% - var(--ch)) 0%,
+      100% var(--ch), 100% calc(100% - var(--ch)),
+      calc(100% - var(--ch)) 100%, var(--ch) 100%,
+      0% calc(100% - var(--ch)), 0% var(--ch)
+    );
+  }
+
+  /* Postcard (reviews & podcasts share base style; tweak via modifiers) */
+  .postcard {
+    @apply relative bg-surface border border-border shadow-card chamfer;
+    @apply p-4 md:p-6;
+  }
+  .postcard-title {
+    @apply text-xl md:text-2xl font-semibold leading-tight;
+  }
+  .postcard-meta {
+    @apply text-sm text-ink/60;
+  }
+  .postcard-body {
+    @apply text-base leading-relaxed text-ink/90;
+  }
+  .postcard-action {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border hover:border-ink/30;
+  }
+  /* subtle overlap rhythm in lists */
+  .overlap-grid > * + * {
+    margin-top: -10px; /* gentle layered feel */
+  }
+
+  /* Review vs Podcast minor variants */
+  .postcard--review {
+    @apply bg-surface;
+  }
+  .postcard--podcast {
+    @apply bg-surface;
+  }
+
+  /* Grid for home “postcards” */
+  .post-grid {
+    @apply grid gap-5;
+  }
+  @media (min-width: 640px) {
+    .post-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  }
+  @media (min-width: 1024px) {
+    .post-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  }
+
+  /* Tiles (review/podcast index pages) */
+  .tile {
+    @apply chamfer bg-surface border border-border shadow-soft p-4 md:p-5;
+  }
+  .tile-title { @apply font-semibold text-lg leading-tight; }
+  .tile-meta { @apply text-xs text-ink/60; }
+
+  /* Footer */
+  .site-footer {
+    @apply mt-10 border-t border-border pt-6 pb-10 text-sm text-ink/70;
+  }
+
+  /* Page wells (Mission / Contact static pages) */
+  .page-well {
+    @apply bg-surface border border-border rounded-2xl p-6 md:p-10;
+  }
+
+  /* Snap scrolling helpers (if you use them on lists) */
+  .snap-viewport { @apply snap-y snap-mandatory overflow-y-auto; }
+  .snap-card { @apply snap-start; }
+}
+
+/* ========== Utility layer (tiny, project-specific) ========== */
+@layer utilities {
+  /* angled separators you can reuse in other rows */
+  .angled-divider {
+    position: relative;
+  }
+  .angled-divider::before {
+    content:"";
+    position:absolute; inset-inline:auto 0; top:50%;
+    width: var(--nav-stripe); height: 1px;
+    background: linear-gradient(135deg, rgba(0,0,0,.10), rgba(0,0,0,0));
+    transform: translateY(-50%) rotate(-18deg);
+  }
+
+  /* spotlight background block (for under-logo gutter start) */
+  .spotlight-block {
+    background: radial-gradient(120px 50px at 0% 0%, rgba(255,255,255,.35), transparent 70%);
+  }
+}

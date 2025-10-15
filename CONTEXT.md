@@ -44,22 +44,43 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
 - Globe now uses Three.js (blue ocean, amber extruded land, dual cloud layers). Double‑tap (mobile) or double‑click toggles fullscreen; aria-hidden to avoid focus trap; tooltip follows cursor.
 - Country-only geography; ISO-2 required; pins jittered within country centroid.
 
-## Today’s Changes
-- Colors (`app/globals.css`): palette aligned to new CSS (kept Typekit). `--teal` is `#135E66`, `--aqua` is `#2AA7B5`. Global link color uses `var(--aqua)`.
-- Hero/layout (`components/BelowMap.tsx`):
-  - Consolidated controls to page corners: top-left shows Dashboard when logged-in, Participate/Login when logged-out; top-right shows Leaderboard (collapsed by default). Removed rim-adjacent buttons to avoid overlapping the globe.
-  - Ensured globe sits centered on its own layer; controls are outside canvas hit area. Retain two-column layout: left text (`Hero`), right Bandcamp embed.
-  - Exactly one H1 remains via `Hero`; headings maintain proper hierarchy.
-- Globe (`components/Globe.tsx`): marked canvas as decorative (`aria-hidden`, `role=presentation`, `tabindex=-1`) to prevent focus trapping; retains visuals and tooltips.
-- Globe overlay: lightweight SVG layer for nodes, labels, and straight edges. Overlay now renders from React state (post-fetch) with refs for per-frame positioning. Fallback “Test Node” when dataset empty. Debug overlay via `?debug=1` shows counts (profiles, nodes, edges).
-- Cleanup: pruned unused rim controls; kept referral/auth logic intact. Identified unused placeholders (`DesktopSidebar.tsx`, `AlbumPlayer.tsx`) for removal when safe.
-- DB (Supabase): unchanged.
-- API: unchanged (`/api/my-referral-link` wiring still pending).
+## Recent Changes — Yesterday Afternoon
+- Globe visual refresh:
+  - Introduced `components/GlobeRG.tsx` using `react-globe.gl` with real arcs data sourced from our nodes/links.
+  - Tooltip follows cursor with viewport clamping; pinch-to-zoom enabled with guarded range; node markers always visible and responsively sized.
+  - Kept WebGL canvas non-interactive for AT: `aria-hidden="true" role="presentation" tabindex="-1"`.
+- Screen reader support:
+  - Added `components/GlobeSummarySR.tsx` — an SR-only live region summarizing people, countries, connections, and longest river endpoints; refreshes every 10 minutes and on tab focus.
+- Dashboard overlay (inline):
+  - `components/BelowMap.tsx` now opens a responsive inline overlay for guest (signup/login) and user dashboards; focus trap and Escape handling included.
+  - Signup flow includes country ISO-2 select sourced from our world data, favorite song, and boat color picker with preview.
+- Bandcamp & branding:
+  - `components/BandcampEmbed.tsx` themed to project palette; large player on desktop, small embed on mobile.
+  - `components/Background.tsx` adds a fixed background image with subtle blur and overlay; `Hero` pane uses aqua glass effect.
+- Packages:
+  - Added `react-globe.gl`, bumped `three` to `^0.169.0` to satisfy subpath imports.
+
+## Recent Changes — Today
+- Share Your Boat flow (no layout changes):
+  - New API `POST /api/profiles/by-email` returns `{ id, name, ref_code_8 }` for building referral URLs.
+  - `components/ShareTiles.tsx` with four actions: WhatsApp, Email, Messages (SMS), and Web Share API; IDs: `#btn-whatsapp`, `#btn-email`, `#btn-messages`, `#btn-webshare`.
+  - Uses `window.RIVER_REFERRAL_URL` if provided; falls back to computed origin + `?ref=<8‑digit>`; email greets with full name when available.
+  - Copy-to-clipboard fallback with `aria-live` confirmation; modal remains open; focus preserved.
+  - Processed white glyph icons placed under `/public/logos/` for dark-blue tiles.
+- Globe containment & spacing:
+  - Dedicated globe container with `overflow-hidden` and responsive height `clamp(45vh, 60vh, 70vh)`.
+  - CSS vars `--globe-offset-y` and `--globe-scale` applied to canvas layer; tuned per breakpoint to maintain safe gap from CTAs and keep the globe fully contained.
+- Bandcamp mobile sizing: increased small player height to ~100px while keeping large desktop player.
+- Lint/build hygiene:
+  - Typed `navigator.share/clipboard` guards and `Intl.DisplayNames` wrapper; eliminated blocking ESLint errors.
+  - Build verified locally with Next.js 15 + Turbopack; remaining warnings are non-blocking (unused vars in legacy code, next/no-img-element on logos).
+- Deployment:
+  - Deployed to Vercel production and pushed to git (main). Alias remains `riverflowseshaan.vercel.app`.
 
 ## Deployment
 - Vercel project linked: `riverflows` (org: eshaans-projects-d91d58e1)
 - Stable domain: `https://riverflowseshaan.vercel.app` (alias)
- - Latest Production: `https://riverflows-oyhlljgwr-eshaans-projects-d91d58e1.vercel.app` (current)
+- Latest Production: `https://riverflows-5umcyvw4i-eshaans-projects-d91d58e1.vercel.app` (current)
 - CLI flow: `vercel --prod --yes` then `vercel alias set <prod_url> riverflowseshaan.vercel.app`
 
 ## Useful Commands
