@@ -3,7 +3,7 @@ export default function BandcampEmbed() {
   const bg = "f7f0e4"; // var(--parchment)
   const link = "2aa7b5"; // var(--aqua)
   return (
-    <div>
+    <div className="p-2">
       {/* Desktop: large player */}
       <div className="hidden md:flex justify-center">
         <iframe

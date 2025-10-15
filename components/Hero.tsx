@@ -1,6 +1,6 @@
 export default function Hero() {
   return (
-    <section id="hero" className="relative max-w-2xl mx-auto p-6 space-y-4 rounded-xl">
+    <section id="hero" className="relative max-w-2xl mx-auto p-4 space-y-3 rounded-xl">
       {/* Frosted overlay only on desktop to avoid double-stacking with parent card */}
       <div className="hidden lg:block absolute inset-0 rounded-xl backdrop-blur" style={{ background: "var(--aqua)", opacity: 0.3, boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.06)" }} aria-hidden="true" />
       <div className="relative">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 import { getIsoCountries, type IsoCountry } from "@/lib/countryList";
@@ -14,6 +14,13 @@ import ColorChips from "@/components/ColorChips";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 
   const Globe = dynamic(() => import("@/components/GlobeRG"), { ssr: false });
+
+  type UserRow = {
+    name: string | null;
+    country_code: string | null;
+    message: string | null;
+    boat_color: string | null;
+  };
 
 export default function BelowMap() {
   const router = useRouter();
@@ -46,25 +53,58 @@ export default function BelowMap() {
   const { user, loading } = useUser();
   const anyPanelOpen = dashboardOpen || leaderboardOpen;
   const [accOpen, setAccOpen] = useState<{ how: boolean; why: boolean; who: boolean }>({ how: false, why: false, who: false });
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const privacyRef = useRef<HTMLDivElement | null>(null);
+  const privacyLinkRef = useRef<HTMLButtonElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const dashboardToggleRef = useRef<HTMLButtonElement | null>(null);
+  const dashboardHeadingRef = useRef<HTMLHeadingElement | null>(null);
 
-  // Lock body scroll while a panel is open
+  // Resolve a human-friendly country name from ISO-2 codes using our list
+  const resolvedCountryName = useMemo(() => {
+    const codeRaw = (userProfile?.country_code || country || '').toUpperCase();
+    if (!codeRaw) return '—';
+    const match = countries.find((c) => c.code === codeRaw);
+    return match?.name || codeRaw;
+  }, [userProfile?.country_code, country, countries]);
+
+  // Lock body scroll while a panel is open and inert the rest of the page for SR/keyboard
   useEffect(() => {
     try {
-      if (anyPanelOpen) {
-        const prev = document.body.style.overflow;
-        document.body.dataset.prevOverflow = prev;
-        document.body.style.overflow = "hidden";
-      } else {
-        const prev = document.body.dataset.prevOverflow;
-        document.body.style.overflow = prev ?? "";
-        delete document.body.dataset.prevOverflow;
-      }
+      const update = () => {
+        const desktop = typeof window !== 'undefined' && window.innerWidth >= 1280; // xl breakpoint
+        const shouldLock = anyPanelOpen || desktop;
+        document.body.style.overflow = shouldLock ? 'hidden' : '';
+        const inertify = (el: HTMLElement | null, on: boolean) => {
+          if (!el) return;
+          if (on) {
+            el.setAttribute('inert', '');
+            el.setAttribute('aria-hidden', 'true');
+          } else {
+            el.removeAttribute('inert');
+            el.removeAttribute('aria-hidden');
+          }
+        };
+        // Inert main content when any panel open
+        inertify(headerRef.current, anyPanelOpen);
+        inertify(contentRef.current, anyPanelOpen);
+      };
+      update();
+      window.addEventListener('resize', update);
+      return () => { window.removeEventListener('resize', update); };
     } catch {}
   }, [anyPanelOpen]);
 
   useEffect(() => {
     if (dashboardOpen && dashboardRef.current) {
-      dashboardRef.current.focus();
+      // Focus the heading first, else first focusable control
+      const root = dashboardRef.current as HTMLElement;
+      const focusTarget = (dashboardHeadingRef.current as HTMLElement) || root.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusTarget) focusTarget.focus();
+    } else if (!dashboardOpen) {
+      // Restore focus to the opener
+      setTimeout(() => dashboardToggleRef.current?.focus(), 0);
     }
   }, [dashboardOpen]);
   useEffect(() => {
@@ -95,35 +135,45 @@ export default function BelowMap() {
 
   useEffect(() => {
     if (!dashboardOpen || dashboardMode !== 'user' || !user?.email) return;
-    try {
-      fetch('/api/users/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email }) })
-        .then((r) => r.json())
-        .then((j) => {
-          if (j?.user) {
-            setUserProfile({
-              name: j.user.name ?? null,
-              country_code: j.user.country_code ?? null,
-              message: j.user.message ?? null,
-              boat_color: j.user.boat_color ?? null,
-            });
-          }
-        })
-        .catch(() => {});
-      // TODO: If needed, fetch boats_total from a profiles endpoint; default to 0 for now
-      setBoatsTotal((v) => v || 0);
-      // fetch ref_code_8 and name for share URL
-      fetch('/api/profiles/by-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email }) })
-        .then(r => r.json())
-        .then(j => {
-          if (!j?.profile) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // Prefer direct Supabase read for robust profile details
+        const supabase = getSupabase();
+        const { data } = await supabase.from('users')
+          .select('name,country_code,message,boat_color')
+          .eq('email', user.email)
+          .limit(1)
+          .maybeSingle();
+        if (!cancelled && data) {
+          const d = data as UserRow;
+          setUserProfile({
+            name: d.name ?? null,
+            country_code: d.country_code ?? null,
+            message: d.message ?? null,
+            boat_color: d.boat_color ?? null,
+          });
+        }
+      } catch {}
+      try {
+        setBoatsTotal((v) => v || 0);
+        const resp = await fetch('/api/profiles/by-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email }) });
+        const j = await resp.json();
+        if (!cancelled && j?.profile) {
           const code = j.profile.ref_code_8;
           const name = j.profile.name || '';
           const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
-          setReferralUrl(`${base}/?ref=${code}`);
+          setReferralUrl(code ? `${base}/?ref=${code}` : base);
           setUserFullName(name);
-        })
-        .catch(() => {});
-    } catch {}
+        }
+      } catch {
+        if (!cancelled) {
+          const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+          setReferralUrl((r) => r || base);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [dashboardOpen, dashboardMode, user?.email]);
 
   const trapFocus = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -164,118 +214,96 @@ export default function BelowMap() {
   return (
     <div className="px-[25px] py-4">
       {/* Sticky Top Bar */}
-      <div className="sticky top-0 z-50">
-        <div className="relative mx-auto max-w-6xl px-2 sm:px-4">
-          <div className="h-12 flex items-center justify-center rounded-b-xl bg-white/50 backdrop-blur border border-white/40 shadow-sm">
-            {/* Left button (desktop) */}
-            {!loading && (
-              <div className="absolute left-2 xl:left-3">
+      <div className="sticky top-0 z-50" style={{ ['--hdr' as unknown as string]: '40px' }}>
+        <div className="relative mx-auto max-w-6xl px-2 sm:px-4" ref={headerRef}>
+          <div
+            className="min-h-10 py-1.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
+            style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+          >
+            <div className="grid grid-cols-3 items-center gap-2 w-full">
+              <div className="justify-self-start">
+                {!loading && (
+                  <button
+                    ref={dashboardToggleRef}
+                    type="button"
+                    className="inline-flex px-3 py-2 rounded-[24px] bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
+                    aria-label={user ? "Open Dashboard" : "Participate / Log in"}
+                    aria-controls="panel-dashboard"
+                    aria-expanded={dashboardOpen}
+                    onClick={() => {
+                      if (user) {
+                        setDashboardMode("user");
+                        setDashboardOpen((v) => !v);
+                      } else {
+                        setDashboardMode("guest");
+                        setDashboardOpen(true);
+                      }
+                    }}
+                  >
+                    {user ? "Dashboard" : "Participate / Log in"}
+                  </button>
+                )}
+              </div>
+              <div className="justify-self-center w-full max-w-[560px] mx-auto px-2 min-w-0 text-center">
+                <div className="xl:hidden">
+                  <iframe
+                    title="Bandcamp player (slim)"
+                    aria-label="Bandcamp player for Dream River"
+                    style={{ border: 0, width: '100%', height: 68 }}
+                    src={`https://bandcamp.com/EmbeddedPlayer/album=672398703/size=small/bgcol=f7f0e4/linkcol=2aa7b5/transparent=true/`}
+                    seamless
+                  >
+                    <a href="https://eshaansood.bandcamp.com/album/the-sonic-alchemists-i-dream-river">The Sonic Alchemists I: Dream River by Eshaan Sood</a>
+                  </iframe>
+                </div>
+                <h1 className="hidden xl:block font-seasons text-base sm:text-lg">Dream River</h1>
+              </div>
+              <div className="justify-self-end">
                 <button
                   type="button"
-                  className="hidden xl:inline-flex px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
-                  aria-label={user ? "Open Dashboard" : "Participate / Log in"}
-                  aria-controls="panel-dashboard"
-                  aria-expanded={dashboardOpen}
-                  onClick={() => {
-                    if (user) {
-                      setDashboardMode("user");
-                      setDashboardOpen((v) => !v);
-                    } else {
-                      setDashboardMode("guest");
-                      setDashboardOpen(true);
-                    }
-                  }}
+                  aria-label="Open Leaderboard"
+                  aria-controls="panel-leaderboard"
+                  aria-expanded={leaderboardOpen}
+                  className="inline-flex px-3 py-2 rounded-[24px] bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
+                  onClick={() => setLeaderboardOpen((v) => !v)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setLeaderboardOpen(false); }}
                 >
-                  {user ? "Dashboard" : "Participate / Log in"}
+                  Leaderboard
                 </button>
               </div>
-            )}
-            {/* Title */}
-            <div className="text-center">
-              <h1 className="font-seasons text-base sm:text-lg">Dream River</h1>
-            </div>
-            {/* Right button (desktop) */}
-            <div className="absolute right-2 xl:right-3">
-              <button
-                type="button"
-                aria-label="Open Leaderboard"
-                aria-controls="panel-leaderboard"
-                aria-expanded={leaderboardOpen}
-                className="hidden xl:inline-flex px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
-                onClick={() => setLeaderboardOpen((v) => !v)}
-                onKeyDown={(e) => { if (e.key === "Escape") setLeaderboardOpen(false); }}
-              >
-                Leaderboard
-              </button>
             </div>
           </div>
         </div>
       </div>
+      
+      {/* Small margin below header */}
+      <div className="h-4" />
 
       {/* Content Wrapper */}
-      <div className="mx-auto max-w-6xl mt-4 sm:mt-6">
+      <div className="mx-auto max-w-6xl mt-0" ref={contentRef}>
         {/* Mobile / small-screen layout (≤1279px) */}
         <div className="xl:hidden space-y-4">
-          {/* Buttons row */}
-          <div className="flex items-center justify-between gap-3">
-            {!loading && (
-              <button
-                type="button"
-                className="px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm flex-1"
-                aria-label={user ? "Open Dashboard" : "Participate / Log in"}
-                aria-controls="panel-dashboard"
-                aria-expanded={dashboardOpen}
-                onClick={() => {
-                  if (user) { setDashboardMode("user"); setDashboardOpen((v) => !v); }
-                  else { setDashboardMode("guest"); setDashboardOpen(true); }
-                }}
-              >
-                {user ? "Dashboard" : "Participate / Log in"}
-              </button>
-            )}
-            <button
-              type="button"
-              className="px-3 py-2 rounded-md bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm flex-1"
-              aria-label="Open Leaderboard"
-              aria-controls="panel-leaderboard"
-              aria-expanded={leaderboardOpen}
-              onClick={() => setLeaderboardOpen((v) => !v)}
-              onKeyDown={(e) => { if (e.key === "Escape") setLeaderboardOpen(false); }}
-            >
-              Leaderboard
-            </button>
-          </div>
-
-          {/* Slim Bandcamp player */}
-          <div className="rounded-2xl bg-white/70 backdrop-blur-sm border border-white/40 shadow-sm overflow-hidden">
-            <div className="p-3">
-              <BandcampEmbed />
-            </div>
-          </div>
+          {/* Header now contains buttons and slim player; no title shown */}
 
           {/* Globe dominant section */}
           <section aria-label="Global participation">
-            <div className="relative rounded-2xl bg-[#0c1220] shadow-md overflow-hidden">
+            <div className="relative rounded-[24px] shadow-md overflow-hidden" style={{ background: '#0b0d1a' }}>
+              <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(6px)' }} />
               {/* Globe container uses viewport height to dominate; add bottom padding to allow heading peek */}
-              <div className="relative w-full" style={{ height: "min(80vh, calc(100svh - 220px))" }}>
+              <div className="relative w-full" style={{ height: "min(85vh, calc(100svh - 180px))" }}>
                 <div className="absolute inset-0">
-                  <GlobeSummarySR />
-                  <Globe />
+                  <GlobeSummarySR id="globe-sr-summary" />
+                  <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
                 </div>
               </div>
             </div>
           </section>
 
-          {/* Peeking heading under globe */}
-          <div className="-mt-12 pt-12">
-            <h2 className="font-seasons text-xl">Where The River Flows</h2>
-          </div>
-
           {/* Accordions for remaining sections */}
           <div className="space-y-3">
-            <div className="rounded-xl border bg-white/60 backdrop-blur p-2">
+            <div className="rounded-[24px] border" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <button
-                className="w-full text-left px-2 py-2 font-semibold"
+                className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
                 aria-expanded={accOpen.how}
                 aria-controls="acc-how"
                 onClick={() => setAccOpen((o) => ({ ...o, how: !o.how }))}
@@ -283,14 +311,14 @@ export default function BelowMap() {
                 How it works
               </button>
               {accOpen.how && (
-                <div id="acc-how" role="region" aria-labelledby="acc-how-btn" className="px-2 pb-2 text-sm">
+                <div id="acc-how" role="region" aria-labelledby="acc-how-btn" className="px-3 pb-3 text-sm">
                   When you sign up, you’ll get a unique link to share with your friends. Each time someone joins through your link, your river grows. When they listen to the album and invite their own friends, their river connects to yours. Together, we can trace where the music flows — and as your chain grows, you collect paper boats that unlock exclusive perks.
                 </div>
               )}
             </div>
-            <div className="rounded-xl border bg-white/60 backdrop-blur p-2">
+            <div className="rounded-[24px] border" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <button
-                className="w-full text-left px-2 py-2 font-semibold"
+                className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
                 aria-expanded={accOpen.why}
                 aria-controls="acc-why"
                 onClick={() => setAccOpen((o) => ({ ...o, why: !o.why }))}
@@ -298,14 +326,14 @@ export default function BelowMap() {
                 Why
               </button>
               {accOpen.why && (
-                <div id="acc-why" role="region" aria-labelledby="acc-why-btn" className="px-2 pb-2 text-sm">
+                <div id="acc-why" role="region" aria-labelledby="acc-why-btn" className="px-3 pb-3 text-sm">
                   I might be old school, but most of the music I treasure came from friends who shared it with me. While the internet keeps getting louder, I want to bring back that simple joy: discovering music from someone you know and trust.
                 </div>
               )}
             </div>
-            <div className="rounded-xl border bg-white/60 backdrop-blur p-2">
+            <div className="rounded-[24px] border" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <button
-                className="w-full text-left px-2 py-2 font-semibold"
+                className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
                 aria-expanded={accOpen.who}
                 aria-controls="acc-who"
                 onClick={() => setAccOpen((o) => ({ ...o, who: !o.who }))}
@@ -313,7 +341,7 @@ export default function BelowMap() {
                 Who I am
               </button>
               {accOpen.who && (
-                <div id="acc-who" role="region" aria-labelledby="acc-who-btn" className="px-2 pb-2 text-sm">
+                <div id="acc-who" role="region" aria-labelledby="acc-who-btn" className="px-3 pb-3 text-sm">
                   I’m Eshaan Sood, a storyteller from New Delhi now in New York. My debut album Dream River is out everywhere — and this is my way of sending the boat sailing to every corner of the world.
                 </div>
               )}
@@ -322,32 +350,53 @@ export default function BelowMap() {
         </div>
 
         {/* Desktop layout (≥1280px): 3 columns ~ 2:5:3 -> 3:6:3 over 12 cols */}
-        <div className="hidden xl:grid xl:grid-cols-12 gap-6">
-          {/* Bandcamp (left) */}
-          <section aria-label="Bandcamp player" className="xl:col-span-3 xl:col-start-1">
-            <div className="rounded-2xl bg-white/70 backdrop-blur-sm border border-white/40 shadow-sm overflow-hidden">
-              <div className="p-3 sm:p-4">
+        <div className="hidden xl:grid gap-8 overflow-hidden" style={{ gridTemplateColumns: '3fr 6fr 3fr', height: 'calc(100svh - var(--hdr, 40px))' }}>
+          {/* Left: Bandcamp + YouTube stack (original positioning) */}
+          <section aria-label="Bandcamp and YouTube stack" className="h-full min-h-0 flex flex-col gap-4">
+            {/* Bandcamp card (top half) */}
+            <div className="flex-1 min-h-0 rounded-[24px] shadow-md" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+              <div className="p-4 h-full overflow-hidden">
                 <BandcampEmbed />
+              </div>
+            </div>
+            {/* YouTube card (bottom half) */}
+            <div className="flex-1 min-h-0 rounded-[24px] shadow-md" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+              <div className="p-4 h-full">
+                <h2 className="mb-3 font-seasons" style={{ fontSize: '1.3rem', color: 'rgba(245,250,255,0.85)', fontWeight: 600 }}>How To Play</h2>
+                <div className="relative w-full" style={{ aspectRatio: '16 / 9' }}>
+                  <iframe width="560" height="315" src="https://www.youtube.com/embed/AlvMCxaiIno?si=ZkyjiCvfv2IRvSZ0" title="YouTube video player" frameBorder={0} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen className="absolute inset-0 w-full h-full rounded-[16px]"></iframe>
+                </div>
+                {/* Subtle divider to separate from center content visually */}
+                <div className="mt-4" style={{ height: 1.5, background: 'rgba(11,13,26,0.25)', boxShadow: '0 0 2px rgba(11,13,26,0.25)' }} />
               </div>
             </div>
           </section>
 
           {/* Globe (center) */}
-          <section aria-label="Global participation" className="xl:col-span-6 xl:col-start-4">
-            <div className="relative rounded-2xl bg-[#0c1220] shadow-md overflow-hidden">
-              {/* Globe square container keeps perfect circle */}
-              <div className="relative w-full aspect-square">
-                <div className="absolute inset-0">
-                  <GlobeSummarySR />
-                  <Globe />
+          <section aria-label="Global participation">
+            <div className="relative h-full rounded-[24px] shadow-md overflow-hidden" style={{ background: '#0b0d1a' }}>
+              {/* Subtle frosted texture overlay while staying dark */}
+              <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(6px)' }} />
+              <div className="relative flex items-center justify-center h-full p-4">
+                <div className="relative w-full" style={{ aspectRatio: '1 / 1', maxHeight: '100%', maxWidth: '100%' }}>
+                  <div className="absolute inset-0">
+                  <GlobeSummarySR id="globe-sr-summary" />
+                  <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
+                  </div>
                 </div>
               </div>
             </div>
           </section>
 
           {/* Text block (right) */}
-          <section aria-label="Project intro" className="xl:col-span-3 xl:col-start-10">
-            <div className="rounded-2xl border bg-white/55 backdrop-blur-md border-white/50 shadow-md p-4 sm:p-6">
+          <section aria-label="Project intro">
+            <div
+              className="h-full rounded-[24px] shadow-md p-4 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]"
+              tabIndex={0}
+              role="region"
+              aria-label="About Dream River"
+              style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+            >
               <Hero />
             </div>
           </section>
@@ -369,6 +418,7 @@ export default function BelowMap() {
           id="panel-dashboard"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="dashboard-heading"
           className={`fixed inset-y-0 left-0 z-50 w-[88vw] max-w-sm lg:max-w-[520px] bg-white border-r border-purple-200 shadow-2xl overflow-y-auto focus:outline-none transform transition-transform duration-300 ease-out`}
           style={{ transform: "translateX(0)" }}
           tabIndex={-1}
@@ -442,7 +492,7 @@ export default function BelowMap() {
                     </div>
                     <ColorChips boatColor={boatColor} setBoatColor={setBoatColor} />
                   </section>
-                  <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3">
                     <button
                       className="rounded-md px-4 py-3 btn font-seasons flex-1"
                       disabled={uiLoading || !firstName || !lastName || !email || !country || !favoriteSong}
@@ -467,6 +517,23 @@ export default function BelowMap() {
                     </button>
                     <button className="text-sm underline" onClick={() => setGuestStep('menu')}>Back</button>
                   </div>
+                        {/* Legal disclaimer */}
+                        <div className="mt-3 text-[0.85rem] opacity-80">
+                          By clicking <strong>Send Code</strong>, you consent to receiving emails and agree to our{' '}
+                          <button
+                            ref={privacyLinkRef}
+                            type="button"
+                            role="link"
+                            className="underline"
+                            onClick={() => {
+                              setPrivacyOpen(true);
+                              setTimeout(() => { if (privacyRef.current) privacyRef.current.focus(); }, 0);
+                            }}
+                          >
+                            Privacy Policy
+                          </button>
+                          . You can unsubscribe anytime.
+                        </div>
                   {alert && <p className="text-sm">{alert}</p>}
                 </div>
               )}
@@ -603,7 +670,7 @@ export default function BelowMap() {
           ) : (
             <>
               <div className="flex items-center justify-between px-4 py-3 border-b border-purple-100">
-                <h3 className="text-purple-900 font-semibold">Dashboard</h3>
+                <h3 ref={dashboardHeadingRef} id="dashboard-heading" className="text-purple-900 font-semibold">Dashboard</h3>
                 <button aria-label="Close dashboard" onClick={() => setDashboardOpen(false)} className="text-purple-800">✕</button>
               </div>
               <div className="p-4">
@@ -627,33 +694,30 @@ export default function BelowMap() {
                     </div>
                   </div>
 
-                  <div className="font-sans text-sm md:text-base">Country : {(userProfile?.country_code || country || '—')}</div>
+                        <div className="font-sans text-sm md:text-base">Country : {resolvedCountryName}</div>
 
                   <div className="font-seasons text-base md:text-lg">{userProfile?.message || '—'}</div>
 
                   <div className="space-y-2">
-                    {!shareOpen && (
+                          {!shareOpen && (
                       <button
                         className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons transition-all duration-300 ease-out"
                         aria-label="Share Your Boat"
-                        onClick={() => setShareOpen(true)}
+                              onClick={() => setShareOpen(true)}
                         disabled={!referralUrl}
                       >
                         Share Your Boat
                       </button>
                     )}
                     {shareOpen && (
-                      <div className="transition-all duration-300 ease-out" aria-label="Share Your Boat" role="region">
+                          <div className="transition-all duration-300 ease-out" aria-label="Share Your Boat" role="region">
                         <div className="flex items-center justify-between mb-2">
                           <button className="text-sm underline" onClick={() => setShareOpen(false)} aria-label="Back">Back</button>
                           <div aria-live="polite" className="sr-only">{announce}</div>
                         </div>
-                        <div className="hidden md:flex gap-4">
-                          <ShareTiles referralUrl={referralUrl} message={shareMessage} userFullName={userFullName} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 md:hidden">
-                          <ShareTiles referralUrl={referralUrl} message={shareMessage} userFullName={userFullName} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
-                        </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <ShareTiles referralUrl={referralUrl} message={shareMessage} userFullName={userFullName} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
+                              </div>
                         <div className="mt-3 space-y-2">
                           <label className="font-sans text-sm" htmlFor="shareMessage">Message</label>
                           <textarea id="shareMessage" className="w-full border rounded-md px-3 py-2" rows={4} value={shareMessage} onChange={(e) => setShareMessage(e.target.value)} />
@@ -694,6 +758,28 @@ export default function BelowMap() {
                   <div>
                     <button className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons" aria-label="Redeem Rewards">
                       Redeem Rewards
+                    </button>
+                  </div>
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      aria-label="Log Out"
+                      className="w-full min-h-12 md:min-h-14 rounded-md border bg-white/90"
+                      style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontWeight: 700 }}
+                      onClick={async () => {
+                        try {
+                          const supabase = getSupabase();
+                          await supabase.auth.signOut();
+                        } catch {}
+                        setUserProfile(null);
+                        setBoatsTotal(0);
+                        setReferralUrl("");
+                        setUserFullName("");
+                        setShareOpen(false);
+                        setDashboardMode("guest");
+                      }}
+                    >
+                      Log Out
                     </button>
                   </div>
                 </div>
@@ -765,6 +851,38 @@ export default function BelowMap() {
           [role="dialog"] { transition: none !important; }
         }
       `}</style>
+      {/* Privacy Policy Modal */}
+      {privacyOpen && (
+        <>
+          <div className="fixed inset-0 z-[80] bg-black/40" onClick={() => { setPrivacyOpen(false); setTimeout(() => privacyLinkRef.current?.focus(), 0); }} />
+          <div
+            ref={privacyRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="privacy-title"
+            tabIndex={-1}
+            className="fixed z-[90] inset-x-0 bottom-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 w-full sm:max-w-md rounded-[24px] shadow-md p-4 outline-none"
+            style={{ background: 'rgba(210,245,250,0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+            onKeyDown={(e) => { if (e.key === 'Escape') { setPrivacyOpen(false); setTimeout(() => privacyLinkRef.current?.focus(), 0); } trapFocus(e as unknown as React.KeyboardEvent<HTMLDivElement>); }}
+          >
+            <button
+              aria-label="Close Privacy Policy"
+              className="absolute top-2 right-2 text-xl"
+              onClick={() => { setPrivacyOpen(false); setTimeout(() => privacyLinkRef.current?.focus(), 0); }}
+            >
+              ×
+            </button>
+            <h2 id="privacy-title" className="font-seasons text-lg mb-2">Privacy Policy</h2>
+            <ul className="list-disc pl-5 text-sm space-y-1">
+              <li>We collect your name and email to create your account and show your river connections.</li>
+              <li>We never sell or share your data with third parties.</li>
+              <li>Data is securely stored on Supabase with industry-standard encryption.</li>
+              <li>You can request deletion of your account anytime by emailing <a className="underline" href="mailto:contact@eshaansood.in">contact@eshaansood.net</a>.</li>
+              <li>Emails are only sent with your consent, and you can unsubscribe at any time.</li>
+            </ul>
+          </div>
+        </>
+      )}
     </div>
   );
 }

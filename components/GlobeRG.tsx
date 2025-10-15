@@ -35,7 +35,13 @@ const createPaperTexture = (): THREE.CanvasTexture | null => {
   return texture;
 };
 
-export default function GlobeRG() {
+type GlobeRGProps = {
+  describedById?: string;
+  ariaLabel?: string;
+  tabIndex?: number;
+};
+
+export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel = "Interactive globe showing Dream River connections", tabIndex = 0 }: GlobeRGProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const globeEl = useRef<any>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -265,6 +271,10 @@ export default function GlobeRG() {
       className="absolute inset-0"
       onMouseMove={handleMouseMove}
       style={{ transform: `translateY(var(--globe-offset-y)) scale(var(--globe-scale))`, transformOrigin: "center center" }}
+      role="region"
+      aria-label={ariaLabel}
+      aria-describedby={describedById}
+      tabIndex={tabIndex}
     >
       <ReactGlobe
         ref={globeEl}

@@ -7,13 +7,15 @@ function formatTime(date: Date) {
   return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
-export default function GlobeSummarySR() {
+export default function GlobeSummarySR({ id }: { id?: string }) {
   const [text, setText] = useState("Loading globe summary.");
   const prevRef = useRef<{ people: number; countries: number; connections: number; from: string; to: string } | null>(null);
+  const retriesRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     let timer: number | null = null;
+    let retryTimer: number | null = null;
 
     const compute = async () => {
       try {
@@ -28,6 +30,15 @@ export default function GlobeSummarySR() {
         const now = new Date();
         const snapshot = { people, countries, connections, from, to };
         const prev = prevRef.current;
+        // Avoid announcing a misleading "0 people" snapshot; retry instead
+        if (people === 0) {
+          if (retriesRef.current < 3) {
+            retriesRef.current += 1;
+            if (!retryTimer) retryTimer = window.setTimeout(compute, retriesRef.current * 1500);
+          }
+          return;
+        }
+        // Update only on change
         if (!prev || prev.people !== people || prev.countries !== countries || prev.connections !== connections || prev.from !== from || prev.to !== to) {
           prevRef.current = snapshot;
           setText(`${people} people are sailing through Dream River in ${countries} countries. ${connections} connections have been made, and the longest river runs from ${from} to ${to}. Updated ${formatTime(now)}.`);
@@ -40,11 +51,11 @@ export default function GlobeSummarySR() {
     timer = window.setInterval(compute, 10 * 60 * 1000);
     const vis = () => { if (!document.hidden) compute(); };
     document.addEventListener('visibilitychange', vis, { passive: true });
-    return () => { cancelled = true; if (timer) window.clearInterval(timer); };
+    return () => { cancelled = true; if (timer) window.clearInterval(timer); if (retryTimer) window.clearTimeout(retryTimer); };
   }, []);
 
   return (
-    <div className="sr-only">
+    <div className="sr-only" id={id}>
       <p aria-live="polite" aria-atomic="true">{text}</p>
     </div>
   );
