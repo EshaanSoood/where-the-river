@@ -6,6 +6,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as topojson from 'topojson-client';
 import type { FeatureCollection } from '../types';
 import { fetchGlobeData } from '@/lib/globeData';
+import { getCountryNameFromCode } from "@/lib/countryMap";
 
 const GlobeComponent: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -46,8 +47,8 @@ const GlobeComponent: React.FC = () => {
     const getContainerSize = () => {
       const rect = mount.getBoundingClientRect();
       // Fallback if not yet laid out
-      const width = Math.max(1, Math.floor(rect.width || mount.clientWidth || window.innerWidth));
-      const height = Math.max(1, Math.floor(rect.height || mount.clientHeight || window.innerHeight));
+      const width = Math.max(1, Math.floor(rect.width || mount.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1)));
+      const height = Math.max(1, Math.floor(rect.height || mount.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 1)));
       return { width, height };
     };
 
@@ -239,6 +240,17 @@ const GlobeComponent: React.FC = () => {
     
     // Removed boat paths/markers for simplified visual style
 
+    // Deterministic hash for edge seeding
+    const hashEdge = (s: string) => {
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      // Map to [-1, 1]
+      return (h % 2000) / 1000 - 1;
+    };
+
     const loadAndDrawGlobe = async () => {
         try {
             const res = await fetch('https://unpkg.com/world-atlas@2.0.2/countries-110m.json');
@@ -258,12 +270,14 @@ const GlobeComponent: React.FC = () => {
       const vec = latLonToVector3(lat, lon, globeRadius + 2.0);
       const surfaceNormal = vec.clone().normalize();
       const toCameraVector = new THREE.Vector3().subVectors(camera.position, vec).normalize();
-      const facing = surfaceNormal.dot(toCameraVector) > 0.0;
+      const dot = surfaceNormal.dot(toCameraVector); // [-1,1]
+      const facing = dot > 0.0;
+      const facingStrength = Math.max(0, Math.min(1, dot));
       const { width, height } = getContainerSize();
       const projected = vec.clone().project(camera);
       const x = (projected.x * 0.5 + 0.5) * width;
       const y = (-projected.y * 0.5 + 0.5) * height;
-      return { x, y, facing };
+      return { x, y, facing, facingStrength };
     };
 
     const updateOverlayPositions = () => {
@@ -286,15 +300,41 @@ const GlobeComponent: React.FC = () => {
           const pa = projectLatLngToScreen(a.lat, a.lng);
           const pb = projectLatLngToScreen(b.lat, b.lng);
           if (!pa.facing || !pb.facing) return;
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', String(pa.x));
-          line.setAttribute('y1', String(pa.y));
-          line.setAttribute('x2', String(pb.x));
-          line.setAttribute('y2', String(pb.y));
-          line.setAttribute('stroke', 'rgba(0,0,0,0.25)');
-          line.setAttribute('stroke-width', '1');
-          line.setAttribute('vector-effect', 'non-scaling-stroke');
-          edgeLayer.appendChild(line);
+
+          const sx = pa.x; const sy = pa.y;
+          const ex = pb.x; const ey = pb.y;
+          const dx = ex - sx;
+          const dy = ey - sy;
+          const len = Math.max(1, Math.hypot(dx, dy));
+          const mx = sx + dx * 0.5;
+          const my = sy + dy * 0.5;
+          // Perpendicular unit vector
+          const px = -dy / len;
+          const py = dx / len;
+          // Deterministic offset (10–14% of length)
+          const seed = hashEdge(`${l.source}→${l.target}`);
+          const magnitude = len * (0.10 + 0.04 * ((seed + 1) / 2));
+          const cx = mx + px * magnitude * seed;
+          const cy = my + py * magnitude * seed;
+          const d = `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`;
+
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', d);
+          path.setAttribute('class', 'river-edge');
+          path.setAttribute('fill', 'none');
+          path.setAttribute('stroke', 'var(--ink)');
+          path.setAttribute('stroke-linecap', 'round');
+          path.setAttribute('stroke-linejoin', 'round');
+          path.setAttribute('vector-effect', 'non-scaling-stroke');
+          // Width variation (slight) based on seed and length
+          const width = 0.9 + 0.7 * ((seed + 1) / 2);
+          path.setAttribute('stroke-width', String(width));
+          // Gentle dash to suggest flow; drift handled via CSS animation
+          path.setAttribute('stroke-dasharray', '6 10');
+          // Opacity scaled by facing strength of endpoints
+          const alpha = 0.28 * ((pa.facingStrength + pb.facingStrength) / 2);
+          path.setAttribute('opacity', String(Math.max(0.06, Math.min(0.35, alpha))));
+          edgeLayer.appendChild(path);
           drawnEdges++;
         });
       }
@@ -493,7 +533,18 @@ const GlobeComponent: React.FC = () => {
                   <circle ref={(el) => {
                     const slot = nodeElementMapRef.current[n.id];
                     if (slot) slot.circle = el;
-                  }} r={nodeRadius} fill="var(--teal)" stroke="#fff" strokeWidth={1} style={{ pointerEvents: 'auto' }} tabIndex={0} aria-label={`${n.name}, from ${n.countryCode}`} />
+                  }} r={nodeRadius} fill="var(--teal)" stroke="#fff" strokeWidth={1} style={{ pointerEvents: 'auto' }} tabIndex={0} aria-label={`${n.name}, from ${n.countryCode}`}
+                  onMouseEnter={() => {
+                    try {
+                      const isDebug = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
+                      if (isDebug) {
+                        // Temporary verification log; remove after validation
+                        // Expect: { code: "IN", name: "India" }
+                        // eslint-disable-next-line no-console
+                        console.log({ code: n.countryCode, name: getCountryNameFromCode(n.countryCode) });
+                      }
+                    } catch {}
+                  }} />
                   <text ref={(el) => {
                     const slot = nodeElementMapRef.current[n.id];
                     if (slot) slot.text = el;
@@ -538,6 +589,11 @@ const GlobeComponent: React.FC = () => {
           </div>
         </div>
       )}
+      <style jsx>{`
+        .river-edge { stroke-dashoffset: 0; animation: riverDrift 30s linear infinite; }
+        @keyframes riverDrift { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 200; } }
+        @media (prefers-reduced-motion: reduce) { .river-edge { animation: none !important; } }
+      `}</style>
     </>
   );
 };

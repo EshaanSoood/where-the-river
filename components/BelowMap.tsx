@@ -14,6 +14,7 @@ import ColorChips from "@/components/ColorChips";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 
   const Globe = dynamic(() => import("@/components/GlobeRG"), { ssr: false });
+  const RewardsView = dynamic(() => import("@/components/RewardsView"), { ssr: false });
 
   type UserRow = {
     name: string | null;
@@ -44,6 +45,8 @@ export default function BelowMap() {
   const [userProfile, setUserProfile] = useState<{ name: string | null; country_code: string | null; message: string | null; boat_color: string | null } | null>(null);
   const [boatsTotal, setBoatsTotal] = useState<number>(0);
   const [shareOpen, setShareOpen] = useState(false);
+  const [rewardsOpen, setRewardsOpen] = useState(false);
+  // Points modal state lives inside RewardsView now
   const [shareMessage, setShareMessage] = useState("Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I’ve been listening to Dream River by them lately and I think you’ll enjoy it too.");
   const [referralUrl, setReferralUrl] = useState("");
   const [userFullName, setUserFullName] = useState("");
@@ -60,6 +63,19 @@ export default function BelowMap() {
   const contentRef = useRef<HTMLDivElement | null>(null);
   const dashboardToggleRef = useRef<HTMLButtonElement | null>(null);
   const dashboardHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const shareHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const shareButtonRef = useRef<HTMLButtonElement | null>(null);
+  // Rewards handled within lazy-loaded RewardsView
+  
+
+  const rewardTiers: { boats: number; title: string; subtitle: string; copy: string }[] = [
+    { boats: 20, title: "Watch The Documentary", subtitle: "Early access documentary", copy: "Unlocks early access to a short film about Dream River and the making of this project." },
+    { boats: 50, title: "Q&A Livestream", subtitle: "Community Q&A session", copy: "Join a live Q&A to talk about the music, the globe, and the story behind the river." },
+    { boats: 100, title: "Sticker Pack", subtitle: "Limited digital sticker set", copy: "Collect a set of limited artwork stickers to share and celebrate your river." },
+    { boats: 150, title: "Behind the Scenes", subtitle: "Photo + notes pack", copy: "Peek into sketches, notes, and photos captured while making Dream River." },
+    { boats: 250, title: "Listening Party", subtitle: "Invite-only listening room", copy: "An intimate group session to listen together and share stories along the river." },
+    { boats: 400, title: "Signed Poster (Digital)", subtitle: "Digital signed artwork", copy: "Receive a signed digital poster to commemorate your river’s milestone." },
+  ];
 
   // Resolve a human-friendly country name from ISO-2 codes using our list
   const resolvedCountryName = useMemo(() => {
@@ -138,21 +154,31 @@ export default function BelowMap() {
     let cancelled = false;
     (async () => {
       try {
-        // Prefer direct Supabase read for robust profile details
-        const supabase = getSupabase();
-        const { data } = await supabase.from('users')
-          .select('name,country_code,message,boat_color')
-          .eq('email', user.email)
-          .limit(1)
-          .maybeSingle();
-        if (!cancelled && data) {
-          const d = data as UserRow;
+        // Read merged profile from server to ensure canonical fields and avoid client-side RLS
+        const resp = await fetch('/api/me', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: user.email }),
+        });
+        const j = await resp.json();
+        if (!cancelled && j?.me) {
           setUserProfile({
-            name: d.name ?? null,
-            country_code: d.country_code ?? null,
-            message: d.message ?? null,
-            boat_color: d.boat_color ?? null,
+            name: j.me.name ?? null,
+            country_code: j.me.country_code ?? null,
+            message: j.me.message ?? null,
+            boat_color: j.me.boat_color ?? null,
           });
+          if (typeof j.me.boats_total === 'number') {
+            setBoatsTotal((v) => v || j.me.boats_total || 0);
+          }
+          if (!referralUrl) {
+            const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+            const code = j.me.ref_code_8 || j.me.referral_code;
+            setReferralUrl(code ? `${base}/?ref=${code}` : base);
+          }
+          if (!userFullName && j.me.name) {
+            setUserFullName(j.me.name);
+          }
         }
       } catch {}
       try {
@@ -176,6 +202,15 @@ export default function BelowMap() {
     return () => { cancelled = true; };
   }, [dashboardOpen, dashboardMode, user?.email]);
 
+  // Manage focus when switching into/out of the inline Share view
+  useEffect(() => {
+    if (shareOpen) {
+      setTimeout(() => shareHeadingRef.current?.focus(), 0);
+    }
+  }, [shareOpen]);
+  // RewardsView manages its own focus
+
+  
   const trapFocus = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Tab") return;
     const root = e.currentTarget;
@@ -212,7 +247,7 @@ export default function BelowMap() {
   }
 
   return (
-    <div className="px-[25px] py-4">
+    <div className="px-[20px] py-4">
       {/* Sticky Top Bar */}
       <div className="sticky top-0 z-50" style={{ ['--hdr' as unknown as string]: '40px' }}>
         <div className="relative mx-auto max-w-6xl px-2 sm:px-4" ref={headerRef}>
@@ -236,6 +271,7 @@ export default function BelowMap() {
                         setDashboardOpen((v) => !v);
                       } else {
                         setDashboardMode("guest");
+                        setGuestStep('menu');
                         setDashboardOpen(true);
                       }
                     }}
@@ -281,6 +317,8 @@ export default function BelowMap() {
 
       {/* Content Wrapper */}
       <div className="mx-auto max-w-6xl mt-0" ref={contentRef}>
+        {/* Single SR summary for both layouts (avoid duplicate IDs across breakpoints) */}
+        <GlobeSummarySR id="globe-sr-summary" />
         {/* Mobile / small-screen layout (≤1279px) */}
         <div className="xl:hidden space-y-4">
           {/* Header now contains buttons and slim player; no title shown */}
@@ -292,7 +330,6 @@ export default function BelowMap() {
               {/* Globe container uses viewport height to dominate; add bottom padding to allow heading peek */}
               <div className="relative w-full" style={{ height: "min(85vh, calc(100svh - 180px))" }}>
                 <div className="absolute inset-0">
-                  <GlobeSummarySR id="globe-sr-summary" />
                   <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
                 </div>
               </div>
@@ -380,7 +417,6 @@ export default function BelowMap() {
               <div className="relative flex items-center justify-center h-full p-4">
                 <div className="relative w-full" style={{ aspectRatio: '1 / 1', maxHeight: '100%', maxWidth: '100%' }}>
                   <div className="absolute inset-0">
-                  <GlobeSummarySR id="globe-sr-summary" />
                   <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
                   </div>
                 </div>
@@ -603,20 +639,18 @@ export default function BelowMap() {
                         setUiLoading(true);
                         setAlert(null);
                         try {
-                          const res = await fetch('/api/users/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-                          const json = await res.json();
-                          if (!json.exists) {
-                            setAlert('No rivers found with that email address.');
-                            setGuestStep('signup_email');
-                            return;
-                          }
+                          // Always attempt OTP sign-in; fall back to signup if auth rejects
                           const supabase = getSupabase();
                           const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-                          if (error) throw error;
-                          setGuestStep('login_code');
-                          setAlert('We emailed you a 6-digit code. Enter it below.');
+                          if (error) {
+                            setAlert('No rivers found with that email address. You can start a new one.');
+                            setGuestStep('signup_email');
+                          } else {
+                            setGuestStep('login_code');
+                            setAlert('We emailed you a 6-digit code. Enter it below.');
+                          }
                         } catch (e) {
-                          setAlert('Unable to check river. Try again.');
+                          setAlert('Unable to send code. Try again.');
                         } finally {
                           setUiLoading(false);
                         }
@@ -670,10 +704,13 @@ export default function BelowMap() {
           ) : (
             <>
               <div className="flex items-center justify-between px-4 py-3 border-b border-purple-100">
-                <h3 ref={dashboardHeadingRef} id="dashboard-heading" className="text-purple-900 font-semibold">Dashboard</h3>
+                <h3 ref={dashboardHeadingRef} id="dashboard-heading" tabIndex={-1} className="text-purple-900 font-semibold">Dashboard</h3>
                 <button aria-label="Close dashboard" onClick={() => setDashboardOpen(false)} className="text-purple-800">✕</button>
               </div>
               <div className="p-4">
+                {rewardsOpen ? (
+                  <RewardsView boatsTotal={boatsTotal} onBack={() => { setRewardsOpen(false); setTimeout(() => dashboardHeadingRef.current?.focus(), 0); }} />
+                ) : (
                 <div className="space-y-4 md:space-y-5">
                   <div className="flex items-center justify-between gap-4">
                     <div className="w-14 h-14 rounded-full overflow-hidden border" style={{ borderColor: 'var(--mist)' }} aria-label="Boat badge">
@@ -701,6 +738,7 @@ export default function BelowMap() {
                   <div className="space-y-2">
                           {!shareOpen && (
                       <button
+                        ref={shareButtonRef}
                         className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons transition-all duration-300 ease-out"
                         aria-label="Share Your Boat"
                               onClick={() => setShareOpen(true)}
@@ -710,11 +748,22 @@ export default function BelowMap() {
                       </button>
                     )}
                     {shareOpen && (
-                          <div className="transition-all duration-300 ease-out" aria-label="Share Your Boat" role="region">
+                          <div className="transition-all duration-300 ease-out" role="region" aria-labelledby="share-title">
                         <div className="flex items-center justify-between mb-2">
-                          <button className="text-sm underline" onClick={() => setShareOpen(false)} aria-label="Back">Back</button>
+                          <button
+                            className="text-sm underline"
+                            onClick={() => { setShareOpen(false); setTimeout(() => shareButtonRef.current?.focus(), 0); }}
+                            aria-label="Back"
+                          >Back</button>
                           <div aria-live="polite" className="sr-only">{announce}</div>
                         </div>
+                            <h4
+                              id="share-title"
+                              ref={shareHeadingRef}
+                              tabIndex={-1}
+                              className="font-seasons text-lg mb-2"
+                              aria-label="Share"
+                            >Share</h4>
                               <div className="grid grid-cols-2 gap-4">
                                 <ShareTiles referralUrl={referralUrl} message={shareMessage} userFullName={userFullName} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
                               </div>
@@ -756,16 +805,15 @@ export default function BelowMap() {
                   </div>
 
                   <div>
-                    <button className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons" aria-label="Redeem Rewards">
+                    <button className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons" aria-label="Redeem Rewards" onClick={() => { setRewardsOpen(true); setShareOpen(false); }}>
                       Redeem Rewards
                     </button>
                   </div>
                   <div className="mt-2">
                     <button
                       type="button"
-                      aria-label="Log Out"
-                      className="w-full min-h-12 md:min-h-14 rounded-md border bg-white/90"
-                      style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontWeight: 700 }}
+                      aria-label="Log out"
+                      className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons text-white"
                       onClick={async () => {
                         try {
                           const supabase = getSupabase();
@@ -777,12 +825,14 @@ export default function BelowMap() {
                         setUserFullName("");
                         setShareOpen(false);
                         setDashboardMode("guest");
+                        setGuestStep('menu');
                       }}
                     >
-                      Log Out
+                      Log out
                     </button>
                   </div>
                 </div>
+                )}
               </div>
             </>
           )}

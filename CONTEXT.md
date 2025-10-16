@@ -95,3 +95,31 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
 - Keep edits minimal and lint-clean.
 - When adding features, update `PROJECT_LOG.md` and this `CONTEXT.md` with new endpoints/pages and next steps.
 
+
+## Recent Changes — Yesterday & Today (ISO‑2, Referrals, Globe Arcs)
+- ISO‑2 Canonical Country Handling
+  - Frontend: `app/(auth)/participate/page.tsx` country dropdown now submits ISO‑2 (`value=code`, `label=name`). Placeholder disabled.
+  - Backend: `app/api/users/upsert/route.ts` normalizes to ISO‑2; rejects unknown labels with `400 invalid_country`.
+  - `/api/me`: returns `country_code` and derived `country_name` using `lib/countryMap.ts`.
+  - Shared util: `lib/countryMap.ts` (normalize input, resolve ISO‑2, derive friendly name from Intl.DisplayNames).
+- Referral Generation & Robustness
+  - Server‑side referral_id generation with auto‑retry on unique conflict (max 5 attempts). Client‑sent `referral_id` ignored; `referred_by` still accepted.
+  - DB confirmed: `users.referred_by` → `users.referral_id` with ON DELETE SET NULL; unique index on `referral_id` (plus partial numeric 8‑digit).
+- Globe Feed & Rendering
+  - Data source `lib/globeData.ts`: returns only public fields; nodes keyed by `referral_id`; edges built client‑side `referred_by → referral_id`.
+  - Edges: switched from straight `<line>` to organic quadratic Bézier `<path>` with deterministic seeding and facing‑aware opacity in `components/Globe.tsx`.
+  - Hover verification (temporary): logs `{ code, name }` under `?debug=1`.
+- Tests & Audits
+  - Built deep branching referral chain A–N plus O via real API; verified ISO‑2 writes, unique 8‑digit IDs, correct edges; then cleaned up test users.
+  - Added/updated docs:
+    - `docs/audit-signup-login-referral.md`, `docs/proposed-diffs.patch`, `docs/test-plan.md`, `docs/test-results.md`, `docs/testresultsnew.md`
+    - `docs/country-handling.md`, `docs/country-and-referrals.md`
+    - `docs/countryhandlingtest.md`
+    - `docs/point test.md` (graph hardening, edge mapping audit, organic edges, cleanup)
+- Misc UI
+  - Reduced outer container horizontal padding by ~20% in `components/BelowMap.tsx`.
+
+## Action Items
+- Consider adding `.limit`/cursor pagination to globe feed for scale.
+- Optional guard: skip self‑loop edges if `source===target`.
+

@@ -35,7 +35,10 @@ export default function GlobeSummarySR({ id }: { id?: string }) {
           if (retriesRef.current < 3) {
             retriesRef.current += 1;
             if (!retryTimer) retryTimer = window.setTimeout(compute, retriesRef.current * 1500);
+            return;
           }
+          // Fallback message if still empty after retries
+          setText("No participants yet. The river will update here when people join.");
           return;
         }
         // Update only on change

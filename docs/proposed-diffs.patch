@@ -1,0 +1,104 @@
+*** Begin Patch
+*** Update File: app/(auth)/participate/page.tsx
+@@
+-  const [country, setCountry] = useState("");
++  const [country, setCountry] = useState("");
+@@
+-              <select
++              <select
+                id="country"
+                className="w-full border rounded-md px-3 py-2 bg-background"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                required
+              >
+                <option value="" disabled>Select your country</option>
+                {countries.map((c) => (
+                  <option key={c.code} value={c.code}>{c.name}</option>
+                ))}
+              </select>
+@@
+-        await fetch("/api/users/upsert", {
++        await fetch("/api/users/upsert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            email,
+            country_code: String(country).trim().replace(/\u2014/g, "").toUpperCase(),
+            message: userMessage || null,
+            photo_url: null,
+            referral_id, // will be validated server-side (numeric+unique)
+            referred_by: null,
+          }),
+        }).then((r) => { if (!r.ok) throw new Error("Profile creation failed"); });
+*** End Patch
+*** Begin Patch
+*** Update File: app/api/users/upsert/route.ts
+@@
+-    const { name, email, country_code, message, photo_url, referral_id, referred_by, boat_color } = body || {};
++    const { name, email, country_code, message, photo_url, referral_id, referred_by, boat_color, parent_referral } = body || {};
+@@
+-    const { data, error } = await supabaseServer
+-      .from("users")
+-      .upsert(
+-        {
+-          name: name ?? null,
+-          email,
+-          country_code: String(country_code).toUpperCase(),
+-          message: message ?? null,
+-          photo_url: photo_url ?? null,
+-          referral_id,
+-          referred_by: referred_by ?? null,
+-          otp_verified: true,
+-          boat_color: boat_color ?? null,
+-        },
+-        { onConflict: "email" }
+-      )
+-      .select()
+-      .single();
++    // Normalize country and generate numeric 8-digit referral if invalid
++    const cc = String(country_code || "").trim().replace(/\u2014/g, "").toUpperCase();
++    const generateCode = () => String(Math.floor(10_000_000 + Math.random() * 89_999_999));
++    let ref = String(referral_id || "").replace(/\D/g, "").slice(0, 8);
++    if (ref.length !== 8) ref = generateCode();
++
++    // Retry up to 5 times on referral_id uniqueness conflict
++    let data: any = null;
++    for (let i = 0; i < 5; i++) {
++      const attempt = await supabaseServer
++        .from("users")
++        .upsert(
++          {
++            name: name ?? null,
++            email,
++            country_code: cc || null,
++            message: message ?? null,
++            photo_url: photo_url ?? null,
++            referral_id: ref,
++            referred_by: parent_referral ?? referred_by ?? null,
++            otp_verified: true,
++            boat_color: boat_color ?? null,
++          },
++          { onConflict: "email" }
++        )
++        .select()
++        .single();
++      if (!attempt.error) { data = attempt.data; break; }
++      if (attempt.error && /referral_id/.test(attempt.error.message)) { ref = generateCode(); continue; }
++      throw attempt.error; // propagate non-uniqueness errors
++    }
+*** End Patch
+*** Begin Patch
+*** Update File: components/BelowMap.tsx
+@@
+-  const resolvedCountryName = useMemo(() => {
+-    const codeRaw = (userProfile?.country_code || country || '').toUpperCase();
++  const resolvedCountryName = useMemo(() => {
++    const raw = (userProfile?.country_code || country || '').trim().replace(/\u2014/g, "");
++    const codeRaw = raw.toUpperCase();
+     if (!codeRaw) return '—';
+     const match = countries.find((c) => c.code === codeRaw);
+     return match?.name || codeRaw;
+   }, [userProfile?.country_code, country, countries]);
+*** End Patch
