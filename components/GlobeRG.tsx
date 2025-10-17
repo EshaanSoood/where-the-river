@@ -5,13 +5,16 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactGlobe from "react-globe.gl";
 import * as THREE from "three";
 import * as topojson from "topojson-client";
+// Relax typing for newer 'paths*' props that may not exist in installed types
+const RG: any = ReactGlobe as unknown as any;
 // import { geoCentroid } from "d3-geo";
 import { fetchGlobeData } from "@/lib/globeData";
 import { countryCodeToLatLng } from "@/app/data/countryCentroids";
 import { getSupabase } from "@/lib/supabaseClient";
 
 type ArcData = { startLat: number; startLng: number; endLat: number; endLng: number; key?: string };
-type PointData = { lat: number; lng: number; size: number; color: string; id?: string; countryCode?: string; name?: string };
+type ArcDataRich = ArcData & { startCc?: string; endCc?: string; aggregatedCount?: number };
+type PointData = { lat: number; lng: number; size: number; color: string; id?: string; countryCode?: string; name?: string; kind?: 'self' | 'friend' | 'other' | 'aggregate'; aggregateCount?: number };
 type CountriesData = { features: any[] };
 type Boat = { id: number; mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; startTime: number; duration: number };
 
@@ -47,7 +50,17 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const globeEl = useRef<any>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const boatsRef = useRef<Boat[]>([]);
+  // Single active boat that rides cached path points from built-in paths
+  const activeBoatRef = useRef<{
+    key: string;
+    mesh: THREE.Mesh;
+    points: THREE.Vector3[];
+    startTime: number;
+    duration: number;
+  } | null>(null);
+  const persistKeyRef = useRef<string | null>(null);
+  const pathShownRef = useRef<Set<string>>(new Set());
+  const path3DCacheRef = useRef<Map<string, THREE.Vector3[]>>(new Map());
   // Session seed (stable for the life of the page) and per-edge params cache
   const createSessionSeed = () => {
     try {
@@ -100,11 +113,9 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
 
   const [countriesLOD, setCountriesLOD] = useState<{ low: CountriesData; high: CountriesData }>({ low: { features: [] }, high: { features: [] } });
   const [currentLOD, setCurrentLOD] = useState<"low" | "high">("low");
-  const [arcsData, setArcsData] = useState<ArcData[]>([]);
+  const [arcsData, setArcsData] = useState<ArcDataRich[]>([]);
   const [pointsData, setPointsData] = useState<PointData[]>([]);
   const [visiblePoints, setVisiblePoints] = useState<PointData[]>([]);
-  const [pointLabelOverlays, setPointLabelOverlays] = useState<{ id: string; x: number; y: number; text: string }[]>([]);
-  const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
   const [hoveredCountry, setHoveredCountry] = useState<any | null>(null);
   const nodesRef = useRef<{ id: string; lat: number; lng: number }[]>([]);
   const userRefCodeRef = useRef<string | null>(null);
@@ -115,17 +126,14 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
   const userMeRef = useRef<{ name?: string | null; boats_total?: number | null; boat_color?: string | null; country_name?: string | null } | null>(null);
   const userHotspotRef = useRef<HTMLButtonElement | null>(null);
   const userBadgeHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const userNameRef = useRef<HTMLDivElement | null>(null);
+  const [userFirstName, setUserFirstName] = useState<string>("");
   const [srAnnounce, setSrAnnounce] = useState<string>("");
 
   const [tooltip, setTooltip] = useState<{ content: string | null; x: number; y: number }>({ content: null, x: 0, y: 0 });
   const tooltipRef = useRef<HTMLDivElement | null>(null);
-  // SVG path reuse: keep a single <svg> element and update individual <path> d/opacity
-  const svgRef = useRef<SVGSVGElement | null>(null);
-  const pathMapRef = useRef<Map<string, SVGPathElement>>(new Map());
-  const anchorsRef = useRef<Map<string, { startLat: number; startLng: number; endLat: number; endLng: number }>>(new Map());
-  const prevSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
-  const projectPathsRef = useRef<(() => void) | null>(null);
-  const [svgPaths, setSvgPaths] = useState<{ d: string; w: number; dash: number; opacity: number }[]>([]);
+  const hasInteractedRef = useRef<boolean>(false);
+  // Removed SVG overlay/state: lines will use Globe's built-in arcs
 
   useEffect(() => { countriesLODRef.current = countriesLOD; }, [countriesLOD]);
 
@@ -136,6 +144,8 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
   const overflowBadgesRef = useRef<Map<string, { x: number; y: number; k: number; label: string }>>(new Map());
   const nearFullBadgesRef = useRef<Map<string, { x: number; y: number; label: string }>>(new Map());
   const clusterPeopleLabelsRef = useRef<Map<string, { x: number; y: number; label: string }>>(new Map());
+  const expandedCountriesRef = useRef<Set<string>>(new Set());
+  const isIndividualBucketRef = useRef<boolean>(false);
   const [pointsTransitionMs, setPointsTransitionMs] = useState<number>(250);
   const pointEnterAtRef = useRef<Map<string, number>>(new Map());
   const pointExitAtRef = useRef<Map<string, number>>(new Map());
@@ -227,23 +237,23 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
         const isTinyCountry = dx > 0 && dx < 18; // ~small on-screen footprint
         if (isSmallScreen) cap = Math.max(baseCap, Math.floor(cap * 0.75));
         if (isTinyCountry) cap = Math.min(cap, baseCap + 1);
+        // Respect expanded country toggle (aggregate expansion)
+        if (expandedCountriesRef.current.has(cc)) cap = Math.floor(cap * 2.5);
         const allowed = Math.max(0, cap - (mine ? 1 : 0));
         const shown = rest.slice(0, allowed);
-        if (mine) nextVisible.push(mine);
-        nextVisible.push(...shown);
+        // Tag kinds
+        if (mine) nextVisible.push({ ...mine, kind: 'self' });
+        shown.forEach(p => nextVisible.push({ ...p, kind: (connectedIdsRef.current.has(p.id!) ? 'friend' : 'other') }));
         const total = arr.length;
         const overflow = total - (shown.length + (mine ? 1 : 0));
         const nearFullThreshold = (isSmallScreen || isTinyCountry) ? 0.75 : 0.8;
         const nearFull = overflow <= 0 && total > nearFullThreshold * cap && total <= cap;
         if (overflow > 0) {
-          // centroid from country code
+          // Add aggregate synthetic node at centroid
           const centroid = cc && countryCodeToLatLng[cc] ? { lat: countryCodeToLatLng[cc][0], lng: countryCodeToLatLng[cc][1] } : null;
-          const pr = centroid ? projectLatLng(centroid.lat, centroid.lng) : null;
-          if (pr) overflowBadgesRef.current.set(cc, { x: pr.x, y: pr.y - 10, k: overflow, label: `+${overflow} more` });
+          if (centroid) nextVisible.push({ id: `agg-${cc}`, lat: centroid.lat, lng: centroid.lng, size: 0.22, color: '#ffffff', countryCode: cc, name: undefined as any, kind: 'aggregate', aggregateCount: overflow });
         } else if (nearFull) {
-          const centroid = cc && countryCodeToLatLng[cc] ? { lat: countryCodeToLatLng[cc][0], lng: countryCodeToLatLng[cc][1] } : null;
-          const pr = centroid ? projectLatLng(centroid.lat, centroid.lng) : null;
-          if (pr) nearFullBadgesRef.current.set(cc, { x: pr.x, y: pr.y - 10, label: `${total} listeners` });
+          // No aggregate node; near full badge not needed visually anymore
         }
       });
 
@@ -259,32 +269,9 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       } catch {}
 
       setVisiblePoints(nextVisible);
-      // Build per-point label overlays for currently visible points
-      try {
-        const labels: { id: string; x: number; y: number; text: string }[] = [];
-        const wrap = wrapRef.current;
-        const globe = globeEl.current;
-        if (wrap && globe) {
-          const cam = globe.camera();
-          nextVisible.forEach(p => {
-            if (!p.id) return;
-            const c = globe.getCoords(p.lat, p.lng);
-            if (!c) return;
-            const rect = wrap.getBoundingClientRect();
-            const v = new THREE.Vector3(c.x, c.y, c.z);
-            const dot = v.clone().normalize().dot(cam.position.clone().normalize());
-            if (dot <= 0) return;
-            v.project(cam);
-            const x = (v.x * 0.5 + 0.5) * rect.width;
-            const y = (-v.y * 0.5 + 0.5) * rect.height;
-            const initials = (p.name || '').trim().split(/\s+/).slice(0,2).map(s => s[0]?.toUpperCase() || '').join('') || '—';
-            labels.push({ id: p.id, x, y: y + 10, text: initials });
-          });
-        }
-        setPointLabelOverlays(labels);
-      } catch {}
       // Update current bucket after applying
       zoomBucketRef.current = bucketLabel;
+      isIndividualBucketRef.current = pick >= 2.0; // heuristic: closer zoom
       lastRecalcAtRef.current = performance.now();
       // Kick bloom RAF
       startBloomAnim();
@@ -336,21 +323,23 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       const glow = userGlowRef.current;
       const badge = userBadgeRef.current;
       const hotspot = userHotspotRef.current;
+      const nameEl = userNameRef.current;
       const pos = userLatLngRef.current;
-      if (!wrap || !globe || !pos) { if (glow) glow.style.opacity = '0'; if (badge) badge.style.opacity = '0'; if (hotspot) hotspot.style.opacity = '0'; return; }
+      if (!wrap || !globe || !pos) { if (glow) glow.style.opacity = '0'; if (badge) badge.style.opacity = '0'; if (hotspot) hotspot.style.opacity = '0'; if (nameEl) nameEl.style.opacity = '0'; return; }
       const rect = wrap.getBoundingClientRect();
       const cam = globe.camera();
       const c = globe.getCoords(pos.lat, pos.lng);
-      if (!c) { if (glow) glow.style.opacity = '0'; if (badge) badge.style.opacity = '0'; if (hotspot) hotspot.style.opacity = '0'; return; }
+      if (!c) { if (glow) glow.style.opacity = '0'; if (badge) badge.style.opacity = '0'; if (hotspot) hotspot.style.opacity = '0'; if (nameEl) nameEl.style.opacity = '0'; return; }
       const world = new THREE.Vector3(c.x, c.y, c.z);
       const dot = world.clone().normalize().dot(cam.position.clone().normalize());
-      if (dot <= 0) { if (glow) glow.style.opacity = '0'; if (badge) badge.style.opacity = '0'; if (hotspot) hotspot.style.opacity = '0'; return; } // hide when on back side
+      if (dot <= 0) { if (glow) glow.style.opacity = '0'; if (badge) badge.style.opacity = '0'; if (hotspot) hotspot.style.opacity = '0'; if (nameEl) nameEl.style.opacity = '0'; return; } // hide when on back side
       const v = world.project(cam);
       const x = (v.x * 0.5 + 0.5) * rect.width;
       const y = (-v.y * 0.5 + 0.5) * rect.height;
       if (glow) { glow.style.left = `${x}px`; glow.style.top = `${y}px`; glow.style.opacity = '1'; }
       if (badge && userBadgeOpen) { badge.style.left = `${x}px`; badge.style.top = `${y - 36}px`; badge.style.opacity = '1'; }
       if (hotspot) { hotspot.style.left = `${x}px`; hotspot.style.top = `${y}px`; hotspot.style.opacity = '0.001'; hotspot.style.pointerEvents = 'auto'; hotspot.tabIndex = 0; hotspot.setAttribute('aria-hidden', 'false'); }
+      if (nameEl) { nameEl.style.left = `${x}px`; nameEl.style.top = `${y + 12}px`; nameEl.style.opacity = userFirstName ? '1' : '0'; }
     } catch {}
   };
 
@@ -388,12 +377,12 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     fetchGlobeData("all").then(({ nodes, links }) => {
       if (cancelled) return;
       // Points (origins/destinations) from nodes for subtle markers
-      const pts: PointData[] = nodes.map(n => ({ id: n.id, name: n.name, lat: n.lat, lng: n.lng, size: 0.15, color: "rgba(255,255,255,0.6)", countryCode: n.countryCode }));
+      const pts: PointData[] = nodes.map(n => ({ id: n.id, name: n.name, lat: n.lat, lng: n.lng, size: 0.15, color: "#ffffff", countryCode: n.countryCode }));
       setPointsData(pts);
       setVisiblePoints(pts);
       try { const map = new Map<string, PointData>(); pts.forEach(p => { if (p.id) map.set(p.id, p); }); allPointsByIdRef.current = map; } catch {}
       nodesRef.current = nodes.map(n => ({ id: n.id, lat: n.lat, lng: n.lng }));
-      const arcs: ArcData[] = [];
+      const arcs: ArcDataRich[] = [];
       links.forEach(l => {
         const a = nodes.find(n => n.id === l.source);
         const b = nodes.find(n => n.id === l.target);
@@ -401,7 +390,7 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
           const key = `${l.source}\u2192${l.target}`; // use arrow separator to avoid ambiguity
           // Ensure params are created once per edge and reused later
           try { getOrCreateEdgeParams(key); } catch {}
-          arcs.push({ startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng, key });
+          arcs.push({ startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng, key, startCc: a.countryCode, endCc: b.countryCode });
         }
       });
       setArcsData(arcs);
@@ -442,6 +431,7 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
         if (!alive) return;
         userRefCodeRef.current = typeof ref === 'string' ? ref : null;
         userMeRef.current = { name: j?.me?.name ?? null, boats_total: j?.me?.boats_total ?? null, boat_color: j?.me?.boat_color ?? null, country_name: j?.me?.country_name ?? null };
+        try { const full = (userMeRef.current?.name || '').trim(); setUserFirstName(full ? full.split(/\s+/)[0] : ''); } catch { setUserFirstName(''); }
         // Resolve user's lat/lng from nodes once data is available
         const n = nodesRef.current.find(x => x.id === userRefCodeRef.current);
         userLatLngRef.current = n ? { lat: n.lat, lng: n.lng } : null;
@@ -467,169 +457,131 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
   };
   const paperBoatGeometry = useMemo(() => createPaperBoatGeometry(), []);
 
-  // Build boats for arcs when globe ready and arcs available
-  const ensureBoatsForArcs = () => {
+  // Compute path altitude and styling once, used by globe and boat (single source of truth)
+  const getPathAltitude = (d: ArcDataRich): number => {
+    const ang = greatCircleAngleRad(d.startLat, d.startLng, d.endLat, d.endLng);
+    const t = Math.min(1, Math.max(0, ang / Math.PI));
+    const base = 0.06 + 0.18 * easeInOutCubic(t);
+    const seed = d.key ? (hashString(d.key) % 1000) / 1000 : 0.5;
+    const jitter = (seed - 0.5) * 0.02; // ±0.01
+    return Math.max(0.04, base + jitter);
+  };
+  const getPathStroke = (d: ArcDataRich): number => {
+    const base = 1.0;
+    const agg = d.aggregatedCount ? Math.min(2.0, Math.log2(d.aggregatedCount + 1)) : 0;
+    const seed = d.key ? (hashString(d.key) % 1000) / 1000 : 0.5;
+    const jitter = (seed - 0.5) * 0.3;
+    return Math.max(0.6, base + agg + jitter);
+  };
+  const getPathColor = (_d: ArcDataRich): string => 'rgba(42,167,181,0.7)';
+
+  // Build path 3D points (cache by key) matching built-in path geometry
+  const GLOBE_RADIUS = 100;
+  const getPath3DPoints = (d: ArcDataRich): THREE.Vector3[] => {
+    const key = d.key || `${d.startLat},${d.startLng}->${d.endLat},${d.endLng}`;
+    const cached = path3DCacheRef.current.get(key);
+    if (cached && cached.length) return cached;
     const globe = globeEl.current;
+    if (!globe) return [];
+    const latLngPts = buildPathPoints(d);
+    const alt = getPathAltitude(d);
+    const pts: THREE.Vector3[] = [];
+    for (const p of latLngPts) {
+      const c = globe.getCoords(p.lat, p.lng);
+      if (!c) continue;
+      const v = new THREE.Vector3(c.x, c.y, c.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + alt));
+      pts.push(v);
+    }
+    path3DCacheRef.current.set(key, pts);
+    return pts;
+  };
+
+  // Create or switch the single active boat to follow a given path
+  const ensureActiveBoat = (d: ArcDataRich, persistent: boolean) => {
     const scene = sceneRef.current;
-    if (!globe || !scene) return;
-    // Clear existing
-    boatsRef.current.forEach(b => scene.remove(b.mesh));
-    boatsRef.current = [];
-    const ARC_ALTITUDE = 0.2;
-    const BOAT_PATH_ALTITUDE = 0.07;
-    const GLOBE_RADIUS = 100;
-    arcsData.forEach((a) => {
-      const sc = globe.getCoords(a.startLat, a.startLng);
-      const ec = globe.getCoords(a.endLat, a.endLng);
-      if (!sc || !ec) return;
-      // Read cached per-edge params to bias mid control point to the same side as SVG rivers
-      const params = a.key ? getOrCreateEdgeParams(a.key) : { curvatureT: 0.5, lateralJitter: 0, altitudeJitter: 0, sign: 1 as -1 | 1, curvFactor: 0.12, wiggleAmpFactor: 0.02, wiggleFreq: 1, phase: 0 };
-      const startPos = new THREE.Vector3(sc.x, sc.y, sc.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
-      const endPos = new THREE.Vector3(ec.x, ec.y, ec.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
-      // Midpoint elevated slightly
-      const baseMid = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
-      const midAltitude = GLOBE_RADIUS * (1 + ARC_ALTITUDE + (params.altitudeJitter || 0) * 0.0);
-      baseMid.normalize().multiplyScalar(midAltitude);
-      // Compute lateral direction at mid: perpendicular to great-circle, tangent at mid
-      const normal = startPos.clone().cross(endPos).normalize();
-      let lateral = normal.clone().cross(baseMid.clone().normalize()).normalize();
-      if (!isFinite(lateral.length())) lateral = normal.clone();
-      // Guardrails: clamp lateral offset ≤ 22% of chord length
-      const chord = endPos.clone().sub(startPos);
-      const chordLen = chord.length();
-      const curv3d = Math.min(0.22 * chordLen, (params.curvFactor || 0.12) * chordLen);
-      // Tiny deterministic wiggle to keep boats visually aligned with SVG shape
-      const tmid = 0.5;
-      const windowFn = (t: number) => Math.sin(Math.PI * t) ** 2;
-      const wiggle = (params.sign as number) * Math.min(curv3d * 0.35, (params.wiggleAmpFactor || 0.02) * chordLen) * windowFn(tmid) * Math.sin(Math.PI * (params.wiggleFreq || 1) * tmid + (params.phase || 0));
-      const lateralOffset = (params.sign as number) * (0.5 * curv3d) + 0.2 * wiggle;
-      const biasedMid = baseMid.clone().add(lateral.multiplyScalar(lateralOffset));
-      const curve = new THREE.CatmullRomCurve3([startPos, biasedMid, endPos]);
-      const boatMaterial = new THREE.MeshPhongMaterial({ map: paperTexture ?? undefined, color: 0xffffff, shininess: 5, specular: 0x111111 });
+    const globe = globeEl.current;
+    if (!scene || !globe) return;
+    const key = d.key || `${d.startLat},${d.startLng}->${d.endLat},${d.endLng}`;
+    const pts = getPath3DPoints(d);
+    if (pts.length < 2) return;
+    // Fade/remove existing boat
+    if (activeBoatRef.current && activeBoatRef.current.key !== key) {
+      try {
+        const old = activeBoatRef.current;
+        const mat = (old.mesh.material as THREE.Material) as any;
+        if (mat) { (mat.transparent = true); mat.opacity = 1; }
+        const t0 = performance.now();
+        const fade = () => {
+          const dt = performance.now() - t0;
+          const a = Math.max(0, 1 - dt / 180);
+          if (mat) mat.opacity = a;
+          if (a <= 0) {
+            try { scene.remove(old.mesh); } catch {}
+          } else requestAnimationFrame(fade);
+        };
+        requestAnimationFrame(fade);
+      } catch {}
+      activeBoatRef.current = null;
+    }
+    // Create boat if none
+    if (!activeBoatRef.current) {
+      const boatMaterial = new THREE.MeshPhongMaterial({ map: paperTexture ?? undefined, color: 0xffffff, shininess: 5, specular: 0x111111, transparent: true, opacity: 0 });
       const boatMesh = new THREE.Mesh(paperBoatGeometry, boatMaterial);
       boatMesh.scale.set(6, 6, 6);
-      const boatId = Date.now() + Math.random();
-      boatsRef.current.push({ id: boatId, mesh: boatMesh, curve, startTime: performance.now(), duration: 15000 });
       scene.add(boatMesh);
-    });
+      // Sync duration with path draw-on for first-time paths
+      const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const drawOnMs = prefersReduced ? 0 : 1300;
+      const hasShown = pathShownRef.current.has(key);
+      const duration = hasShown ? 1250 : drawOnMs || 1250;
+      activeBoatRef.current = { key, mesh: boatMesh, points: pts, startTime: performance.now(), duration };
+      pathShownRef.current.add(key);
+      // Fade in quickly
+      const t0 = performance.now();
+      const fadeIn = () => {
+        const dt = performance.now() - t0;
+        const a = Math.min(1, dt / 180);
+        (boatMaterial as any).opacity = a;
+        if (a < 1) requestAnimationFrame(fadeIn);
+      };
+      requestAnimationFrame(fadeIn);
+    } else {
+      // Update to match key and points if same key reused
+      activeBoatRef.current.key = key;
+      activeBoatRef.current.points = pts;
+      activeBoatRef.current.startTime = performance.now();
+    }
+    if (persistent) persistKeyRef.current = key; else if (!persistKeyRef.current) persistKeyRef.current = null;
   };
 
-  // Animate boats
+  // Animate single boat along cached points
   useEffect(() => {
     let raf = 0;
-    const animate = () => {
-      const now = performance.now();
-      boatsRef.current.forEach((boat) => {
-        const progress = ((now - boat.startTime) / boat.duration) % 1.0;
-        const pos = boat.curve.getPointAt(progress);
-        boat.mesh.position.copy(pos);
-        const tangent = boat.curve.getTangentAt(progress);
+    const step = () => {
+      const act = activeBoatRef.current;
+      if (act) {
+        const { mesh, points, startTime, duration } = act;
+        const now = performance.now();
+        const t = duration > 0 ? ((now - startTime) / duration) % 1.0 : 1.0;
+        const total = points.length;
+        const idx = Math.min(total - 2, Math.max(0, Math.floor(t * (total - 1))));
+        const f = (t * (total - 1)) - idx;
+        const p0 = points[idx];
+        const p1 = points[idx + 1];
+        const pos = new THREE.Vector3().copy(p0).lerp(p1, f);
+        mesh.position.copy(pos);
+        const tangent = new THREE.Vector3().copy(p1).sub(p0).normalize();
         const lookAtPos = pos.clone().add(tangent);
-        boat.mesh.up.copy(pos).normalize();
-        boat.mesh.lookAt(lookAtPos);
-      });
-      raf = requestAnimationFrame(animate);
+        mesh.up.copy(pos).normalize();
+        mesh.lookAt(lookAtPos);
+      }
+      raf = requestAnimationFrame(step);
     };
-    raf = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(step);
+    return () => { if (raf) cancelAnimationFrame(raf); };
   }, []);
 
-  // Heavy: ensure per-edge params, cache anchors, and create <path> nodes once per data change
-  const buildPaths = () => {
-    try {
-      const svg = svgRef.current;
-      if (!svg) return;
-      const seen = new Set<string>();
-      for (const a of arcsData) {
-        const key = a.key || `${a.startLat},${a.startLng}->${a.endLat},${a.endLng}`;
-        seen.add(key);
-        anchorsRef.current.set(key, { startLat: a.startLat, startLng: a.startLng, endLat: a.endLat, endLng: a.endLng });
-        getOrCreateEdgeParams(key); // ensure cached params exist
-        if (!pathMapRef.current.get(key)) {
-          const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          pathEl.setAttribute('fill', 'none');
-          pathEl.setAttribute('vector-effect', 'non-scaling-stroke');
-          pathEl.setAttribute('stroke-linecap', 'round');
-          pathEl.setAttribute('stroke-linejoin', 'round');
-          const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-          if (!prefersReduced) pathEl.style.animation = 'riverFlow 6000ms linear infinite';
-          svg.appendChild(pathEl);
-          pathMapRef.current.set(key, pathEl);
-        }
-      }
-      // Remove paths for edges that no longer exist
-      pathMapRef.current.forEach((el, key) => { if (!seen.has(key)) { el.remove(); pathMapRef.current.delete(key); anchorsRef.current.delete(key); } });
-    } catch {}
-  };
-
-  // Light: reproject cached anchors to screen space and update existing <path> d/opacity only
-  const projectPaths = () => {
-    try {
-      const wrap = wrapRef.current;
-      const globe = globeEl.current;
-      if (!wrap || !globe) return;
-      const rect = wrap.getBoundingClientRect();
-      const width = Math.max(1, rect.width);
-      const height = Math.max(1, rect.height);
-      prevSizeRef.current = { w: width, h: height };
-      const camera = globe.camera();
-      const camDir = camera.position.clone().normalize();
-      const project = (lat: number, lng: number): { x: number; y: number; front: boolean; dot: number } | null => {
-        const c = globe.getCoords(lat, lng);
-        if (!c) return null;
-        const v = new THREE.Vector3(c.x, c.y, c.z);
-        const dcam = v.clone().normalize().dot(camDir);
-        const front = dcam > 0;
-        v.project(camera);
-        const x = (v.x * 0.5 + 0.5) * width;
-        const y = (-v.y * 0.5 + 0.5) * height;
-        return { x, y, front, dot: Math.max(0, Math.min(1, dcam)) };
-      };
-      const windowFn = (t: number) => Math.sin(Math.PI * t) ** 2;
-      const smoothFn = (t: number, freq: number, phase: number) => Math.sin(Math.PI * freq * t + phase);
-      anchorsRef.current.forEach((anch, key) => {
-        const s = project(anch.startLat, anch.startLng);
-        const e = project(anch.endLat, anch.endLng);
-        const pathEl = pathMapRef.current.get(key) || null;
-        if (!pathEl || !s || !e) return;
-        const dx = e.x - s.x, dy = e.y - s.y, len = Math.hypot(dx, dy);
-        if (len < 2) { pathEl.setAttribute('opacity', '0'); return; }
-        const px = -dy / len, py = dx / len;
-        const params = getOrCreateEdgeParams(key);
-        const curvPx = Math.min(0.22 * len, params.curvFactor * len);
-        const side = params.sign;
-        const c1x = s.x + 0.33 * dx + side * px * (0.65 * curvPx);
-        const c1y = s.y + 0.33 * dy + side * py * (0.65 * curvPx);
-        const c2x = s.x + 0.66 * dx + side * px * (0.35 * curvPx);
-        const c2y = s.y + 0.66 * dy + side * py * (0.35 * curvPx);
-        const maxLat = 0.22 * len;
-        const baseLatApprox = curvPx * 0.85;
-        let wiggleAmpPx = Math.min(curvPx * 0.35, params.wiggleAmpFactor * len);
-        wiggleAmpPx = Math.max(0, Math.min(wiggleAmpPx, Math.max(0, maxLat - baseLatApprox)));
-        const N = 28;
-        let d = `M ${s.x.toFixed(1)},${s.y.toFixed(1)}`;
-        for (let i = 1; i <= N; i++) {
-          const t = i / N, u = 1 - t, tt = t * t, uu = u * u, uuu = uu * u, ttt = tt * t;
-          const bx = uuu * s.x + 3 * uu * t * c1x + 3 * u * tt * c2x + ttt * e.x;
-          const by = uuu * s.y + 3 * uu * t * c1y + 3 * u * tt * c2y + ttt * e.y;
-          const wiggle = side * wiggleAmpPx * windowFn(t) * smoothFn(t, params.wiggleFreq, params.phase);
-          const wx = bx + px * wiggle, wy = by + py * wiggle;
-          d += ` L ${wx.toFixed(1)},${wy.toFixed(1)}`;
-        }
-        const rEdge = (params.phase / (Math.PI * 2)) % 1;
-        const w = 0.9 + 0.7 * rEdge;
-        const dash = 6 + (params.curvFactor - 0.10) / (0.22 - 0.10) * 6;
-        const facing = Math.min(s.dot, e.dot);
-        const opacity = 0.10 + (0.40 - 0.10) * facing;
-        const hue = 200 + (rEdge - 0.5) * 10; // subtle variance
-        pathEl.setAttribute('d', d);
-        pathEl.setAttribute('stroke', `hsl(${hue}, 90%, 66%)`);
-        pathEl.setAttribute('stroke-width', String(w));
-        pathEl.setAttribute('stroke-dasharray', `${Math.round(dash)} ${Math.round(dash + 6)}`);
-        pathEl.setAttribute('opacity', opacity.toFixed(3));
-      });
-    } catch {}
-  };
+  // Removed SVG path builders/projectors; arcs use built-in globe rendering
 
   const onGlobeReady = () => {
     if (!globeEl.current) return;
@@ -648,14 +600,24 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.25;
     controls.enableZoom = true;
-    // Enforce minimum zoom = 1× (no zooming out beyond the baseline distance)
-    const baselineDistance = camera.position.length();
-    baselineDistanceRef.current = baselineDistance;
-    controls.maxDistance = baselineDistance; // prevent zooming out smaller than baseline
-    controls.minDistance = Math.max(120, baselineDistance * 0.6); // allow zooming in, but not excessively
-    if (camera.position.length() > baselineDistance) {
-      camera.position.setLength(baselineDistance);
-    }
+    // Fit globe at zoom = 1 (no clipping) and center
+    const getFitDistance = () => {
+      try {
+        const fov = (camera.fov || 75) * Math.PI / 180;
+        const R = 100;
+        const margin = 1.02; // slight padding to avoid edge clipping
+        const d = (R * margin) / Math.tan(fov / 2);
+        return Math.max(d, R * 1.3);
+      } catch { return camera.position.length(); }
+    };
+    const fitD = getFitDistance();
+    controls.target.set(0, 0, 0);
+    camera.position.set(0, 0, fitD);
+    camera.updateProjectionMatrix();
+    baselineDistanceRef.current = fitD;
+    controls.maxDistance = fitD;
+    controls.minDistance = Math.max(fitD / 3, 80);
+    try { controls.addEventListener('start', () => { hasInteractedRef.current = true; }); } catch {}
     const canvasEl = globeEl.current.renderer().domElement as HTMLCanvasElement;
     (canvasEl.style as CSSStyleDeclaration).touchAction = "none";
     try {
@@ -690,131 +652,8 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     scene.add(stars);
 
     handleZoom();
-    ensureBoatsForArcs();
 
-    const computePaths = () => {
-      try {
-        if (!wrapRef.current || !globeEl.current) return;
-        const rect = wrapRef.current.getBoundingClientRect();
-        const width = Math.max(1, rect.width);
-        const height = Math.max(1, rect.height);
-        prevSizeRef.current = { w: width, h: height };
-        const camDir = camera.position.clone().normalize();
-        const project = (lat: number, lng: number): { x: number; y: number; front: boolean; dot: number } | null => {
-          const c = globeEl.current.getCoords(lat, lng);
-          if (!c) return null;
-          const v = new THREE.Vector3(c.x, c.y, c.z);
-          const dcam = v.clone().normalize().dot(camDir);
-          const front = dcam > 0; // front-facing check
-          v.project(camera);
-          const x = (v.x * 0.5 + 0.5) * width;
-          const y = (-v.y * 0.5 + 0.5) * height;
-          return { x, y, front, dot: Math.max(0, Math.min(1, dcam)) };
-        };
-        const bezierPoint = (t: number, p0: {x:number;y:number}, p1: {x:number;y:number}, p2: {x:number;y:number}, p3: {x:number;y:number}) => {
-          const u = 1 - t;
-          const tt = t * t, uu = u * u;
-          const uuu = uu * u, ttt = tt * t;
-          const x = uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x;
-          const y = uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y;
-          return { x, y };
-        };
-        const windowFn = (t: number) => Math.sin(Math.PI * t) ** 2; // zero at ends, peak mid
-        const smoothFn = (t: number, freq: number, phase: number) => {
-          // deterministic low-frequency sine per spec
-          return Math.sin(Math.PI * freq * t + phase);
-        };
-        const seen = new Set<string>();
-        for (const a of arcsData) {
-          const s = project(a.startLat, a.startLng);
-          const e = project(a.endLat, a.endLng);
-          if (!s || !e) continue;
-          // No early skip; let opacity easing fade back-facing edges to 0
-          const dx = e.x - s.x;
-          const dy = e.y - s.y;
-          const len = Math.hypot(dx, dy);
-          if (len < 2) continue;
-          const ux = dx / len;
-          const uy = dy / len;
-          // Perpendicular to chord (unit)
-          const px = -uy;
-          const py = ux;
-          const params = a.key ? getOrCreateEdgeParams(a.key) : { sign: 1 as -1 | 1, curvFactor: 0.12, wiggleAmpFactor: 0.02, wiggleFreq: 1, phase: 0, curvatureT: 0.5, lateralJitter: 0, altitudeJitter: 0 };
-          // Curvature magnitude in pixels, clamped ≤ 0.22*len
-          const curvMax = 0.22 * len;
-          const curvPx = Math.min(curvMax, params.curvFactor * len);
-          const side = params.sign;
-          // Control points along chord with lateral offset on the same side
-          const c1x = s.x + 0.33 * dx + side * px * (0.65 * curvPx);
-          const c1y = s.y + 0.33 * dy + side * py * (0.65 * curvPx);
-          const c2x = s.x + 0.66 * dx + side * px * (0.35 * curvPx);
-          const c2y = s.y + 0.66 * dy + side * py * (0.35 * curvPx);
-          // Wiggle amplitude much smaller than curvature, and clamp so total lateral <= 0.22*len
-          const maxLat = 0.22 * len;
-          const baseLatApprox = curvPx * 0.85; // conservative upper bound of bezier lateral
-          let wiggleAmpPx = Math.min(curvPx * 0.35, params.wiggleAmpFactor * len);
-          wiggleAmpPx = Math.max(0, Math.min(wiggleAmpPx, Math.max(0, maxLat - baseLatApprox)));
-          // Sample points along base Bezier and add lateral offset along chord-perpendicular
-          const N = 28;
-          let d = `M ${s.x.toFixed(1)},${s.y.toFixed(1)}`;
-          for (let i = 1; i <= N; i++) {
-            const t = i / N;
-            const base = bezierPoint(t, s, {x:c1x,y:c1y}, {x:c2x,y:c2y}, e);
-            const wiggle = params.sign * wiggleAmpPx * windowFn(t) * smoothFn(t, params.wiggleFreq, params.phase);
-            const wx = base.x + px * wiggle;
-            const wy = base.y + py * wiggle;
-            d += ` L ${wx.toFixed(1)},${wy.toFixed(1)}`;
-          }
-          // Seeded stroke width variance and dash size
-          const rEdge = (params.phase / (Math.PI * 2)) % 1;
-          const w = 0.9 + 0.7 * rEdge; // ~0.9..1.6
-          const dash = 6 + (params.curvFactor - 0.10) / (0.22 - 0.10) * 6; // ~6..12
-          // Fade-out easing: use dot with midpoint world vector for smooth horizon fade
-          let opacity = 0;
-          try {
-            const sc = globeEl.current?.getCoords(a.startLat, a.startLng);
-            const ec = globeEl.current?.getCoords(a.endLat, a.endLng);
-            if (sc && ec) {
-              const sv = new THREE.Vector3(sc.x, sc.y, sc.z).normalize();
-              const ev = new THREE.Vector3(ec.x, ec.y, ec.z).normalize();
-              const mid = sv.add(ev).normalize();
-              const f = Math.max(0, mid.dot(camera.position.clone().normalize()));
-              opacity = Math.pow(f, 2.5) * 0.45; // maxOpacity ~0.45 for better brightness
-            }
-          } catch { opacity = 0; }
-          const key = a.key || `${a.startLat},${a.startLng}->${a.endLat},${a.endLng}`;
-          seen.add(key);
-          let pathEl = pathMapRef.current.get(key) || null;
-          if (!pathEl && svgRef.current) {
-            pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            pathEl.setAttribute('fill', 'none');
-            // Tiny per-edge hue variance within cyan/blue palette
-            const hue = 200 + (rEdge - 0.5) * 10; // ~195..205
-            pathEl.setAttribute('stroke', `hsl(${hue}, 90%, 66%)`);
-            pathEl.setAttribute('vector-effect', 'non-scaling-stroke');
-            pathEl.setAttribute('stroke-linecap', 'round');
-            pathEl.setAttribute('stroke-linejoin', 'round');
-            const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            if (!prefersReduced) pathEl.style.animation = 'riverFlow 6000ms linear infinite';
-            svgRef.current.appendChild(pathEl);
-            pathMapRef.current.set(key, pathEl);
-          }
-          if (pathEl) {
-            pathEl.setAttribute('d', d);
-            pathEl.setAttribute('stroke-width', String(w));
-            pathEl.setAttribute('stroke-dasharray', `${Math.round(dash)} ${Math.round(dash + 6)}`);
-            pathEl.setAttribute('opacity', opacity.toFixed(3));
-          }
-        }
-        // Hide/remove only edges that no longer exist in data
-        pathMapRef.current.forEach((el, key) => { if (!anchorsRef.current.has(key)) { el.remove(); pathMapRef.current.delete(key); } });
-      } catch {}
-    };
-    // Lightweight projector alias for camera changes
-    const projectPaths = computePaths;
-    projectPathsRef.current = projectPaths;
-
-    controls.addEventListener("change", projectPaths);
+    // Removed SVG path recompute listeners
     // Also reposition the user glow on camera changes
     const onControlsChange = () => { try { updateUserOverlaysPosition(); } catch {} };
     controls.addEventListener("change", onControlsChange);
@@ -826,23 +665,22 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       if (resizeTimer) window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
         try {
-          const rect = wrapRef.current?.getBoundingClientRect();
-          const prev = prevSizeRef.current;
-          const w = rect ? rect.width : prev.w;
-          const h = rect ? rect.height : prev.h;
-          const changed = prev.w > 0 && (Math.abs(w - prev.w) / prev.w > 0.10 || Math.abs(h - prev.h) / prev.h > 0.10);
-          if (changed) { computePaths(); }
-          projectPaths();
+          if (!hasInteractedRef.current) {
+            const d = getFitDistance();
+            camera.position.setLength(d);
+            camera.updateProjectionMatrix();
+            baselineDistanceRef.current = d;
+            controls.maxDistance = d;
+            controls.minDistance = Math.max(d / 3, 80);
+          }
           updateUserOverlaysPosition();
-        } catch { projectPaths(); }
+        } catch {}
       }, 150) as unknown as number;
     };
     window.addEventListener("resize", onResize);
     // Recalc points on resize bucket changes as well
     window.addEventListener("resize", () => { try { recalcVisiblePoints(); } catch {} });
-    computePaths();
     return () => {
-      try { controls.removeEventListener("change", projectPaths); } catch {}
       try { controls.removeEventListener("change", onControlsChange); } catch {}
       try { controls.removeEventListener("change", onControlsBucket); } catch {}
       try { window.removeEventListener("resize", onResize); } catch {}
@@ -850,13 +688,9 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     };
   };
 
-  // Rebuild boats when arcs change and globe is ready
-  useEffect(() => { ensureBoatsForArcs(); }, [arcsData]);
+  // Removed multi-boat curve; boat follows built-in paths via ensureActiveBoat on hover/click
 
-  // When data arrives and globe is ready, draw paths once with the lightweight projector
-  useEffect(() => {
-    try { projectPathsRef.current?.(); } catch {}
-  }, [arcsData]);
+  // Removed: projector for SVG paths
 
   // Hover tooltip using our clamped logic
   const handlePolygonHover = (feature: any | null) => {
@@ -886,6 +720,73 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     setTooltip((t) => ({ ...t, x, y }));
   };
 
+  // --- Arc helpers (great-circle and easing) ---
+  function greatCircleAngleRad(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const φ1 = toRad(lat1), λ1 = toRad(lon1);
+    const φ2 = toRad(lat2), λ2 = toRad(lon2);
+    const Δφ = φ2 - φ1;
+    const Δλ = λ2 - λ1;
+    const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return c;
+  }
+  function easeInOutCubic(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  function buildPathPoints(d: ArcData): { lat: number; lng: number }[] {
+    // Use seeded control to create a gentle S-curve in geodesic space by perturbing midpoint along lateral direction
+    const key = d.key || `${d.startLat},${d.startLng}->${d.endLat},${d.endLng}`;
+    const params = getOrCreateEdgeParams(key);
+    // Lerp a few points along great-circle, then offset midpoint bearing a tiny amount
+    const steps = 8;
+    const pts: { lat: number; lng: number }[] = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      // Spherical linear interpolation using vector slerp
+      const toRad = (x: number) => (x * Math.PI) / 180;
+      const toDeg = (x: number) => (x * 180) / Math.PI;
+      const φ1 = toRad(d.startLat), λ1 = toRad(d.startLng);
+      const φ2 = toRad(d.endLat), λ2 = toRad(d.endLng);
+      const sinφ1 = Math.sin(φ1), cosφ1 = Math.cos(φ1);
+      const sinλ1 = Math.sin(λ1), cosλ1 = Math.cos(λ1);
+      const sinφ2 = Math.sin(φ2), cosφ2 = Math.cos(φ2);
+      const sinλ2 = Math.sin(λ2), cosλ2 = Math.cos(λ2);
+      const v1 = new THREE.Vector3(cosφ1 * cosλ1, sinφ1, cosφ1 * sinλ1);
+      const v2 = new THREE.Vector3(cosφ2 * cosλ2, sinφ2, cosφ2 * sinλ2);
+      const theta = Math.acos(Math.min(1, Math.max(-1, v1.dot(v2))));
+      if (theta === 0) { pts.push({ lat: d.startLat, lng: d.startLng }); continue; }
+      const sinTheta = Math.sin(theta);
+      const a = Math.sin((1 - t) * theta) / sinTheta;
+      const b = Math.sin(t * theta) / sinTheta;
+      const v = new THREE.Vector3().addScaledVector(v1, a).addScaledVector(v2, b).normalize();
+      const lat = Math.asin(v.y);
+      const lng = Math.atan2(v.z, v.x);
+      pts.push({ lat: toDeg(lat), lng: toDeg(lng) });
+    }
+    // Apply tiny lateral wiggle around midpoint index
+    const midIdx = Math.floor(pts.length / 2);
+    const before = pts[Math.max(0, midIdx - 1)];
+    const mid = pts[midIdx];
+    const after = pts[Math.min(pts.length - 1, midIdx + 1)];
+    if (before && mid && after) {
+      // Approximate tangent bearing at mid
+      const bearing = Math.atan2(
+        Math.sin((after.lng - before.lng) * Math.PI / 180) * Math.cos(after.lat * Math.PI / 180),
+        Math.cos(before.lat * Math.PI / 180) * Math.sin(after.lat * Math.PI / 180) -
+        Math.sin(before.lat * Math.PI / 180) * Math.cos(after.lat * Math.PI / 180) * Math.cos((after.lng - before.lng) * Math.PI / 180)
+      );
+      const side = params.sign as number;
+      const ampDeg = Math.max(0.05, Math.min(0.25, params.wiggleAmpFactor * 10)); // ~0.05..0.25 degrees
+      const offsetBearing = bearing + side * Math.PI / 2;
+      const dLat = ampDeg * Math.cos(offsetBearing);
+      const dLng = ampDeg * Math.sin(offsetBearing) / Math.max(0.5, Math.cos(mid.lat * Math.PI / 180));
+      pts[midIdx] = { lat: mid.lat + dLat, lng: mid.lng + dLng };
+    }
+    return pts;
+  }
+
   return (
     <div
       ref={wrapRef}
@@ -896,18 +797,66 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       aria-describedby={describedById}
       tabIndex={tabIndex}
     >
-      <ReactGlobe
+      <RG
         ref={globeEl}
         onGlobeReady={onGlobeReady}
         backgroundColor="rgba(0,0,0,0)"
         globeMaterial={globeMaterial}
         atmosphereColor="#66c2ff"
         atmosphereAltitude={0.25}
-        arcsData={[]}
+        pathsData={useMemo(() => {
+          // Build capped & aggregated path edges once per data change
+          const MAX = 200;
+          const PER_PAIR = 8;
+          if (!arcsData || arcsData.length === 0) return [] as any[];
+          const byPair = new Map<string, ArcDataRich[]>();
+          for (const a of arcsData) {
+            const k = `${a.startCc || '??'}->${a.endCc || '??'}`;
+            if (!byPair.has(k)) byPair.set(k, []);
+            byPair.get(k)!.push(a);
+          }
+          const groups = Array.from(byPair.entries()).sort((a, b) => b[1].length - a[1].length);
+          const out: any[] = [];
+          for (const [k, arr] of groups) {
+            if (out.length >= MAX) break;
+            const keep = arr.slice(0, Math.min(arr.length, PER_PAIR));
+            keep.forEach(edge => out.push({ ...edge }));
+            if (arr.length > keep.length) {
+              const [sCc, eCc] = k.split('->');
+              const sCent = sCc && countryCodeToLatLng[sCc] ? countryCodeToLatLng[sCc] : [keep[0].startLat, keep[0].startLng];
+              const eCent = eCc && countryCodeToLatLng[eCc] ? countryCodeToLatLng[eCc] : [keep[0].endLat, keep[0].endLng];
+              out.push({ startLat: sCent[0], startLng: sCent[1], endLat: eCent[0], endLng: eCent[1], startCc: sCc, endCc: eCc, aggregatedCount: arr.length - keep.length });
+            }
+            if (out.length >= MAX) break;
+          }
+          return out.slice(0, MAX);
+        }, [arcsData]) as any}
+        pathPoints={(d: any) => buildPathPoints(d)}
+        pathColor={(d: any) => 'rgba(42,167,181,0.7)'}
+        pathStroke={(d: any) => {
+          const base = 1.0;
+          const agg = d.aggregatedCount ? Math.min(2.0, Math.log2(d.aggregatedCount + 1)) : 0;
+          const seed = d.key ? (hashString(d.key) % 1000) / 1000 : 0.5;
+          const jitter = (seed - 0.5) * 0.3;
+          return Math.max(0.6, base + agg + jitter);
+        }}
+        pathAltitude={(d: any) => {
+          const ang = greatCircleAngleRad(d.startLat, d.startLng, d.endLat, d.endLng);
+          const t = Math.min(1, Math.max(0, ang / Math.PI));
+          const base = 0.06 + 0.18 * easeInOutCubic(t);
+          const seed = d.key ? (hashString(d.key) % 1000) / 1000 : 0.5;
+          const jitter = (seed - 0.5) * 0.02;
+          return Math.max(0.04, base + jitter);
+        }}
+        pathDashLength={0.95}
+        pathDashGap={1.1}
+        pathDashAnimateTime={(() => { try { return (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 0 : 1300; } catch { return 0; } })()}
+        pathCurveResolution={64}
         pointsData={visiblePoints.length ? visiblePoints : pointsData}
-        pointAltitude={(d: any) => (d?.id && d.id === userRefCodeRef.current ? 0.205 : 0.201)}
+        pointAltitude={(d: any) => (d?.kind === 'aggregate' ? 0.203 : (d?.id && d.id === userRefCodeRef.current ? 0.205 : 0.201))}
         pointRadius={(d: any) => {
-          const base = (d?.id && d.id === userRefCodeRef.current ? Math.max(0.18, d.size || 0.15) : (d?.size || 0.15));
+          const isSelf = d?.id && d.id === userRefCodeRef.current;
+          const base = isSelf ? Math.max(0.18, d.size || 0.15) : (d?.kind === 'aggregate' ? 0.24 : (d?.size || 0.15));
           try {
             if (!d?.id) return base;
             const t0 = pointEnterAtRef.current.get(d.id);
@@ -919,9 +868,10 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
           } catch { return base; }
         }}
         pointColor={(d: any) => {
-          const isUser = d?.id && d.id === userRefCodeRef.current;
-          const isConnected = d?.id && connectedIdsRef.current.has(d.id);
-          const base = (isUser ? "#2AA7B5" : isConnected ? "#2AA7B5" : (d?.color || "rgba(255,255,255,0.6)"));
+          const isSelf = d?.id && d.id === userRefCodeRef.current;
+          const isFriend = d?.kind === 'friend';
+          const isAgg = d?.kind === 'aggregate';
+          const base = (isSelf ? "#2AA7B5" : isFriend ? "#135E66" : "#ffffff");
           try {
             if (!d?.id) return base;
             const tHide = pointExitAtRef.current.get(d.id);
@@ -929,13 +879,7 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
             const now = performance.now();
             const t = Math.min(1, Math.max(0, (now - tHide) / 200));
             const alpha = 1 - t; // fade out
-            if (base.startsWith('#')) return base; // solid color, leave as is
-            return base.replace(/rgba\(([^)]+)\)/, (_m: string, inner: string) => {
-              const parts = inner.split(',').map(s => s.trim());
-              const r = parts[0], g = parts[1], b = parts[2];
-              const a = (parts[3] ? parseFloat(parts[3]) : 1) * alpha;
-              return `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`;
-            });
+            return base;
           } catch { return base; }
         }}
         pointsMerge={true}
@@ -960,29 +904,26 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
             if (pt?.id && pt.id === userRefCodeRef.current) {
               setUserBadgeOpen((v) => !v);
               requestAnimationFrame(() => updateUserOverlaysPosition());
+              return; // consume; don't raise country
             }
+            // For other nodes: raise country behavior via polygon hover/click already present
+          } catch {}
+        }}
+        onPathHover={(d: any) => {
+          try {
+            if (!d) return;
+            ensureActiveBoat(d as ArcDataRich, false);
+          } catch {}
+        }}
+        onPathClick={(d: any) => {
+          try {
+            if (!d) return;
+            ensureActiveBoat(d as ArcDataRich, true);
           } catch {}
         }}
       />
-      {/* 2D overlay for organic rivers in screen space (paths are created once and updated) */}
-      <svg ref={svgRef} className="absolute inset-0 pointer-events-none" aria-hidden="true" />
-      {/* Per-point initials under each visible node */}
-      {pointLabelOverlays.map(l => {
-        const fullName = allPointsByIdRef.current.get(l.id)?.name || '';
-        const initials = l.text;
-        const show = hoveredPointId === l.id && fullName ? fullName : initials;
-        return (
-          <div
-            key={`lbl-${l.id}`}
-            className="absolute text-[10px] leading-none px-1 rounded-sm"
-            style={{ left: l.x, top: l.y, transform: 'translate(-50%, 0)', zIndex: 32, color: 'var(--ink)', background: hoveredPointId === l.id ? 'rgba(250,250,250,0.8)' : 'transparent' }}
-            onMouseEnter={() => setHoveredPointId(l.id)}
-            onMouseLeave={() => setHoveredPointId(null)}
-          >
-            {show}
-          </div>
-        );
-      })}
+      {/* Removed SVG overlay */}
+      
       {/* Logged-in user glow marker (subtle, topmost) */}
       <div
         ref={userGlowRef}
@@ -990,6 +931,17 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
         style={{ width: 32, height: 32, borderRadius: "50%", boxShadow: "0 0 18px 8px rgba(42,167,181,0.35)", opacity: 0, transform: "translate(-50%, -50%)", zIndex: 60, display: "block" }}
         aria-hidden="true"
       />
+      {/* Logged-in user's first name (always-on text) */}
+      {userFirstName && (
+        <div
+          ref={userNameRef}
+          className="absolute pointer-events-none"
+          style={{ opacity: 0, transform: "translate(-50%, 0)", zIndex: 61, color: 'var(--ink)', fontSize: 11, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}
+          aria-hidden="true"
+        >
+          {userFirstName}
+        </div>
+      )}
       {/* Screen-reader and keyboard hotspot for the user's node */}
       <button
         ref={userHotspotRef}
@@ -1046,8 +998,6 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       ))}
       <div className="sr-only" aria-live="polite">{srAnnounce}</div>
       <style jsx>{`
-        @keyframes riverFlow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 120; } }
-        @media (prefers-reduced-motion: reduce) { svg path { animation: none !important; } }
         /* Center the internal WebGL canvas within the globe container */
         :global(.globe-wrap canvas) { display: block; margin-left: auto; margin-right: auto; }
       `}</style>

@@ -233,43 +233,24 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
           {/* Center spine on md+ */}
           <div className="hidden md:block absolute left-1/2 top-0 bottom-0 -translate-x-1/2" style={{ width: 1.5, background: 'linear-gradient(180deg, #8EE5E9, rgba(142,229,233,0))' }} aria-hidden="true" />
           <ul className="space-y-3">
-            {REWARDS.map((tier) => {
-              const isUnlocked = points >= tier.points;
-              const isMisted = !isUnlocked;
-              const status: "locked" | "claimable" | "claimed" = isUnlocked
-                ? (claimedIds.includes(tier.id) ? "claimed" : "claimable")
-                : "locked";
-              const remaining = Math.max(0, tier.points - points);
-              return (
-                <li key={tier.id} className="relative" ref={(el) => { itemRefs.current[tier.id] = el; }}>
-                  {/* Connector dot: left on mobile, center on md+ */}
-                  <div className={`absolute -top-3 md:left-1/2 md:-translate-x-1/2 left-0`} aria-hidden="true" style={{ transform: 'translateX(-50%)' }}>
-                    <div
-                      className={`rounded-full ${isUnlocked ? 'opacity-100 drop-shadow-[0_0_8px_rgba(120,220,255,0.8)]' : 'opacity-40'} `}
-                      style={{ width: 12, height: 12, background: 'var(--teal)' }}
-                    />
-                  </div>
-                  <div className={`relative group rounded-[24px] border px-4 py-3 overflow-hidden ${status === 'claimable' ? 'claimable-glow' : ''}`} style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: 'inset 0 0 0 1px rgba(14,62,69,0.22), inset 0 -10px 24px rgba(14,62,69,0.18), 0 6px 16px rgba(0,0,0,0.05)' }}>
-                    {/* Mist overlay for future tiers */}
-                    {isMisted && (
-                      <div
-                        className="absolute inset-0 z-[90] rounded-2xl pointer-events-none transition-opacity duration-500 ease-in-out mist-overlay backdrop-blur-[2px] group-hover:opacity-[0.12] group-focus-within:opacity-[0.12]"
-                        style={{ background: 'linear-gradient(180deg, rgba(9,11,26,0.4) 0%, rgba(11,13,26,0.25) 35%, rgba(130,180,255,0.15) 70%, rgba(255,255,255,0) 100%)' }}
-                        aria-hidden="true"
-                      >
-                        {/* Vertical haze band aligned to spine */}
-                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[18px] rounded-full opacity-25 pointer-events-none group-hover:opacity-10 group-focus-within:opacity-10" style={{ background: 'linear-gradient(180deg, rgba(160,200,255,0.35), rgba(255,255,255,0))' }} />
-                        <div
-                          className="mist-drift absolute inset-0"
-                          style={{
-                            background: 'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(210,245,250,0.12) 40%, rgba(255,255,255,0) 100%)',
-                            opacity: 0.30,
-                            willChange: 'transform, opacity',
-                          }}
-                        />
-                      </div>
-                    )}
-                    <div className="relative z-10">
+            {(() => {
+              const items: React.ReactElement[] = [];
+              const locked = REWARDS.filter(r => r.points > points);
+              const nextUp = locked[0] || null;
+              const soon = locked[1] || null;
+              const laterCount = Math.max(0, locked.length - 2);
+              const unlocked = REWARDS.filter(r => r.points <= points);
+
+              // Render unlocked tiers (claimable/claimed)
+              unlocked.forEach((tier) => {
+                const status: "claimable" | "claimed" = claimedIds.includes(tier.id) ? "claimed" : "claimable";
+                const remaining = 0;
+                items.push(
+                  <li key={tier.id} className="relative" ref={(el) => { itemRefs.current[tier.id] = el; }}>
+                    <div className={`absolute -top-3 md:left-1/2 md:-translate-x-1/2 left-0`} aria-hidden="true" style={{ transform: 'translateX(-50%)' }}>
+                      <div className={`rounded-full opacity-100 drop-shadow-[0_0_8px_rgba(120,220,255,0.8)]`} style={{ width: 12, height: 12, background: 'var(--teal)' }} />
+                    </div>
+                    <div className={`relative group rounded-[24px] border px-4 py-3 overflow-hidden ${status === 'claimable' ? 'claimable-glow' : ''}`} style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: 'inset 0 0 0 1px rgba(14,62,69,0.22), inset 0 -10px 24px rgba(14,62,69,0.18), 0 6px 16px rgba(0,0,0,0.05)' }}>
                       {status === 'claimed' && (
                         <div className="absolute top-2 right-2 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider" style={{ background: 'rgba(11,13,26,0.12)', color: 'var(--ink)' }}>
                           CLAIMED{claimedAt[tier.id] ? ` • ${new Date(claimedAt[tier.id]).toLocaleDateString()} ${new Date(claimedAt[tier.id]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
@@ -279,14 +260,10 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                       {tier.subtitle ? (
                         <div className="font-semibold text-sm mb-1" style={{ color: 'var(--ink)' }}>{tier.subtitle}</div>
                       ) : null}
-                      <p className={`text-base ${isMisted ? 'opacity-80' : 'opacity-90'}`} style={{ color: 'var(--ink)' }}>{tier.id === 'r50' ? "Want to know what the songs sound like when we play them live?" : tier.id === 'r20' ? "You’ve reached the first island. Here’s an early look at the story behind Dream River." : tier.id === 'r100' ? "You can now send your message directly to the creators. Ask about the music, the process, or anything that moved you." : tier.id === 'r150' ? "You’ve reached the Bronze island — enjoy rare live takes and 50% off your first merch." : tier.id === 'r250' ? "You’ve reached the Silver island — glimpses of what’s to come, and an invitation to learn directly from Eshaan." : "You’ve reached the Golden island — thank you for guiding so many boats home. We’re going to send you an actual paper boat made by Eshaan and a special gift with it."}</p>
+                      <p className="text-base opacity-90" style={{ color: 'var(--ink)' }}>
+                        {tier.id === 'r50' ? "Want to know what the songs sound like when we play them live?" : tier.id === 'r20' ? "You’ve reached the first island. Here’s an early look at the story behind Dream River." : tier.id === 'r100' ? "You can now send your message directly to the creators. Ask about the music, the process, or anything that moved you." : tier.id === 'r150' ? "You’ve reached the Bronze island — enjoy rare live takes and 50% off your first merch." : tier.id === 'r250' ? "You’ve reached the Silver island — glimpses of what’s to come, and an invitation to learn directly from Eshaan." : "You’ve reached the Golden island — thank you for guiding so many boats home. We’re going to send you an actual paper boat made by Eshaan and a special gift with it."}
+                      </p>
                       <div className="mt-3 flex items-center gap-3">
-                        {status === "locked" && (
-                          <>
-                            <button type="button" className="rounded-md btn px-4 py-2 font-seasons opacity-70 cursor-not-allowed" disabled aria-disabled="true">Claim Reward</button>
-                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(11,13,26,0.12)', color: 'var(--ink)' }} aria-live="polite">+{remaining} to unlock</span>
-                          </>
-                        )}
                         {status === "claimable" && (
                           <button
                             type="button"
@@ -300,18 +277,76 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                           </button>
                         )}
                         {status === "claimed" && (
-                          tier.id === 'r150' ? (
-                            <button type="button" className="rounded-md btn px-4 py-2 font-seasons opacity-70 cursor-not-allowed" disabled aria-disabled="true">Claimed</button>
-                          ) : (
-                            <button type="button" className="rounded-md btn px-4 py-2 font-seasons focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]">View Reward</button>
-                          )
+                          <button type="button" className="rounded-md btn px-4 py-2 font-seasons opacity-70 cursor-not-allowed" disabled aria-disabled="true">Claimed</button>
                         )}
                       </div>
                     </div>
-                  </div>
-                </li>
-              );
-            })}
+                  </li>
+                );
+              });
+
+              // Next up (first locked)
+              if (nextUp) {
+                const remaining = Math.max(0, nextUp.points - points);
+                items.push(
+                  <li key={nextUp.id} className="relative" ref={(el) => { itemRefs.current[nextUp.id] = el; }}>
+                    <div className={`absolute -top-3 md:left-1/2 md:-translate-x-1/2 left-0`} aria-hidden="true" style={{ transform: 'translateX(-50%)' }}>
+                      <div className={`rounded-full opacity-40`} style={{ width: 12, height: 12, background: 'var(--teal)' }} />
+                    </div>
+                    <div className="relative rounded-[24px] border px-4 py-3" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+                      <h3 className="font-seasons text-lg font-semibold mb-1" style={{ color: 'var(--ink)', opacity: 0.95 }}>{nextUp.points} Boats – {nextUp.title}</h3>
+                      {nextUp.subtitle ? (
+                        <div className="font-semibold text-sm mb-1" style={{ color: 'var(--ink)', opacity: 0.92 }}>{nextUp.subtitle}</div>
+                      ) : null}
+                      <div className="text-sm italic opacity-75" style={{ color: 'var(--ink)' }}>Something great lies beyond.</div>
+                      <div className="mt-3 flex items-center gap-3">
+                        <button type="button" className="rounded-md btn px-4 py-2 font-seasons opacity-70 cursor-not-allowed" disabled aria-disabled="true">Claim Reward</button>
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(11,13,26,0.12)', color: 'var(--ink)' }}>+{remaining} to unlock</span>
+                      </div>
+                    </div>
+                  </li>
+                );
+              }
+
+              // Soon (second locked)
+              if (soon) {
+                const remaining = Math.max(0, soon.points - points);
+                items.push(
+                  <li key={soon.id} className="relative" ref={(el) => { itemRefs.current[soon.id] = el; }}>
+                    <div className={`absolute -top-3 md:left-1/2 md:-translate-x-1/2 left-0`} aria-hidden="true" style={{ transform: 'translateX(-50%)' }}>
+                      <div className={`rounded-full opacity-30`} style={{ width: 12, height: 12, background: 'var(--teal)' }} />
+                    </div>
+                    <div className="relative rounded-[24px] border px-4 py-3" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+                      <h3 className="font-seasons text-lg font-semibold mb-1" style={{ color: 'var(--ink)' }}>{soon.points} Boats – {soon.title}</h3>
+                      {soon.subtitle ? (
+                        <div className="font-semibold text-sm mb-1" style={{ color: 'var(--ink)', opacity: 0.7 }}>{soon.subtitle}</div>
+                      ) : null}
+                      <div className="text-sm italic" style={{ color: 'var(--ink)' }}>Something great lies beyond.</div>
+                      <div className="mt-2">
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(11,13,26,0.12)', color: 'var(--ink)' }}>+{remaining} to unlock</span>
+                      </div>
+                    </div>
+                  </li>
+                );
+              }
+
+              // Later (grouped)
+              if (laterCount > 0) {
+                items.push(
+                  <li key="later-group" className="relative">
+                    <div className={`absolute -top-3 md:left-1/2 md:-translate-x-1/2 left-0`} aria-hidden="true" style={{ transform: 'translateX(-50%)' }}>
+                      <div className={`rounded-full opacity-20`} style={{ width: 12, height: 12, background: 'var(--teal)' }} />
+                    </div>
+                    <div className="relative rounded-[24px] border px-4 py-3" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+                      <div className="font-seasons text-lg font-semibold mb-1" style={{ color: 'var(--ink)' }}>And {laterCount} more islands ahead…</div>
+                      <div className="text-sm italic opacity-80" style={{ color: 'var(--ink)' }}>Something great lies beyond.</div>
+                    </div>
+                  </li>
+                );
+              }
+
+              return items;
+            })()}
           </ul>
         </div>
       </section>
@@ -389,16 +424,6 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
         </>
       )}
       <style jsx>{`
-        @keyframes mistDrift {
-          0%   { transform: translate3d(-12%, -8%, 0) scale(1.02); }
-          50%  { transform: translate3d(10%, 8%, 0) scale(1.08); }
-          100% { transform: translate3d(-12%, -8%, 0) scale(1.02); }
-        }
-        .mist-drift { animation: mistDrift 32s ease-in-out infinite; }
-        @media (prefers-reduced-motion: reduce) {
-          .mist-drift { animation: none !important; }
-        }
-        .mist-overlay { opacity: 0.56; }
         @keyframes gentlePulse {
           0%, 100% { box-shadow: 0 6px 16px rgba(0,0,0,0.05), 0 0 0 0 rgba(102, 194, 255, 0.0); }
           50% { box-shadow: 0 8px 20px rgba(0,0,0,0.08), 0 0 0 6px rgba(102, 194, 255, 0.25); }
@@ -408,11 +433,8 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
           .claimable-glow { animation: none; }
         }
         .claimable-glow:hover, .claimable-glow:focus-within { transform: translateY(-1px); transition: transform 180ms ease-out; }
-        /* Bold Helvetica for body text in rewards panel only (avoid headings) */
-        .rewards-body :where(p, .text-sm, .text-base, .font-sans, span, li, label, input, textarea) {
-          font-family: Helvetica, Arial, sans-serif;
-          font-weight: 700;
-        }
+        /* Body copy normal weight for readability */
+        .rewards-body :where(p, .text-sm, .text-base, .font-sans, span, li, label, input, textarea) { font-weight: 400; }
       `}</style>
     </div>
   );

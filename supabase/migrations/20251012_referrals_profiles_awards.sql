@@ -3,24 +3,7 @@
 
 create extension if not exists pgcrypto with schema public;
 
--- 1) Profiles table
-create table if not exists public.profiles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  email text unique not null,
-  first_name text not null,
-  last_name text not null,
-  country_code text not null,
-  favorite_song text,
-  referral_code text unique not null,
-  parent_user_id uuid null references public.profiles(user_id) on delete set null,
-  joined_at timestamptz null,
-  boats_total int not null default 0,
-  boats_direct int not null default 0,
-  boats_grand int not null default 0,
-  boats_deep int not null default 0,
-  constraint email_not_empty check (length(trim(email)) > 0),
-  constraint country_iso2 check (length(country_code) = 2)
-);
+-- DEPRECATED: public.profiles (removed)
 
 create index if not exists idx_profiles_parent on public.profiles(parent_user_id);
 create index if not exists idx_profiles_country on public.profiles(country_code);
@@ -67,10 +50,7 @@ begin
   end loop;
 end; $$ language plpgsql;
 
-drop trigger if exists trg_set_referral_code_before_insert on public.profiles;
-create trigger trg_set_referral_code_before_insert
-  before insert on public.profiles
-  for each row execute function public.set_referral_code_if_null();
+-- DEPRECATED triggers for profiles (removed)
 
 create or replace function public.prevent_referral_code_change() returns trigger as $$
 begin
@@ -80,27 +60,10 @@ begin
   return new;
 end; $$ language plpgsql;
 
-drop trigger if exists trg_prevent_referral_code_change on public.profiles;
-create trigger trg_prevent_referral_code_change
-  before update on public.profiles
-  for each row execute function public.prevent_referral_code_change();
+-- DEPRECATED trigger (removed)
 
 -- Backfill missing referral codes
-do $$
-declare r record; code text; exists_code int; attempts int;
-begin
-  for r in select user_id from public.profiles where coalesce(referral_code,'') = '' loop
-    attempts := 0;
-    loop
-      attempts := attempts + 1;
-      code := public.generate_referral_code(8 + (attempts % 3));
-      select 1 into exists_code from public.profiles where referral_code = code limit 1;
-      exit when not found;
-      if attempts > 20 then raise exception 'Unable to backfill unique referral code'; end if;
-    end loop;
-    update public.profiles set referral_code = code where user_id = r.user_id;
-  end loop;
-end $$;
+-- DEPRECATED backfill block (removed)
 
 -- Prevent re-parenting once joined
 create or replace function public.prevent_reparent_after_join() returns trigger as $$
@@ -111,10 +74,7 @@ begin
   return new;
 end; $$ language plpgsql;
 
-drop trigger if exists trg_prevent_reparent_after_join on public.profiles;
-create trigger trg_prevent_reparent_after_join
-  before update on public.profiles
-  for each row execute function public.prevent_reparent_after_join();
+-- DEPRECATED trigger (removed)
 
 -- 3) Referral awards audit
 create table if not exists public.referral_awards (
@@ -128,7 +88,7 @@ create table if not exists public.referral_awards (
 );
 
 -- 4) Row-Level Security
-alter table public.profiles enable row level security;
+-- Keep referral_awards for now; profiles removed
 alter table public.referral_awards enable row level security;
 
 -- Helper claim for service role
@@ -142,40 +102,18 @@ end; $$ language plpgsql stable;
 
 -- Profiles policies
 -- Remove any overly-permissive public select; rely on self-select and public views
-drop policy if exists profiles_public_select on public.profiles;
+-- DEPRECATED profiles policies (removed)
 
 -- Restrict columns for public selection via a view; direct table still protected by column usage in app
 
-drop policy if exists profiles_self_select on public.profiles;
-create policy profiles_self_select on public.profiles for select
-  using (user_id = auth.uid());
+-- (removed)
 
-drop policy if exists profiles_self_insert on public.profiles;
-create policy profiles_self_insert on public.profiles for insert
-  with check (user_id = auth.uid());
+-- (removed)
 
-drop policy if exists profiles_self_update on public.profiles;
-create policy profiles_self_update on public.profiles for update
-  using (user_id = auth.uid())
-  with check (
-    user_id = auth.uid()
-    and boats_total = (select boats_total from public.profiles p where p.user_id = profiles.user_id)
-    and boats_direct = (select boats_direct from public.profiles p where p.user_id = profiles.user_id)
-    and boats_grand = (select boats_grand from public.profiles p where p.user_id = profiles.user_id)
-    and boats_deep = (select boats_deep from public.profiles p where p.user_id = profiles.user_id)
-    and referral_code = (select referral_code from public.profiles p where p.user_id = profiles.user_id)
-    and (
-      (select joined_at from public.profiles p where p.user_id = profiles.user_id) is null
-      or parent_user_id = (select parent_user_id from public.profiles p where p.user_id = profiles.user_id)
-    )
-    and joined_at = (select joined_at from public.profiles p where p.user_id = profiles.user_id)
-  );
+-- (removed)
 
 -- Service role unrestricted changes
-drop policy if exists profiles_service_all on public.profiles;
-create policy profiles_service_all on public.profiles for all
-  using (public.is_service_role())
-  with check (public.is_service_role());
+-- (removed)
 
 -- referral_awards policies
 drop policy if exists awards_public_read on public.referral_awards;
@@ -185,13 +123,8 @@ drop policy if exists awards_service_all on public.referral_awards;
 create policy awards_service_all on public.referral_awards for all using (public.is_service_role()) with check (public.is_service_role());
 
 -- Public safe view for leaderboard
-create or replace view public.leaderboard_public as
-select first_name,
-       country_code,
-       boats_total
-from public.profiles
-order by boats_total desc
-limit 1000;
+-- DEPRECATED view leaderboard_public (removed)
+drop view if exists public.leaderboard_public;
 
 -- 5) RPC finalize_join
 create or replace function public.finalize_join(p_joiner uuid)
@@ -200,7 +133,7 @@ language plpgsql
 security definer
 as $$
 declare
-  v_joiner public.profiles%rowtype;
+  -- v_joiner type updated if finalize_join is kept; consider removal if unused
   v_current uuid;
   v_depth int := 0;
   v_award int := 0;
@@ -212,17 +145,14 @@ begin
     raise exception 'service role required';
   end if;
 
-  select * into v_joiner from public.profiles where user_id = p_joiner for update;
+  raise exception 'finalize_join deprecated: profiles removed';
   if not found then
     raise exception 'joiner profile not found';
   end if;
 
-  if v_joiner.joined_at is null then
-    update public.profiles set joined_at = now() where user_id = p_joiner;
-    select * into v_joiner from public.profiles where user_id = p_joiner;
-  end if;
+  -- deprecated body
 
-  v_current := v_joiner.parent_user_id;
+  -- deprecated traversal
   while v_current is not null and v_depth < v_max_depth loop
     v_depth := v_depth + 1;
 
@@ -269,10 +199,7 @@ begin
   return new;
 end; $$ language plpgsql;
 
-drop trigger if exists trg_finalize_join on public.profiles;
-create trigger trg_finalize_join
-  after update on public.profiles
-  for each row execute function public.call_finalize_join();
+-- DEPRECATED trigger (removed)
 
 
 

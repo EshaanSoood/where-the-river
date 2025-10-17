@@ -1,17 +1,17 @@
 Vercel CLI 48.2.9
 Retrieving project…
 Deploying eshaans-projects-d91d58e1/riverflows
-Uploading [--------------------] (0.0B/115.8KB)
-Uploading [=====---------------] (32.4KB/115.8KB)
-Uploading [===========---------] (64.4KB/115.8KB)
-Uploading [=================---] (100.7KB/115.8KB)
-Uploading [====================] (115.8KB/115.8KB)
-Inspect: https://vercel.com/eshaans-projects-d91d58e1/riverflows/F6PJjqHFKBzSQjCn8HTV2yB5ZmJq [4s]
-Production: https://riverflows-48wtiwmzi-eshaans-projects-d91d58e1.vercel.app [4s]
-https://riverflows-48wtiwmzi-eshaans-projects-d91d58e1.vercel.appQueued
+Uploading [--------------------] (0.0B/151.1KB)
+Uploading [=====---------------] (45.1KB/151.1KB)
+Uploading [==========----------] (77.1KB/151.1KB)
+Uploading [===============-----] (113.4KB/151.1KB)
+Uploading [====================] (151.1KB/151.1KB)
+Inspect: https://vercel.com/eshaans-projects-d91d58e1/riverflows/3qwgRFUR57P2cc5sWJYsC2Uz9yc3 [3s]
+Production: https://riverflows-hyyh54vrl-eshaans-projects-d91d58e1.vercel.app [3s]
+https://riverflows-hyyh54vrl-eshaans-projects-d91d58e1.vercel.appQueued
 Building
 Completing
 
 Common next commands:
-- `vercel inspect riverflows-48wtiwmzi-eshaans-projects-d91d58e1.vercel.app --logs`
-- `vercel redeploy riverflows-48wtiwmzi-eshaans-projects-d91d58e1.vercel.app`
+- `vercel inspect riverflows-hyyh54vrl-eshaans-projects-d91d58e1.vercel.app --logs`
+- `vercel redeploy riverflows-hyyh54vrl-eshaans-projects-d91d58e1.vercel.app`

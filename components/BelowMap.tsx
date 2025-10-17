@@ -38,6 +38,7 @@ export default function BelowMap() {
   const [code, setCode] = useState("");
   const [uiLoading, setUiLoading] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
+  const [lastOtpAt, setLastOtpAt] = useState<number>(0);
   const [countries, setCountries] = useState<IsoCountry[]>([]);
 
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -446,7 +447,7 @@ export default function BelowMap() {
         </div>
 
         {/* Desktop layout (≥1024px): 3 columns 1:2:1 over fluid container */}
-        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-start" style={{ gridTemplateColumns: '3fr 6fr 3fr' }}>
+        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-start" style={{ gridTemplateColumns: '3fr 6fr 3fr', maxWidth: 'min(2048px, 92vw)', marginInline: 'auto' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
           <section aria-label="Bandcamp and YouTube" className="h-full min-h-0 min-w-0 overflow-hidden">
             <div className="h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}>
@@ -456,8 +457,8 @@ export default function BelowMap() {
 
           {/* Globe (center) */}
           <section aria-label="Global participation" className="min-w-0 h-full overflow-hidden">
-            <div className="relative h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden" style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}>
-              <div className="relative flex items-center justify-center h-full p-4">
+            <div className="relative h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden" style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}>
+              <div className="relative flex items-center justify-center h-full p-3 md:p-4">
                 <div className="relative w-full h-full">
                   <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
                 </div>
@@ -587,16 +588,41 @@ export default function BelowMap() {
                         <div className="flex items-center gap-3">
                     <button
                       className="rounded-md px-4 py-3 btn font-seasons flex-1"
-                      disabled={uiLoading || !firstName || !lastName || !email || !country || !favoriteSong}
+                      disabled={uiLoading || !firstName || !lastName || !email || !country || !favoriteSong || (Date.now() - lastOtpAt) < 60000}
                       onClick={async () => {
                         setUiLoading(true);
                         setAlert(null);
                         try {
                           const supabase = getSupabase();
-                          const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-                          if (error) throw error;
-                          setGuestStep('signup_code');
-                          setAlert('We emailed you a 6-digit code. Enter it below.');
+                          const emailNorm = email.trim().toLowerCase();
+                          const { error: signUpErr } = await supabase.auth.signInWithOtp({
+                            email: emailNorm,
+                            options: {
+                              shouldCreateUser: true,
+                              data: {
+                                first_name: firstName.trim(),
+                                last_name: lastName.trim(),
+                                country_code: country,
+                                boat_color: boatColor,
+                                message: favoriteSong,
+                              },
+                            },
+                          });
+                          setLastOtpAt(Date.now());
+                          if (signUpErr) {
+                            const msg = (signUpErr.message || '').toLowerCase();
+                            if (msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
+                              const { error: signInErr } = await supabase.auth.signInWithOtp({ email: emailNorm, options: { shouldCreateUser: false } });
+                              if (signInErr) throw signInErr;
+                              setGuestStep('login_code');
+                              setAlert('We emailed you a 6-digit code. Enter it below.');
+                            } else {
+                              throw signUpErr;
+                            }
+                          } else {
+                            setGuestStep('signup_code');
+                            setAlert('We emailed you a 6-digit code. Enter it below.');
+                          }
                         } catch (err: unknown) {
                           const msg = err instanceof Error ? err.message : 'Something went wrong';
                           setAlert(msg);
@@ -605,7 +631,7 @@ export default function BelowMap() {
                         }
                       }}
                     >
-                      {uiLoading ? 'Sending…' : 'Send Code'}
+                      {uiLoading ? 'Sending…' : ((Date.now() - lastOtpAt) < 60000 ? 'Please wait…' : 'Send Code')}
                     </button>
                     <button className="text-sm underline" onClick={() => setGuestStep('menu')}>Back</button>
                   </div>
@@ -632,7 +658,8 @@ export default function BelowMap() {
 
               {guestStep === 'signup_code' && (
                 <div className="space-y-3">
-                  <h2 className="font-seasons text-xl">Enter Code</h2>
+                  <h2 className="font-seasons text-xl" style={{ color: 'var(--teal)' }}>Let’s Start Sailing.</h2>
+                  <div className="text-sm" style={{ color: 'var(--ink-2)' }}>Enter the code we sent to start your journey.</div>
                   <input className="border rounded-md px-3 py-2 bg-background tracking-widest text-center" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="••••••" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
                   <div className="flex items-center gap-3">
                     <button
@@ -643,7 +670,7 @@ export default function BelowMap() {
                         setAlert(null);
                         try {
                           const supabase = getSupabase();
-                          const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
+                          const { data, error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code, type: 'email' });
                           if (error) throw error;
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
@@ -690,18 +717,20 @@ export default function BelowMap() {
                   <div className="flex items-center gap-3">
                     <button
                       className="rounded-md px-4 py-3 btn flex-1"
-                      disabled={uiLoading || !email}
+                      disabled={uiLoading || !email || (Date.now() - lastOtpAt) < 60000}
                       onClick={async () => {
                         setUiLoading(true);
                         setAlert(null);
                         try {
                           // Always attempt OTP sign-in; fall back to signup if auth rejects
                           const supabase = getSupabase();
-                          const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+                          const emailNorm = email.trim().toLowerCase();
+                          const { error } = await supabase.auth.signInWithOtp({ email: emailNorm, options: { shouldCreateUser: false } });
                           if (error) {
                             setAlert('No rivers found with that email address. You can start a new one.');
                             setGuestStep('signup_email');
                           } else {
+                            setLastOtpAt(Date.now());
                             setGuestStep('login_code');
                             setAlert('We emailed you a 6-digit code. Enter it below.');
                           }
@@ -722,7 +751,8 @@ export default function BelowMap() {
 
               {guestStep === 'login_code' && (
                 <div className="space-y-3">
-                  <h2 className="font-seasons text-xl">Enter Code</h2>
+                  <h2 className="font-seasons text-xl" style={{ color: 'var(--teal)' }}>Welcome Back.</h2>
+                  <div className="text-sm" style={{ color: 'var(--ink-2)' }}>Enter the code we sent to resume your river.</div>
                   <input className="border rounded-md px-3 py-2 bg-background tracking-widest text-center" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="••••••" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
                   <div className="flex items-center gap-3">
                     <button

@@ -12,13 +12,14 @@ export async function GET() {
 
     if (totalRes.error) return NextResponse.json({ error: totalRes.error.message }, { status: 400 });
 
-    // Top 5 by boats_total from public.profiles view
-    const { data: top, error: topErr } = await supabaseServer
-      .from("leaderboard_public")
-      .select("first_name,country_code,boats_total")
+    // Top 5 by boats_total via auth.users.user_metadata (service read)
+    const { data: rows, error: topErr } = await supabaseServer
+      .from("users")
+      .select("name,country_code,boats_total")
       .order("boats_total", { ascending: false })
       .limit(5);
     if (topErr) return NextResponse.json({ error: topErr.message }, { status: 400 });
+    const top = (rows || []).map(r => ({ first_name: (r.name || '').split(' ')[0] || '', country_code: r.country_code, boats_total: r.boats_total }));
 
     return NextResponse.json({ totalBoats: totalRes.count ?? 0, top: top ?? [] });
   } catch (e: unknown) {

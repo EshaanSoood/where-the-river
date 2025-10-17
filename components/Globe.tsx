@@ -6,13 +6,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as topojson from 'topojson-client';
 import type { FeatureCollection } from '../types';
 import { fetchGlobeData } from '@/lib/globeData';
-import { getCountryNameFromCode } from "@/lib/countryMap";
+// Country name resolution handled via mesh userData; no DOM node overlay
 
 const GlobeComponent: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const overlaySvgRef = useRef<SVGSVGElement | null>(null);
-  const debugRef = useRef<HTMLDivElement | null>(null);
-  const nodeElementMapRef = useRef<Record<string, { g: SVGGElement | null; circle: SVGCircleElement | null; text: SVGTextElement | null }>>({});
+  
   const lastTapRef = useRef<number>(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [tooltip, setTooltip] = useState<{
@@ -21,14 +19,7 @@ const GlobeComponent: React.FC = () => {
     y: number;
   }>({ content: null, x: 0, y: 0 });
   const tooltipRef = useRef<HTMLDivElement | null>(null);
-  const [nodeRadius, setNodeRadius] = useState<number>(3.5);
-  const nodesRef = useRef<{ id: string; name: string; countryCode: string; lat: number; lng: number }[]>([]);
-  const linksRef = useRef<{ source: string; target: string }[]>([]);
-  const countersRef = useRef<{ fetched: number; drawnNodes: number; drawnEdges: number; missingCentroid: number }>({ fetched: 0, drawnNodes: 0, drawnEdges: 0, missingCentroid: 0 });
-  const [overlay, setOverlay] = useState<{
-    nodes: { id: string; name: string; countryCode: string; lat: number; lng: number }[];
-    links: { source: string; target: string }[];
-  }>({ nodes: [], links: [] });
+  
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -53,15 +44,9 @@ const GlobeComponent: React.FC = () => {
     };
 
     const { width: initialWidth, height: initialHeight } = getContainerSize();
-    const computeNodeRadius = () => {
-      const { width } = getContainerSize();
-      if (width <= 480) return 5.0;
-      if (width <= 768) return 4.25;
-      return 3.5;
-    };
-    setNodeRadius(computeNodeRadius());
+    
 
-    const camera = new THREE.PerspectiveCamera(45, initialWidth / initialHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(45, initialWidth / initialHeight, 0.1, 2000);
     camera.position.z = 300;
     const initialDistance = camera.position.length();
 
@@ -153,6 +138,27 @@ const GlobeComponent: React.FC = () => {
     const clouds2 = new THREE.Mesh(cloudGeometry2, cloudMaterial2);
     scene.add(clouds2);
 
+    // Stars (far background, exempt from fog)
+    const starGeometry = new THREE.BufferGeometry();
+    const starVerts: number[] = [];
+    const starRadius = 1500;
+    const starCount = (typeof window !== 'undefined' && window.innerWidth < 768) ? 3000 : 10000;
+    for (let i = 0; i < starCount; i++) {
+      const u = Math.random();
+      const v = Math.random();
+      const theta = 2 * Math.PI * u;
+      const phi = Math.acos(2 * v - 1);
+      const x = starRadius * Math.sin(phi) * Math.cos(theta);
+      const y = starRadius * Math.sin(phi) * Math.sin(theta);
+      const z = starRadius * Math.cos(phi);
+      starVerts.push(x, y, z);
+    }
+    starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+    const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.7, transparent: true, opacity: 0.8 });
+    starMaterial.fog = false;
+    const stars = new THREE.Points(starGeometry, starMaterial);
+    scene.add(stars);
+
     // Group to hold all country meshes for raycasting
     const countriesGroup = new THREE.Group();
     scene.add(countriesGroup);
@@ -238,18 +244,7 @@ const GlobeComponent: React.FC = () => {
         });
     };
     
-    // Removed boat paths/markers for simplified visual style
-
-    // Deterministic hash for edge seeding
-    const hashEdge = (s: string) => {
-      let h = 2166136261 >>> 0;
-      for (let i = 0; i < s.length; i++) {
-        h ^= s.charCodeAt(i);
-        h = Math.imul(h, 16777619);
-      }
-      // Map to [-1, 1]
-      return (h % 2000) / 1000 - 1;
-    };
+    // Removed boat paths/markers and SVG overlays for simplified visual style
 
     const loadAndDrawGlobe = async () => {
         try {
@@ -266,108 +261,7 @@ const GlobeComponent: React.FC = () => {
 
     loadAndDrawGlobe();
 
-    const projectLatLngToScreen = (lat: number, lon: number) => {
-      const vec = latLonToVector3(lat, lon, globeRadius + 2.0);
-      const surfaceNormal = vec.clone().normalize();
-      const toCameraVector = new THREE.Vector3().subVectors(camera.position, vec).normalize();
-      const dot = surfaceNormal.dot(toCameraVector); // [-1,1]
-      const facing = dot > 0.0;
-      const facingStrength = Math.max(0, Math.min(1, dot));
-      const { width, height } = getContainerSize();
-      const projected = vec.clone().project(camera);
-      const x = (projected.x * 0.5 + 0.5) * width;
-      const y = (-projected.y * 0.5 + 0.5) * height;
-      return { x, y, facing, facingStrength };
-    };
-
-    const updateOverlayPositions = () => {
-      const svg = overlaySvgRef.current;
-      if (!svg) return;
-      const nodes = nodesRef.current;
-      const links = linksRef.current;
-      let drawnNodes = 0;
-      let drawnEdges = 0;
-      const missingCentroid = 0;
-
-      // Edges
-      const edgeLayer = svg.querySelector('#edges') as SVGGElement | null;
-      if (edgeLayer) {
-        while (edgeLayer.firstChild) edgeLayer.removeChild(edgeLayer.firstChild);
-        links.forEach((l) => {
-          const a = nodes.find((n) => n.id === l.source);
-          const b = nodes.find((n) => n.id === l.target);
-          if (!a || !b) return;
-          const pa = projectLatLngToScreen(a.lat, a.lng);
-          const pb = projectLatLngToScreen(b.lat, b.lng);
-          if (!pa.facing || !pb.facing) return;
-
-          const sx = pa.x; const sy = pa.y;
-          const ex = pb.x; const ey = pb.y;
-          const dx = ex - sx;
-          const dy = ey - sy;
-          const len = Math.max(1, Math.hypot(dx, dy));
-          const mx = sx + dx * 0.5;
-          const my = sy + dy * 0.5;
-          // Perpendicular unit vector
-          const px = -dy / len;
-          const py = dx / len;
-          // Deterministic offset (10–14% of length)
-          const seed = hashEdge(`${l.source}→${l.target}`);
-          const magnitude = len * (0.10 + 0.04 * ((seed + 1) / 2));
-          const cx = mx + px * magnitude * seed;
-          const cy = my + py * magnitude * seed;
-          const d = `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`;
-
-          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path.setAttribute('d', d);
-          path.setAttribute('class', 'river-edge');
-          path.setAttribute('fill', 'none');
-          path.setAttribute('stroke', 'var(--ink)');
-          path.setAttribute('stroke-linecap', 'round');
-          path.setAttribute('stroke-linejoin', 'round');
-          path.setAttribute('vector-effect', 'non-scaling-stroke');
-          // Width variation (slight) based on seed and length
-          const width = 0.9 + 0.7 * ((seed + 1) / 2);
-          path.setAttribute('stroke-width', String(width));
-          // Gentle dash to suggest flow; drift handled via CSS animation
-          path.setAttribute('stroke-dasharray', '6 10');
-          // Opacity scaled by facing strength of endpoints
-          const alpha = 0.28 * ((pa.facingStrength + pb.facingStrength) / 2);
-          path.setAttribute('opacity', String(Math.max(0.06, Math.min(0.35, alpha))));
-          edgeLayer.appendChild(path);
-          drawnEdges++;
-        });
-      }
-
-      // Nodes + labels
-      nodes.forEach((n) => {
-        const ent = nodeElementMapRef.current[n.id];
-        if (!ent || !ent.circle || !ent.text || !ent.g) return;
-        const p = projectLatLngToScreen(n.lat, n.lng);
-        if (!p.facing) {
-          ent.g.setAttribute('display', 'none');
-          return;
-        }
-        ent.g.removeAttribute('display');
-        ent.circle.setAttribute('cx', String(p.x));
-        ent.circle.setAttribute('cy', String(p.y));
-        ent.text.setAttribute('x', String(p.x));
-        ent.text.setAttribute('y', String(p.y + 10));
-        drawnNodes++;
-      });
-
-      countersRef.current = {
-        fetched: nodes.length,
-        drawnNodes,
-        drawnEdges,
-        missingCentroid,
-      };
-
-      if (debugRef.current) {
-        const c = countersRef.current;
-        debugRef.current.textContent = `profiles fetched: ${c.fetched}, nodes drawn: ${c.drawnNodes}, edges: ${c.drawnEdges}` + (c.missingCentroid ? `, missing centroid: ${c.missingCentroid}` : '');
-      }
-    };
+    
     
     // No boat in simplified look
 
@@ -445,7 +339,6 @@ const GlobeComponent: React.FC = () => {
       clouds2.rotation.x += delta * 0.002;
       controls.update();
       renderer.render(scene, camera);
-      if (nodesRef.current.length > 0) updateOverlayPositions();
     };
     animate();
 
@@ -454,7 +347,6 @@ const GlobeComponent: React.FC = () => {
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
-      setNodeRadius(computeNodeRadius());
     };
 
     // Observe container resize to avoid window-based sizing
@@ -491,30 +383,7 @@ const GlobeComponent: React.FC = () => {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const isDebug = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
-    fetchGlobeData('all')
-      .then(({ nodes, links }) => {
-        if (cancelled) return;
-        const n = nodes && nodes.length ? nodes : [{ id: 'test', name: 'Test Node', countryCode: 'ZZ', lat: 0, lng: 0 }];
-        nodesRef.current = n;
-        linksRef.current = links || [];
-        setOverlay({ nodes: n, links: links || [] });
-        if (isDebug && debugRef.current) {
-          const c = countersRef.current;
-          debugRef.current.textContent = `profiles fetched: ${n.length}, nodes drawn: ${c.drawnNodes}, edges: ${c.drawnEdges}`;
-        }
-      })
-      .catch(() => {
-        if (cancelled) return;
-        const n = [{ id: 'test', name: 'Test Node', countryCode: 'ZZ', lat: 0, lng: 0 }];
-        nodesRef.current = n;
-        linksRef.current = [];
-        setOverlay({ nodes: n, links: [] });
-      });
-    return () => { cancelled = true; };
-  }, []);
+  // Removed SVG overlay data fetch; globe runs without DOM nodes/edges overlay
 
   return (
     <>
@@ -522,38 +391,7 @@ const GlobeComponent: React.FC = () => {
       {!isFullscreen && (
         <div className="relative" style={{ width: '100%', height: '100%' }}>
           <div ref={mountRef} style={{ position: 'absolute', inset: 0 }} />
-          <svg ref={overlaySvgRef} aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-            <g id="edges" />
-            <g id="nodes">
-              {overlay.nodes.map((n) => (
-                <g key={n.id} ref={(el) => {
-                  if (!nodeElementMapRef.current[n.id]) nodeElementMapRef.current[n.id] = { g: null, circle: null, text: null };
-                  if (nodeElementMapRef.current[n.id]) nodeElementMapRef.current[n.id].g = el;
-                }}>
-                  <circle ref={(el) => {
-                    const slot = nodeElementMapRef.current[n.id];
-                    if (slot) slot.circle = el;
-                  }} r={nodeRadius} fill="var(--teal)" stroke="#fff" strokeWidth={1} style={{ pointerEvents: 'auto' }} tabIndex={0} aria-label={`${n.name}, from ${n.countryCode}`}
-                  onMouseEnter={() => {
-                    try {
-                      const isDebug = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
-                      if (isDebug) {
-                        // Temporary verification log; remove after validation
-                        // Expect: { code: "IN", name: "India" }
-                        // eslint-disable-next-line no-console
-                        console.log({ code: n.countryCode, name: getCountryNameFromCode(n.countryCode) });
-                      }
-                    } catch {}
-                  }} />
-                  <text ref={(el) => {
-                    const slot = nodeElementMapRef.current[n.id];
-                    if (slot) slot.text = el;
-                  }} textAnchor="middle" fontSize={10} style={{ paintOrder: 'stroke', stroke: 'rgba(255,255,255,0.9)', strokeWidth: 3, fill: 'var(--ink)', pointerEvents: 'none' }}>{n.name}</text>
-                </g>
-              ))}
-            </g>
-          </svg>
-          <div ref={debugRef} style={{ position: 'absolute', top: 6, left: 6, fontSize: 11, background: 'rgba(255,255,255,0.8)', padding: '2px 6px', borderRadius: 4, color: 'var(--ink)', display: (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1') ? 'block' : 'none', pointerEvents: 'none' }} />
+          
           {tooltip.content && (
             <div
               ref={tooltipRef}
@@ -589,11 +427,7 @@ const GlobeComponent: React.FC = () => {
           </div>
         </div>
       )}
-      <style jsx>{`
-        .river-edge { stroke-dashoffset: 0; animation: riverDrift 30s linear infinite; }
-        @keyframes riverDrift { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 200; } }
-        @media (prefers-reduced-motion: reduce) { .river-edge { animation: none !important; } }
-      `}</style>
+      
     </>
   );
 };

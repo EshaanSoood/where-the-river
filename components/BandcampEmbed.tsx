@@ -6,12 +6,12 @@ export default function BandcampEmbed({ height = 120, fill = false }: Props) {
   const link = "2aa7b5"; // var(--aqua)
   return (
     <div className={fill ? "p-0 h-full min-h-0" : "p-0"}>
-      {/* Desktop: compact player to ensure full visibility without cropping */}
+      {/* Desktop: large branded player for ≥1024px */}
       <div className={fill ? "hidden md:flex flex-col h-full min-h-0" : "hidden md:block"}>
         <iframe
-          title="Bandcamp player (compact)"
-          style={{ border: 0, width: '100%', height: fill ? '100%' : height }}
-          src={`https://bandcamp.com/EmbeddedPlayer/album=672398703/size=small/bgcol=${bg}/linkcol=${link}/transparent=true/`}
+          title="Bandcamp player (large)"
+          style={{ border: 0, width: '100%', height: fill ? '100%' : (height || 200) }}
+          src={`https://bandcamp.com/EmbeddedPlayer/album=672398703/size=large/bgcol=${bg}/linkcol=${link}/transparent=true/`}
           seamless
           loading="lazy"
         >
@@ -20,7 +20,7 @@ export default function BandcampEmbed({ height = 120, fill = false }: Props) {
           </a>
         </iframe>
       </div>
-      {/* Mobile/Tablet: same compact sizing */}
+      {/* Mobile/Tablet: compact sizing */}
       <div className="block md:hidden">
         <iframe
           title="Bandcamp player (mobile compact)"

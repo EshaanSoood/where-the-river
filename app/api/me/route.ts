@@ -4,34 +4,49 @@ import path from "path";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getCountryNameFromCode } from "@/lib/countryMap";
 
+type UserMeta = {
+  first_name?: string;
+  last_name?: string;
+  name?: string;
+  country_code?: string;
+  boat_color?: string;
+  message?: string;
+  boats_total?: number;
+};
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { email } = body || {};
     if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
 
-    const { data: profile, error: profErr } = await supabaseServer
-      .from("profiles")
-      .select("first_name,last_name,country_code,referral_code,boats_total,email")
-      .eq("email", email)
+    // Read profile from auth.users.user_metadata (server role)
+    const { data: authUser, error: authErr } = await supabaseServer
+      .from('auth.users')
+      .select('id,email,user_metadata')
+      .eq('email', email)
       .maybeSingle();
-    if (profErr) return NextResponse.json({ error: profErr.message }, { status: 400 });
-    if (!profile) return NextResponse.json({ exists: false }, { status: 404 });
-
-    const { data: userRow } = await supabaseServer
-      .from("users")
-      .select("name,message,boat_color,email")
-      .eq("email", email)
-      .maybeSingle();
-
-    const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim();
-    const name = fullName || (userRow?.name ?? null);
-    const country_code = (profile.country_code || "").toUpperCase();
+    if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 });
+    if (!authUser) return NextResponse.json({ exists: false }, { status: 404 });
+    const um = ((authUser as unknown as { user_metadata?: UserMeta }).user_metadata || {}) as UserMeta;
+    const fullName = [um.first_name, um.last_name].filter(Boolean).join(" ").trim() || (um.name || "").trim();
+    const name = fullName || null;
+    const country_code = String(um.country_code || "").toUpperCase() || null;
     const country_name = country_code ? getCountryNameFromCode(country_code) : null;
-    const message = userRow?.message ?? null;
-    const boat_color = userRow?.boat_color ?? null;
-    const referral_code = profile.referral_code;
-    const boats_total = profile.boats_total ?? 0;
+    const message = um.message ?? null;
+    const boat_color = um.boat_color ?? null;
+    const boats_total = typeof um.boats_total === 'number' ? um.boats_total : 0;
+
+    // Referral code: read from users table if available (legacy source)
+    let referral_code: string | null = null;
+    try {
+      const { data: userRow } = await supabaseServer
+        .from("users")
+        .select("referral_id")
+        .eq("email", email)
+        .maybeSingle();
+      referral_code = userRow?.referral_id ?? null;
+    } catch {}
 
     const resp = {
       exists: true,

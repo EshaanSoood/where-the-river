@@ -70,6 +70,9 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
   - Globe container: frosted glass background (`rgba(11,13,26,0.80)` + `backdrop-filter: blur(12px)`), matching borders.
   - Right text panel: sticky bottom gradient hint to suggest more content.
   - Footer: slim frosted bar (40px) inside container; if hidden, fallbacks documented; later restored and visible.
+  - Bandcamp (desktop) now uses large embed with brand colors (bgcol=f7f0e4, linkcol=2aa7b5); mobile retains compact.
+  - Desktop grid centered with max width min(2048px, 92vw) to better utilize space on FHD/2k.
+  - Globe center panel padding slightly reduced; blur tuned for readability/performance.
 - Dashboard – Share overlay
   - Added `DashboardBadge` overlay with `data-mode` (default|share); Share button toggles to share mode and morphs into four tiles via staggered animation (reduced-motion aware).
   - Share screen mounts `ShareTiles` (WhatsApp/Email/SMS/Web Share) with default message, referral URL, fallback copy; Back restores focus to Share button; focus trap, ESC/outside click handled.
@@ -124,16 +127,17 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
   - Per-node initials under each visible dot; on hover expands to full name; collapses immediately on leave.
 - Animations:
   - Bloom on appear (~300–380ms), gather fade-out on hide (~200ms); reduced-motion disables.
+  - Initial fit at zoom=1 without clipping (centered); responsive re-fit until user interacts. Zoom bounds: max out = 1× baseline, max in ≈ 3×.
 
 ## Seed Data
 - Inserted test users via SQL: US=50, IN=40, IT=10, GB=5.
   - One US user with 5 children; one IN user with 7; 10 single-connection pairs distributed (IT/GB); rest standalone.
 
 ## Rewards – Additional Tweaks (Accessibility & UX)
-- Mist overlay: z-index bumped to 90; opacity 0.30; drift speed +20% (32s). Confetti container z-index 40. Mist remains clipped by cards.
+- Mist overlay removed; rewards now use non-animated frosted cards with four exposure tiers (Now/Next up/Soon/Later) and consistent mystery hints.
 - Contrast: deeper teal progress fill and border; claim button with stronger border/fill; improved legibility for low-vision users.
 - Layout: tightened vertical paddings by ~15–20% across sections and cards to reduce scroll.
-- Bold body text (scoped): rewards panel body text uses bold Helvetica; site-wide body remains normal.
+- Rewards body text returns to normal weight; headings use emphasis only.
 - Header/content scrolling: rewards header stays fixed; only content scrolls; focus trap intact.
 - Modal focus: when “How Points Work” opens, focus auto-shifts to the modal container; close restores focus.
 
@@ -187,4 +191,7 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
 ## Action Items
 - Consider adding `.limit`/cursor pagination to globe feed for scale.
 - Optional guard: skip self‑loop edges if `source===target`.
+
+## Globe – Stars & Legacy Globe
+- Stars reinstated in legacy globe: camera far plane increased; star material fog disabled so stars remain visible behind the globe.
 
