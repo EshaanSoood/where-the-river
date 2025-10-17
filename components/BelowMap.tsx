@@ -74,6 +74,7 @@ export default function BelowMap() {
   
   const [showTopFade, setShowTopFade] = useState(false);
   const [showBottomFade, setShowBottomFade] = useState(false);
+  const dashboardFetchAttemptsRef = useRef<number>(0);
 
   useEffect(() => {
     const el = rightPanelRef.current;
@@ -110,7 +111,10 @@ export default function BelowMap() {
     // Prefer server-derived friendly name; fall back to mapping from code
     const fromServer = userProfile?.country_name || null;
     if (fromServer && fromServer.trim().length > 0) return fromServer;
-    const codeRaw = (userProfile?.country_code || country || '').toUpperCase();
+    const codeRaw = (userProfile?.country_code || country || '')
+      .replace(/[\u2013\u2014—]/g, '')
+      .trim()
+      .toUpperCase();
     if (!codeRaw) return 'Country not set';
     try {
       return getCountryNameFromCode(codeRaw);
@@ -119,6 +123,59 @@ export default function BelowMap() {
       return match?.name || 'Country not set';
     }
   }, [userProfile?.country_name, userProfile?.country_code, country, countries]);
+
+  // Helper: unified fetch for dashboard data with simple retry if fields are missing
+  const fetchDashboardData = async (emailAddr: string) => {
+    try {
+      const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : ''))
+        .replace(/\/$/, '');
+      // /api/me
+      const respMe = await fetch(`${base}/api/me`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailAddr })
+      });
+      if (respMe.ok) {
+        const jm = await respMe.json();
+        const boats = typeof jm?.me?.boats_total === 'number' ? jm.me.boats_total : 0;
+        const cname = (jm?.me?.country_name || '').trim();
+        const fallbackName = (jm?.me?.name || '').trim();
+        setBoatsTotal((v) => v || boats || 0);
+        if (!userFullName && fallbackName) setUserFullName(fallbackName);
+        if (cname) setUserProfile((prev) => ({
+          name: prev?.name ?? null,
+          country_code: prev?.country_code ?? null,
+          country_name: cname,
+          message: prev?.message ?? null,
+          boat_color: prev?.boat_color ?? null,
+        }));
+        // referral from /api/me if available
+        if (!referralUrl) {
+          const codeMe = jm?.me?.ref_code_8 || jm?.me?.referral_code || '';
+          if (codeMe) setReferralUrl(`${base}/?ref=${codeMe}`);
+        }
+      }
+      // /api/profiles/by-email for ref + name (preferred)
+      const respProf = await fetch(`${base}/api/profiles/by-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailAddr })
+      });
+      if (respProf.ok) {
+        const jp = await respProf.json();
+        const code = jp?.profile?.ref_code_8 || '';
+        const name = (jp?.profile?.name || '').trim();
+        if (code) setReferralUrl((r) => r || `${base}/?ref=${code}`);
+        if (!userFullName && name) setUserFullName(name);
+      }
+      // background retry if critical fields are missing (max 3 tries)
+      const missing = (!userFullName || !referralUrl);
+      if (missing && dashboardFetchAttemptsRef.current < 3) {
+        dashboardFetchAttemptsRef.current += 1;
+        setTimeout(() => { fetchDashboardData(emailAddr).catch(() => {}); }, 1200);
+      }
+    } catch {}
+  };
 
   // Lock body scroll while a panel is open and inert the rest of the page for SR/keyboard
   useEffect(() => {
@@ -192,59 +249,19 @@ export default function BelowMap() {
     return () => { isMounted = false; };
   }, []);
 
+  // On overlay open in user mode: fetch now
   useEffect(() => {
     if (!dashboardOpen || dashboardMode !== 'user' || !user?.email) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        // Read merged profile from server to ensure canonical fields and avoid client-side RLS
-        const resp = await fetch('/api/me', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: user.email }),
-        });
-        const j = await resp.json();
-        if (!cancelled && j?.me) {
-          setUserProfile({
-            name: j.me.name ?? null,
-            country_code: j.me.country_code ?? null,
-            country_name: j.me.country_name ?? null,
-            message: j.me.message ?? null,
-            boat_color: j.me.boat_color ?? null,
-          });
-          if (typeof j.me.boats_total === 'number') {
-            setBoatsTotal((v) => v || j.me.boats_total || 0);
-          }
-          if (!referralUrl) {
-            const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
-            const code = j.me.ref_code_8 || j.me.referral_code;
-            setReferralUrl(code ? `${base}/?ref=${code}` : base);
-          }
-          if (!userFullName && j.me.name) {
-            setUserFullName(j.me.name);
-          }
-        }
-      } catch {}
-      try {
-        setBoatsTotal((v) => v || 0);
-        const resp = await fetch('/api/profiles/by-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email }) });
-        const j = await resp.json();
-        if (!cancelled && j?.profile) {
-          const code = j.profile.ref_code_8;
-          const name = j.profile.name || '';
-          const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
-          setReferralUrl(code ? `${base}/?ref=${code}` : base);
-          setUserFullName(name);
-        }
-      } catch {
-        if (!cancelled) {
-          const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
-          setReferralUrl((r) => r || base);
-        }
-      }
-    })();
-    return () => { cancelled = true; };
+    dashboardFetchAttemptsRef.current = 0;
+    fetchDashboardData(user.email).catch(() => {});
   }, [dashboardOpen, dashboardMode, user?.email]);
+
+  // Also kick off fetch as soon as auth resolves, even if overlay isn’t open
+  useEffect(() => {
+    if (!user?.email) return;
+    dashboardFetchAttemptsRef.current = 0;
+    fetchDashboardData(user.email).catch(() => {});
+  }, [user?.email]);
 
   // Manage focus when switching into/out of the inline Share view
   useEffect(() => {
@@ -679,6 +696,8 @@ export default function BelowMap() {
                                 boat_color: boatColor,
                               }),
                             });
+                            // Immediately fetch dashboard data post-verification
+                            try { dashboardFetchAttemptsRef.current = 0; await fetchDashboardData(email.trim().toLowerCase()); } catch {}
                             setAlert('Verified! You are in.');
                             setTimeout(() => setDashboardOpen(false), 900);
                             return;
@@ -757,6 +776,7 @@ export default function BelowMap() {
                           if (error) throw error;
                           if (data?.user) {
                             setAlert('Welcome back!');
+                            try { dashboardFetchAttemptsRef.current = 0; await fetchDashboardData(email.trim().toLowerCase()); } catch {}
                             setTimeout(() => setDashboardOpen(false), 900);
                             return;
                           }

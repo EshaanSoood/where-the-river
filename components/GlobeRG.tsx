@@ -738,8 +738,19 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     scene.add(stars);
     // Combined change handler
     const onControlsChange = () => {
-      try { recalcVisiblePoints(); } catch {}
-      try { updateUserOverlaysPosition(); } try { const dist = camera.position.length(); const threshold = 220; if (countriesLODRef.current) { if (dist < threshold && countriesLODRef.current.high.features.length > 0) setCurrentLOD('high'); else setCurrentLOD('low'); } } catch {}
+      try {
+        recalcVisiblePoints();
+        updateUserOverlaysPosition();
+        const dist = camera.position.length();
+        const threshold = 220;
+        if (countriesLODRef.current) {
+          if (dist < threshold && countriesLODRef.current.high.features.length > 0) {
+            setCurrentLOD('high');
+          } else {
+            setCurrentLOD('low');
+          }
+        }
+      } catch {}
     };
     controls.addEventListener('change', onControlsChange);
     let resizeTimer: number | null = null;
