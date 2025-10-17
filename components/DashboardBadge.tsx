@@ -36,32 +36,38 @@ export default function DashboardBadge() {
   }, [mode]);
 
   useEffect(() => {
-    // read minimal info from existing endpoints
+    let cancelled = false;
     (async () => {
       try {
         const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
         const email = user?.email || '';
         if (!email) { setReferralUrl(base); return; }
-        // profiles/by-email for referral + name
-        const respProf = await fetch(`${base}/api/profiles/by-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-        if (!respProf.ok) throw new Error('profiles/by-email failed');
-        const jp = await respProf.json();
-        const code = jp?.profile?.ref_code_8 || '';
-        const name = (jp?.profile?.name || '').trim();
-        setReferralUrl(code ? `${base}/?ref=${code}` : base);
-        if (name) setUserFullName(name);
-
-        // /api/me for boatsTotal and country
+        // Fetch /api/me first for totals/country and fallback name+ref
         try {
           const respMe = await fetch(`${base}/api/me`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
           if (respMe.ok) {
             const jm = await respMe.json();
+            if (cancelled) return;
             const boats = typeof jm?.me?.boats_total === 'number' ? jm.me.boats_total : 0;
             const cname = (jm?.me?.country_name || '').trim();
             const fallbackName = (jm?.me?.name || '').trim();
+            const codeMe = jm?.me?.ref_code_8 || jm?.me?.referral_code || '';
             setBoatsTotal(boats || 0);
-            if (!name && fallbackName) setUserFullName(fallbackName);
+            if (fallbackName && !userFullName) setUserFullName(fallbackName);
             if (cname) setCountryName(cname);
+            if (codeMe) setReferralUrl((r) => r || `${base}/?ref=${codeMe}`);
+          }
+        } catch {}
+        // Prefer /api/profiles/by-email for ref + canonical name
+        try {
+          const respProf = await fetch(`${base}/api/profiles/by-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+          if (respProf.ok) {
+            const jp = await respProf.json();
+            if (cancelled) return;
+            const code = jp?.profile?.ref_code_8 || '';
+            const name = (jp?.profile?.name || '').trim();
+            if (code) setReferralUrl(`${base}/?ref=${code}`);
+            if (name) setUserFullName(name);
           }
         } catch {}
       } catch {
@@ -69,6 +75,7 @@ export default function DashboardBadge() {
         setReferralUrl(base);
       }
     })();
+    return () => { cancelled = true; };
   }, [user?.email]);
   return (
     <section

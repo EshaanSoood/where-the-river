@@ -24,11 +24,11 @@ export async function POST(req: Request) {
     let name = [um.first_name, um.last_name].filter(Boolean).join(" ").trim() || (um.name || "").trim();
     let ref_code_8: string | null = null;
     try {
-      // Prefer matching app users by auth id (email may not be stored in app users table)
+      // Match app users by email (users table stores email on upsert)
       const { data: userRow } = await supabaseServer
         .from("users")
         .select("referral_id,name")
-        .eq("id", (authUser as unknown as AuthUserRow).id)
+        .eq("email", email)
         .maybeSingle();
       ref_code_8 = userRow?.referral_id ?? null;
       if (!name && userRow?.name) name = String(userRow.name).trim();

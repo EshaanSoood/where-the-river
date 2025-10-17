@@ -118,6 +118,7 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
   const [countriesLOD, setCountriesLOD] = useState<{ low: CountriesData; high: CountriesData }>({ low: { features: [] }, high: { features: [] } });
   const [currentLOD, setCurrentLOD] = useState<"low" | "high">("low");
   const [arcsData, setArcsData] = useState<ArcDataRich[]>([]);
+  const [supportsPaths, setSupportsPaths] = useState<boolean>(false);
   const [pointsData, setPointsData] = useState<PointData[]>([]);
   const [visiblePoints, setVisiblePoints] = useState<PointData[]>([]);
   const [hoveredCountry, setHoveredCountry] = useState<any | null>(null);
@@ -532,7 +533,8 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     const base = 0.06 + 0.18 * easeInOutCubic(t);
     const seed = d.key ? (hashString(d.key) % 1000) / 1000 : 0.5;
     const jitter = (seed - 0.5) * 0.02; // ±0.01
-    return Math.max(0.04, base + jitter);
+    // Clamp minimum altitude to ensure rivers stay above raised polygons (~0.06 hover)
+    return Math.max(0.07, base + jitter);
   };
   const getPathStroke = (d: ArcDataRich): number => {
     const base = 1.0;
@@ -704,6 +706,16 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     handleZoom();
     // mark ready; listeners are managed by the effect below
     setGlobeReady(true);
+    // Feature detect paths support once
+    try {
+      const forceArcs = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('forceArcs') === '1';
+      if (!forceArcs) {
+        // Heuristic: if the component has a pathPoints function prop internally, assume supported
+        setSupportsPaths(true);
+      } else {
+        setSupportsPaths(false);
+      }
+    } catch { setSupportsPaths(false); }
   };
 
   // Scene add-ons and listeners with cleanup (ambient/stars, controls change, resize)
@@ -885,6 +897,54 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     return pts;
   }
 
+  // --- SSOT: Edge renderer helpers ---
+  const EDGE_COLOR = 'rgba(42,167,181,0.85)';
+  const GLOBAL_EDGE_CAP = 200;
+  const PER_PAIR_CAP = 8;
+
+  const buildSsotEdges = useMemo(() => {
+    return (raw: ArcDataRich[]): ArcDataRich[] => {
+      if (!raw || raw.length === 0) return [];
+      const byPair = new Map<string, ArcDataRich[]>();
+      for (const a of raw) {
+        const k = `${a.startCc || '??'}->${a.endCc || '??'}`;
+        if (!byPair.has(k)) byPair.set(k, []);
+        byPair.get(k)!.push(a);
+      }
+      const groups = Array.from(byPair.entries()).sort((a, b) => b[1].length - a[1].length);
+      const out: ArcDataRich[] = [];
+      for (const [k, arr] of groups) {
+        if (out.length >= GLOBAL_EDGE_CAP) break;
+        const keep = arr.slice(0, Math.min(arr.length, PER_PAIR_CAP));
+        keep.forEach(edge => out.push({ ...edge }));
+        if (arr.length > keep.length) {
+          const [sCc, eCc] = k.split('->');
+          const sCent = sCc && countryCodeToLatLng[sCc] ? countryCodeToLatLng[sCc] : [keep[0].startLat, keep[0].startLng];
+          const eCent = eCc && countryCodeToLatLng[eCc] ? countryCodeToLatLng[eCc] : [keep[0].endLat, keep[0].endLng];
+          out.push({ startLat: sCent[0], startLng: sCent[1], endLat: eCent[0], endLng: eCent[1], startCc: sCc, endCc: eCc, aggregatedCount: arr.length - keep.length, key: `__agg__:${sCc}->${eCc}` });
+        }
+        if (out.length >= GLOBAL_EDGE_CAP) break;
+      }
+      return out.slice(0, GLOBAL_EDGE_CAP);
+    };
+  }, []);
+
+  const getSeededEdgeParams = (d: ArcDataRich) => {
+    const seed = d.key ? (hashString(d.key) % 1000) / 1000 : 0.5;
+    const agg = d.aggregatedCount ? Math.min(2.0, Math.log2(d.aggregatedCount + 1)) : 0;
+    const stroke = Math.max(0.6, 1.0 + agg + (seed - 0.5) * 0.3);
+    const altitude = getPathAltitude(d);
+    const color = EDGE_COLOR;
+    const dash = {
+      length: 0.95,
+      gap: 1.1,
+      animateTime: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 0 : 1300,
+    };
+    return { color, stroke, altitude, dash };
+  };
+
+  const ssotEdges = useMemo(() => buildSsotEdges(arcsData), [arcsData, buildSsotEdges]);
+
   return (
     <div
       ref={wrapRef}
@@ -902,46 +962,26 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
         globeMaterial={globeMaterial}
         atmosphereColor="#66c2ff"
         atmosphereAltitude={0.25}
-        pathsData={useMemo(() => {
-          // Build capped & aggregated path edges once per data change
-          const MAX = 200;
-          const PER_PAIR = 8;
-          if (!arcsData || arcsData.length === 0) return [] as any[];
-          const byPair = new Map<string, ArcDataRich[]>();
-          for (const a of arcsData) {
-            const k = `${a.startCc || '??'}->${a.endCc || '??'}`;
-            if (!byPair.has(k)) byPair.set(k, []);
-            byPair.get(k)!.push(a);
-          }
-          const groups = Array.from(byPair.entries()).sort((a, b) => b[1].length - a[1].length);
-          const out: any[] = [];
-          for (const [k, arr] of groups) {
-            if (out.length >= MAX) break;
-            const keep = arr.slice(0, Math.min(arr.length, PER_PAIR));
-            keep.forEach(edge => out.push({ ...edge }));
-            if (arr.length > keep.length) {
-              const [sCc, eCc] = k.split('->');
-              const sCent = sCc && countryCodeToLatLng[sCc] ? countryCodeToLatLng[sCc] : [keep[0].startLat, keep[0].startLng];
-              const eCent = eCc && countryCodeToLatLng[eCc] ? countryCodeToLatLng[eCc] : [keep[0].endLat, keep[0].endLng];
-              out.push({ startLat: sCent[0], startLng: sCent[1], endLat: eCent[0], endLng: eCent[1], startCc: sCc, endCc: eCc, aggregatedCount: arr.length - keep.length, key: `__agg__:${sCc}->${eCc}` });
-            }
-            if (out.length >= MAX) break;
-          }
-          return out.slice(0, MAX);
-        }, [arcsData]) as any}
-        pathPoints={(d: any) => buildPathPoints(d)}
-        pathColor={(d: any) => 'rgba(42,167,181,0.85)'}
-        pathStroke={(d: any) => {
-          const base = 1.0;
-          const agg = d.aggregatedCount ? Math.min(2.0, Math.log2(d.aggregatedCount + 1)) : 0;
-          const seed = d.key ? (hashString(d.key) % 1000) / 1000 : 0.5;
-          const jitter = (seed - 0.5) * 0.3;
-          return Math.max(0.6, base + agg + jitter);
-        }}
-        pathAltitude={(d: any) => getPathAltitude(d)}
-        pathDashLength={(() => { try { return (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 1 : 0.95; } catch { return 0.95; } })()}
-        pathDashGap={(() => { try { return (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 0 : 1.1; } catch { return 1.1; } })()}
-        pathDashAnimateTime={(() => { try { return (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 0 : 1300; } catch { return 0; } })()}
+        {...(supportsPaths ? {
+          // paths mode
+          pathsData: ssotEdges as any,
+          pathPoints: (d: any) => buildPathPoints(d),
+          pathColor: (d: any) => getSeededEdgeParams(d).color,
+          pathAltitude: (d: any) => getSeededEdgeParams(d).altitude,
+          pathStroke: (d: any) => getSeededEdgeParams(d).stroke,
+          pathDashLength: getSeededEdgeParams({} as any).dash.length,
+          pathDashGap: getSeededEdgeParams({} as any).dash.gap,
+          pathDashAnimateTime: getSeededEdgeParams({} as any).dash.animateTime,
+        } : {
+          // arcs fallback mode
+          arcsData: ssotEdges as any,
+          arcColor: (d: any) => getSeededEdgeParams(d).color,
+          arcAltitude: (d: any) => getSeededEdgeParams(d).altitude,
+          arcStroke: (d: any) => getSeededEdgeParams(d).stroke,
+          arcDashLength: getSeededEdgeParams({} as any).dash.length,
+          arcDashGap: getSeededEdgeParams({} as any).dash.gap,
+          arcDashAnimateTime: getSeededEdgeParams({} as any).dash.animateTime,
+        })}
         pathCurveResolution={64}
         pointsData={visiblePoints.length ? visiblePoints : pointsData}
         pointAltitude={(d: any) => (d?.kind === 'aggregate' ? 0.203 : (d?.id && d.id === userRefCodeRef.current ? 0.205 : 0.201))}

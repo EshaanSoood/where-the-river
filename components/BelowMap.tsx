@@ -602,31 +602,37 @@ export default function BelowMap() {
                         try {
                           const supabase = getSupabase();
                           const emailNorm = email.trim().toLowerCase();
-                          const { error: signUpErr } = await supabase.auth.signInWithOtp({
-                            email: emailNorm,
-                            options: {
-                              shouldCreateUser: true,
-                              data: {
-                                first_name: firstName.trim(),
-                                last_name: lastName.trim(),
-                                country_code: country,
-                                boat_color: boatColor,
-                                message: favoriteSong,
-                              },
-                            },
-                          });
-                          setLastOtpAt(Date.now());
-                          if (signUpErr) {
-                            const msg = (signUpErr.message || '').toLowerCase();
-                            if (msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
-                              const { error: signInErr } = await supabase.auth.signInWithOtp({ email: emailNorm, options: { shouldCreateUser: false } });
-                              if (signInErr) throw signInErr;
-                              setGuestStep('login_code');
-                              setAlert('We emailed you a 6-digit code. Enter it below.');
-                            } else {
-                              throw signUpErr;
-                            }
+                          // Preflight: does user already exist?
+                          let exists = false;
+                          try {
+                            const r = await fetch('/api/users/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailNorm }) });
+                            const j = await r.json();
+                            exists = !!j?.exists;
+                          } catch {}
+                          if (exists) {
+                            // Existing user → send login OTP and go to Screen D
+                            const { error: signInErr } = await supabase.auth.signInWithOtp({ email: emailNorm, options: { shouldCreateUser: false } });
+                            if (signInErr) throw signInErr;
+                            setLastOtpAt(Date.now());
+                            setGuestStep('login_code');
+                            setAlert('We emailed you a 6-digit code. Enter it below.');
                           } else {
+                            // New user → send signup OTP with metadata and go to Screen C
+                            const { error: signUpErr } = await supabase.auth.signInWithOtp({
+                              email: emailNorm,
+                              options: {
+                                shouldCreateUser: true,
+                                data: {
+                                  first_name: firstName.trim(),
+                                  last_name: lastName.trim(),
+                                  country_code: country,
+                                  boat_color: boatColor,
+                                  message: favoriteSong,
+                                },
+                              },
+                            });
+                            if (signUpErr) throw signUpErr;
+                            setLastOtpAt(Date.now());
                             setGuestStep('signup_code');
                             setAlert('We emailed you a 6-digit code. Enter it below.');
                           }

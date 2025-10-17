@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       const { data: userRow } = await supabaseServer
         .from("users")
         .select("referral_id,name")
-        .eq("id", (authUser as unknown as { id: string }).id)
+        .eq("email", email)
         .maybeSingle();
       referral_code = userRow?.referral_id ?? null;
       fallbackNameFromUsers = userRow?.name ? String(userRow.name).trim() : null;
