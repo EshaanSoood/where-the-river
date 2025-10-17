@@ -846,16 +846,16 @@ export default function BelowMap() {
                   <div className="font-seasons text-base md:text-lg">Stream The Album</div>
                     <div className="mt-2 flex items-center gap-4 md:gap-6 flex-wrap">
                       <a href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify">
-                        <img src="/logos/spotify.png" alt="Spotify" className="h-6 md:h-7 w-auto" />
+                        <img src="/Streaming/Spotify.png" alt="Spotify" className="h-6 md:h-7 w-auto" />
                       </a>
                       <a href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" target="_blank" rel="noopener noreferrer" aria-label="Listen on Apple Music">
-                        <img src="/logos/apple_music.png" alt="Apple Music" className="h-6 md:h-7 w-auto" />
+                        <img src="/Streaming/Applemusic.png" alt="Apple Music" className="h-6 md:h-7 w-auto" />
                       </a>
                       <a href="https://www.youtube.com/playlist?list=OLAK5uy_kDt671HE3YUlBusqp-KMypwqupSNT0bJw" target="_blank" rel="noopener noreferrer" aria-label="Listen on YouTube Music">
-                        <img src="/logos/youtube_music.png" alt="YouTube Music" className="h-6 md:h-7 w-auto" />
+                        <img src="/Streaming/Youtube.png" alt="YouTube Music" className="h-6 md:h-7 w-auto" />
                       </a>
                       <a href="https://eshaansood.bandcamp.com/" target="_blank" rel="noopener noreferrer" aria-label="Listen on Bandcamp">
-                        <img src="/logos/bandcamp.png" alt="Bandcamp" className="h-6 md:h-7 w-auto" />
+                        <img src="/Streaming/Bandcamp.png" alt="Bandcamp" className="h-6 md:h-7 w-auto" />
                       </a>
                     </div>
                   </div>

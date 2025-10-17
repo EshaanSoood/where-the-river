@@ -112,6 +112,23 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
 - Deployment:
   - Deployed to Vercel production and pushed to git (main). Alias remains `riverflowseshaan.vercel.app`.
 
+## Globe – Capacity, Labels, Accessibility, Interactions
+- Capacity & clustering:
+  - Bucketed zoom with hysteresis; per-country screen-space capacity via centroid pixel scale; small screens/tiny countries cluster earlier.
+  - Overflow shows `+K more` badge; near-full shows `N listeners`.
+  - Recompute deferred during animations to avoid flicker.
+- Logged-in user special:
+  - User node larger, aqua, glow overlay, badge on click; SR hotspot with role=dialog for badge; focus management.
+  - Connected nodes (neighbors) highlighted in teal without glow for clarity.
+- Node labels:
+  - Per-node initials under each visible dot; on hover expands to full name; collapses immediately on leave.
+- Animations:
+  - Bloom on appear (~300–380ms), gather fade-out on hide (~200ms); reduced-motion disables.
+
+## Seed Data
+- Inserted test users via SQL: US=50, IN=40, IT=10, GB=5.
+  - One US user with 5 children; one IN user with 7; 10 single-connection pairs distributed (IT/GB); rest standalone.
+
 ## Rewards – Additional Tweaks (Accessibility & UX)
 - Mist overlay: z-index bumped to 90; opacity 0.30; drift speed +20% (32s). Confetti container z-index 40. Mist remains clipped by cards.
 - Contrast: deeper teal progress fill and border; claim button with stronger border/fill; improved legibility for low-vision users.
