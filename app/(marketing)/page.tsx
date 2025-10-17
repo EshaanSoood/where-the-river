@@ -8,9 +8,9 @@ export default function LandingPage() {
       <main className="flex-1 min-h-0" style={{ ['--hdr' as unknown as string]: '40px' }}>
         <BelowMap />
       </main>
-      <footer aria-label="Site footer" className="mt-6 sticky bottom-0 z-30">
+      <footer aria-label="Site footer" className="mt-6 lg:sticky bottom-0 z-30">
         <div
-          className="w-full"
+          className="w-full rounded-[24px]"
           style={{
             height: 40,
             background: 'rgba(210, 245, 250, 0.32)',

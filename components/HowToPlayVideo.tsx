@@ -5,7 +5,7 @@ type Props = { onHeightChange?: (height: number) => void };
 export default function HowToPlayVideo({ onHeightChange }: Props) {
   return (
     <div className="px-0 pt-0 pb-0">
-      <h2 className="mb-2 font-seasons" style={{ fontSize: '1.3rem', color: 'rgba(245,250,255,0.85)', fontWeight: 600, textShadow: '0 1px 2px rgba(11,13,26,0.45)' }}>How To Play</h2>
+      <h2 className="mb-2 font-seasons" style={{ fontSize: '1.3rem', color: 'var(--ink)', fontWeight: 600 }}>How To Play</h2>
       <div className="relative w-full" style={{ aspectRatio: '16 / 9' }}>
         <iframe
           width="560"

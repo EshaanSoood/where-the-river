@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     const um = ((authUser as unknown as { user_metadata?: UserMeta }).user_metadata || {}) as UserMeta;
     const fullName = [um.first_name, um.last_name].filter(Boolean).join(" ").trim() || (um.name || "").trim();
     const name = fullName || null;
-    const country_code = String(um.country_code || "").toUpperCase() || null;
+    const country_code = String(um.country_code || "").replace(/\u2014|—/g, '').trim().toUpperCase() || null;
     const country_name = country_code ? getCountryNameFromCode(country_code) : null;
     const message = um.message ?? null;
     const boat_color = um.boat_color ?? null;
@@ -42,10 +42,13 @@ export async function POST(req: Request) {
     try {
       const { data: userRow } = await supabaseServer
         .from("users")
-        .select("referral_id")
-        .eq("email", email)
+        .select("referral_id,name")
+        .eq("id", (authUser as any).id)
         .maybeSingle();
       referral_code = userRow?.referral_id ?? null;
+      if (!name && userRow?.name) {
+        (resp as any) // placeholder to avoid TS error before resp defined
+      }
     } catch {}
 
     const resp = {

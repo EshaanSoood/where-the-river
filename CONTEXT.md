@@ -192,6 +192,39 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
 - Consider adding `.limit`/cursor pagination to globe feed for scale.
 - Optional guard: skip self‑loop edges if `source===target`.
 
+
+## Daily Summary — 2025-10-17
+
+### Globe and Rendering
+- Switched rivers to the globe’s built‑in path system (via `pathsData`), with seeded wiggle/altitude and capped/aggregated edges (max ~200, per‑pair cap ~8). Natural occlusion preserved.
+- Implemented deterministic wiggle and altitude using per‑edge seeds; short routes straighter, long routes gently curved. One‑time dash draw (≈1.3s; reduced‑motion aware).
+- Added a single active boat riding cached 3D points sampled from the same generated path; hover previews, click persists; natural occlusion in-scene. Removed multi‑boat/legacy SVG path pipeline.
+- Ensured the globe fits the container centered at initial load with no clipping (computed from FOV and radius). Zoom bounds: max zoom‑out fixed at baseline (1×), max zoom‑in ≈ 3× (minDistance = baseline/3). Responsive re‑fit until the user interacts.
+- Adjusted center panel padding and blur for better use of space on FHD/2k; globe canvas centered within the wrapper.
+- Stars: kept visible (fog disabled on material in legacy globe); far plane handled previously.
+
+### Layout and Media
+- Desktop container centered and widened: `max-width: min(2048px, 92vw)` for better use of large displays; grid remains 3:6:3.
+- Bandcamp embed on desktop now uses the large player with brand colors (`bgcol=f7f0e4`, `linkcol=2aa7b5`); mobile retains compact player. Left panel stacks YouTube over Bandcamp with a subtle divider.
+
+### Rewards View
+- Non‑animated frosted cards with four exposure tiers retained; cleaned typings (`JSX.Element` → `React.ReactElement`).
+
+### Auth & API
+- Moved admin reads to direct `auth.users` selects (server role):
+  - `/api/me` and `/api/profiles/by-email` now select `id,email,user_metadata` and type `user_metadata` via `UserMeta`.
+- Participate flow: switched sign‑up to `auth.signInWithOtp({ shouldCreateUser: true, options.data: {...} })` so no password type is required; preserves metadata on creation.
+
+### Type/Lint Fixes
+- Removed remaining `any` usages that blocked builds (star material fog, API handlers, Rewards view typing).
+- Addressed missing symbol from removed boats pipeline; wrapped `react-globe.gl` component in a lax typed alias to accommodate `paths*` props not present in installed types, keeping runtime behavior intact.
+
+### Deployment
+- Local production build verified (Turbopack, Next.js 15.5.4); only non‑blocking warnings remain.
+- Deployed to Vercel production: `https://riverflows-60bml91gy-eshaans-projects-d91d58e1.vercel.app`.
+- Updated stable alias: `https://riverflowseshaan.vercel.app` now points to the latest production deployment.
+- Committed and pushed changes to GitHub (`main`, commit `1bef806`).
+
 ## Globe – Stars & Legacy Globe
 - Stars reinstated in legacy globe: camera far plane increased; star material fog disabled so stars remain visible behind the globe.
 

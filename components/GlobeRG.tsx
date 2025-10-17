@@ -11,6 +11,7 @@ const RG: any = ReactGlobe as unknown as any;
 import { fetchGlobeData } from "@/lib/globeData";
 import { countryCodeToLatLng } from "@/app/data/countryCentroids";
 import { getSupabase } from "@/lib/supabaseClient";
+import { getCountryNameFromCode, resolveIso2 } from "@/lib/countryMap";
 
 type ArcData = { startLat: number; startLng: number; endLat: number; endLng: number; key?: string };
 type ArcDataRich = ArcData & { startCc?: string; endCc?: string; aggregatedCount?: number };
@@ -44,9 +45,11 @@ type GlobeRGProps = {
   describedById?: string;
   ariaLabel?: string;
   tabIndex?: number;
+  starsDesktopCount?: number;
+  starsMobileCount?: number;
 };
 
-export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel = "Interactive globe showing Dream River connections", tabIndex = 0 }: GlobeRGProps) {
+export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel = "Interactive globe showing Dream River connections", tabIndex = 0, starsDesktopCount = 6000, starsMobileCount = 2000 }: GlobeRGProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const globeEl = useRef<any>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -61,6 +64,7 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
   const persistKeyRef = useRef<string | null>(null);
   const pathShownRef = useRef<Set<string>>(new Set());
   const path3DCacheRef = useRef<Map<string, THREE.Vector3[]>>(new Map());
+  const PATH_CACHE_MAX = 512;
   // Session seed (stable for the life of the page) and per-edge params cache
   const createSessionSeed = () => {
     try {
@@ -117,7 +121,9 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
   const [pointsData, setPointsData] = useState<PointData[]>([]);
   const [visiblePoints, setVisiblePoints] = useState<PointData[]>([]);
   const [hoveredCountry, setHoveredCountry] = useState<any | null>(null);
+  const [globeReady, setGlobeReady] = useState<boolean>(false);
   const nodesRef = useRef<{ id: string; lat: number; lng: number }[]>([]);
+  const linksRef = useRef<{ source: string; target: string }[]>([]);
   const userRefCodeRef = useRef<string | null>(null);
   const userLatLngRef = useRef<{ lat: number; lng: number } | null>(null);
   const userGlowRef = useRef<HTMLDivElement | null>(null);
@@ -134,6 +140,30 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const hasInteractedRef = useRef<boolean>(false);
   // Removed SVG overlay/state: lines will use Globe's built-in arcs
+  // Resolve CSS variable once for soft white (fallback to #ffffff for Three.js parsing)
+  const whiteSoft = useMemo(() => getCssVar('--white-soft', '#ffffff'), []);
+  const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
+  const autoRotateTimerRef = useRef<number | null>(null);
+  const autoRotatePrevRef = useRef<boolean>(true);
+  const hoverRaiseTimerRef = useRef<number | null>(null);
+
+  // Unified country raise: highlight and pause auto-rotate briefly
+  const raiseCountryByName = (name: string) => {
+    try {
+      setHoveredCountry({ properties: { name } });
+      setTooltip((t) => ({ ...t, content: `${name}` }));
+      const globe = globeEl.current;
+      if (globe) {
+        const controls = globe.controls();
+        autoRotatePrevRef.current = !!controls.autoRotate;
+        controls.autoRotate = false;
+        if (autoRotateTimerRef.current) window.clearTimeout(autoRotateTimerRef.current);
+        autoRotateTimerRef.current = window.setTimeout(() => {
+          try { controls.autoRotate = autoRotatePrevRef.current; } catch {}
+        }, 1800) as unknown as number;
+      }
+    } catch {}
+  };
 
   useEffect(() => { countriesLODRef.current = countriesLOD; }, [countriesLOD]);
 
@@ -239,19 +269,29 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
         if (isTinyCountry) cap = Math.min(cap, baseCap + 1);
         // Respect expanded country toggle (aggregate expansion)
         if (expandedCountriesRef.current.has(cc)) cap = Math.floor(cap * 2.5);
-        const allowed = Math.max(0, cap - (mine ? 1 : 0));
-        const shown = rest.slice(0, allowed);
-        // Tag kinds
-        if (mine) nextVisible.push({ ...mine, kind: 'self' });
-        shown.forEach(p => nextVisible.push({ ...p, kind: (connectedIdsRef.current.has(p.id!) ? 'friend' : 'other') }));
-        const total = arr.length;
-        const overflow = total - (shown.length + (mine ? 1 : 0));
+        // FRIEND-FIRST CLUSTERING
+        const friends = rest.filter(p => p.id && connectedIdsRef.current.has(p.id)).map(p => ({ ...p, kind: 'friend' as const }));
+        const othersBase = rest.filter(p => !p.id || !connectedIdsRef.current.has(p.id)).map(p => ({ ...p, kind: 'other' as const }));
+        // Deterministic seed sort for others (stable across sessions)
+        const others = othersBase.sort((a, b) => {
+          const ha = a.id ? hashString(a.id) : 0;
+          const hb = b.id ? hashString(b.id) : 0;
+          return ha - hb;
+        });
+        const allowed = Math.max(0, cap - (mine ? 1 : 0) - friends.length);
+        const sampledOthers = others.slice(0, allowed);
+        const shown = [ ...(mine ? [{ ...mine, kind: 'self' as const }] : []), ...friends, ...sampledOthers ];
+        shown.forEach(p => nextVisible.push(p));
+        // Aggregate reflects ONLY the overspill of others
+        const totalOthers = others.length;
+        const overflowOthers = Math.max(0, totalOthers - sampledOthers.length);
         const nearFullThreshold = (isSmallScreen || isTinyCountry) ? 0.75 : 0.8;
-        const nearFull = overflow <= 0 && total > nearFullThreshold * cap && total <= cap;
-        if (overflow > 0) {
+        const total = arr.length;
+        const nearFull = overflowOthers <= 0 && total > nearFullThreshold * cap && total <= cap;
+        if (overflowOthers > 0) {
           // Add aggregate synthetic node at centroid
           const centroid = cc && countryCodeToLatLng[cc] ? { lat: countryCodeToLatLng[cc][0], lng: countryCodeToLatLng[cc][1] } : null;
-          if (centroid) nextVisible.push({ id: `agg-${cc}`, lat: centroid.lat, lng: centroid.lng, size: 0.22, color: '#ffffff', countryCode: cc, name: undefined as any, kind: 'aggregate', aggregateCount: overflow });
+          if (centroid) nextVisible.push({ id: `__agg__:${cc}`, lat: centroid.lat, lng: centroid.lng, size: 0.22, color: whiteSoft, countryCode: cc, name: undefined as any, kind: 'aggregate', aggregateCount: overflowOthers });
         } else if (nearFull) {
           // No aggregate node; near full badge not needed visually anymore
         }
@@ -268,7 +308,19 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
         prevVisibleIdsRef.current = nextIds;
       } catch {}
 
-      setVisiblePoints(nextVisible);
+      // GLOBAL CAP: trim only "others", never friends/self
+      const GLOBAL_CAP = 1200;
+      if (nextVisible.length > GLOBAL_CAP) {
+        const selfs = nextVisible.filter(p => p.kind === 'self');
+        const friendsOnly = nextVisible.filter(p => p.kind === 'friend');
+        const aggregates = nextVisible.filter(p => p.kind === 'aggregate');
+        const othersOnly = nextVisible.filter(p => p.kind === 'other');
+        const remainingSlots = Math.max(0, GLOBAL_CAP - (selfs.length + friendsOnly.length + aggregates.length));
+        const trimmedOthers = othersOnly.slice(0, remainingSlots);
+        setVisiblePoints([...selfs, ...friendsOnly, ...aggregates, ...trimmedOthers]);
+      } else {
+        setVisiblePoints(nextVisible);
+      }
       // Update current bucket after applying
       zoomBucketRef.current = bucketLabel;
       isIndividualBucketRef.current = pick >= 2.0; // heuristic: closer zoom
@@ -377,11 +429,12 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     fetchGlobeData("all").then(({ nodes, links }) => {
       if (cancelled) return;
       // Points (origins/destinations) from nodes for subtle markers
-      const pts: PointData[] = nodes.map(n => ({ id: n.id, name: n.name, lat: n.lat, lng: n.lng, size: 0.15, color: "#ffffff", countryCode: n.countryCode }));
+      const pts: PointData[] = nodes.map(n => ({ id: n.id, name: n.name, lat: n.lat, lng: n.lng, size: 0.15, color: whiteSoft, countryCode: n.countryCode }));
       setPointsData(pts);
       setVisiblePoints(pts);
       try { const map = new Map<string, PointData>(); pts.forEach(p => { if (p.id) map.set(p.id, p); }); allPointsByIdRef.current = map; } catch {}
       nodesRef.current = nodes.map(n => ({ id: n.id, lat: n.lat, lng: n.lng }));
+      linksRef.current = links.map(l => ({ source: l.source, target: l.target }));
       const arcs: ArcDataRich[] = [];
       links.forEach(l => {
         const a = nodes.find(n => n.id === l.source);
@@ -435,6 +488,21 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
         // Resolve user's lat/lng from nodes once data is available
         const n = nodesRef.current.find(x => x.id === userRefCodeRef.current);
         userLatLngRef.current = n ? { lat: n.lat, lng: n.lng } : null;
+        // Recompute connections and visible points now that myId is known
+        try {
+          const adj = new Map<string, Set<string>>();
+          linksRef.current.forEach(l => {
+            if (!adj.has(l.source)) adj.set(l.source, new Set());
+            if (!adj.has(l.target)) adj.set(l.target, new Set());
+            adj.get(l.source)!.add(l.target);
+            adj.get(l.target)!.add(l.source);
+          });
+          const myId = userRefCodeRef.current;
+          const set = new Set<string>();
+          if (myId && adj.has(myId)) { adj.get(myId)!.forEach(id => set.add(id)); }
+          connectedIdsRef.current = set;
+          recalcVisiblePoints();
+        } catch {}
         // Try initial position after we know it
         requestAnimationFrame(() => updateUserOverlaysPosition());
       } catch {}
@@ -492,7 +560,13 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       const v = new THREE.Vector3(c.x, c.y, c.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + alt));
       pts.push(v);
     }
+    // LRU-ish: if value exists reinsert at end; cap size
+    if (path3DCacheRef.current.has(key)) path3DCacheRef.current.delete(key);
     path3DCacheRef.current.set(key, pts);
+    if (path3DCacheRef.current.size > PATH_CACHE_MAX) {
+      const firstKey = path3DCacheRef.current.keys().next().value as string | undefined;
+      if (firstKey) path3DCacheRef.current.delete(firstKey);
+    }
     return pts;
   };
 
@@ -517,6 +591,8 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
           if (mat) mat.opacity = a;
           if (a <= 0) {
             try { scene.remove(old.mesh); } catch {}
+            try { (old.mesh.geometry as THREE.BufferGeometry).dispose(); } catch {}
+            try { ((old.mesh.material as any) as THREE.Material & { dispose?: () => void }).dispose?.(); } catch {}
           } else requestAnimationFrame(fade);
         };
         requestAnimationFrame(fade);
@@ -551,7 +627,7 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       activeBoatRef.current.points = pts;
       activeBoatRef.current.startTime = performance.now();
     }
-    if (persistent) persistKeyRef.current = key; else if (!persistKeyRef.current) persistKeyRef.current = null;
+    if (persistent) persistKeyRef.current = key; else persistKeyRef.current = null;
   };
 
   // Animate single boat along cached points
@@ -595,7 +671,6 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       if (distance < ZOOM_LOD_THRESHOLD && countriesLODRef.current.high.features.length > 0) setCurrentLOD("high");
       else setCurrentLOD("low");
     };
-    controls.addEventListener("change", handleZoom);
 
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.25;
@@ -626,13 +701,24 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       canvasEl.setAttribute("tabindex", "-1");
     } catch {}
 
-    // Ambient light
-    const scene = globeEl.current.scene();
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    handleZoom();
+    // mark ready; listeners are managed by the effect below
+    setGlobeReady(true);
+  };
 
-    // Stars (gated count on mobile)
-    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-    const starCount = isMobile ? 3000 : 10000;
+  // Scene add-ons and listeners with cleanup (ambient/stars, controls change, resize)
+  useEffect(() => {
+    const globe = globeEl.current;
+    if (!globe || !globeReady) return;
+    const scene = globe.scene();
+    const controls = globe.controls();
+    const camera = globe.camera();
+    // Ambient light
+    const amb = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(amb);
+    // Stars
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const starCount = isMobile ? starsMobileCount : starsDesktopCount;
     const starGeometry = new THREE.BufferGeometry();
     const verts: number[] = [];
     const starRadius = 1500;
@@ -646,47 +732,32 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       const z = starRadius * Math.cos(phi);
       verts.push(x, y, z);
     }
-    starGeometry.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+    starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
     const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.7, transparent: true, opacity: 0.8 });
     const stars = new THREE.Points(starGeometry, starMaterial);
     scene.add(stars);
-
-    handleZoom();
-
-    // Removed SVG path recompute listeners
-    // Also reposition the user glow on camera changes
-    const onControlsChange = () => { try { updateUserOverlaysPosition(); } catch {} };
-    controls.addEventListener("change", onControlsChange);
-    // Recalc visible points at bucket boundaries
-    const onControlsBucket = () => { try { recalcVisiblePoints(); } catch {} };
-    controls.addEventListener("change", onControlsBucket);
+    // Combined change handler
+    const onControlsChange = () => {
+      try { recalcVisiblePoints(); } catch {}
+      try { updateUserOverlaysPosition(); } try { const dist = camera.position.length(); const threshold = 220; if (countriesLODRef.current) { if (dist < threshold && countriesLODRef.current.high.features.length > 0) setCurrentLOD('high'); else setCurrentLOD('low'); } } catch {}
+    };
+    controls.addEventListener('change', onControlsChange);
     let resizeTimer: number | null = null;
     const onResize = () => {
       if (resizeTimer) window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => {
-        try {
-          if (!hasInteractedRef.current) {
-            const d = getFitDistance();
-            camera.position.setLength(d);
-            camera.updateProjectionMatrix();
-            baselineDistanceRef.current = d;
-            controls.maxDistance = d;
-            controls.minDistance = Math.max(d / 3, 80);
-          }
-          updateUserOverlaysPosition();
-        } catch {}
-      }, 150) as unknown as number;
+      resizeTimer = window.setTimeout(() => { try { updateUserOverlaysPosition(); recalcVisiblePoints(); } catch {} }, 150) as unknown as number;
     };
-    window.addEventListener("resize", onResize);
-    // Recalc points on resize bucket changes as well
-    window.addEventListener("resize", () => { try { recalcVisiblePoints(); } catch {} });
+    window.addEventListener('resize', onResize);
     return () => {
-      try { controls.removeEventListener("change", onControlsChange); } catch {}
-      try { controls.removeEventListener("change", onControlsBucket); } catch {}
-      try { window.removeEventListener("resize", onResize); } catch {}
+      try { controls.removeEventListener('change', onControlsChange); } catch {}
+      try { window.removeEventListener('resize', onResize); } catch {}
+      try { scene.remove(stars); } catch {}
+      try { starGeometry.dispose(); } catch {}
+      try { (starMaterial as THREE.Material & { dispose?: () => void }).dispose?.(); } catch {}
+      try { scene.remove(amb); } catch {}
       if (resizeTimer) window.clearTimeout(resizeTimer);
     };
-  };
+  }, [globeReady]);
 
   // Removed multi-boat curve; boat follows built-in paths via ensureActiveBoat on hover/click
 
@@ -697,7 +768,23 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
     setHoveredCountry(feature);
     if (!wrapRef.current) return;
     if (feature) {
-      setTooltip((t) => ({ ...t, content: feature.properties?.name ?? null }));
+      try {
+        const ccName = feature.properties?.name ?? null;
+        let listening = 0;
+        const countryCounts = new Map<string, number>();
+        const list = pointsData || [];
+        for (const p of list) {
+          const cc = p.countryCode || '';
+          countryCounts.set(cc, (countryCounts.get(cc) || 0) + 1);
+        }
+        // Resolve ISO-2 from the feature name reliably using our country map
+        const iso2 = typeof ccName === 'string' ? resolveIso2(ccName) : null;
+        if (iso2 && countryCounts.has(iso2)) listening = countryCounts.get(iso2) || 0;
+        const content = listening > 0 ? `${ccName}\n${listening} people are listening to Dream River here.` : ccName;
+        setTooltip((t) => ({ ...t, content }));
+      } catch {
+        setTooltip((t) => ({ ...t, content: feature.properties?.name ?? null }));
+      }
     } else {
       setTooltip((t) => ({ ...t, content: null }));
     }
@@ -825,14 +912,14 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
               const [sCc, eCc] = k.split('->');
               const sCent = sCc && countryCodeToLatLng[sCc] ? countryCodeToLatLng[sCc] : [keep[0].startLat, keep[0].startLng];
               const eCent = eCc && countryCodeToLatLng[eCc] ? countryCodeToLatLng[eCc] : [keep[0].endLat, keep[0].endLng];
-              out.push({ startLat: sCent[0], startLng: sCent[1], endLat: eCent[0], endLng: eCent[1], startCc: sCc, endCc: eCc, aggregatedCount: arr.length - keep.length });
+              out.push({ startLat: sCent[0], startLng: sCent[1], endLat: eCent[0], endLng: eCent[1], startCc: sCc, endCc: eCc, aggregatedCount: arr.length - keep.length, key: `__agg__:${sCc}->${eCc}` });
             }
             if (out.length >= MAX) break;
           }
           return out.slice(0, MAX);
         }, [arcsData]) as any}
         pathPoints={(d: any) => buildPathPoints(d)}
-        pathColor={(d: any) => 'rgba(42,167,181,0.7)'}
+        pathColor={(d: any) => 'rgba(42,167,181,0.85)'}
         pathStroke={(d: any) => {
           const base = 1.0;
           const agg = d.aggregatedCount ? Math.min(2.0, Math.log2(d.aggregatedCount + 1)) : 0;
@@ -840,16 +927,9 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
           const jitter = (seed - 0.5) * 0.3;
           return Math.max(0.6, base + agg + jitter);
         }}
-        pathAltitude={(d: any) => {
-          const ang = greatCircleAngleRad(d.startLat, d.startLng, d.endLat, d.endLng);
-          const t = Math.min(1, Math.max(0, ang / Math.PI));
-          const base = 0.06 + 0.18 * easeInOutCubic(t);
-          const seed = d.key ? (hashString(d.key) % 1000) / 1000 : 0.5;
-          const jitter = (seed - 0.5) * 0.02;
-          return Math.max(0.04, base + jitter);
-        }}
-        pathDashLength={0.95}
-        pathDashGap={1.1}
+        pathAltitude={(d: any) => getPathAltitude(d)}
+        pathDashLength={(() => { try { return (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 1 : 0.95; } catch { return 0.95; } })()}
+        pathDashGap={(() => { try { return (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 0 : 1.1; } catch { return 1.1; } })()}
         pathDashAnimateTime={(() => { try { return (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 0 : 1300; } catch { return 0; } })()}
         pathCurveResolution={64}
         pointsData={visiblePoints.length ? visiblePoints : pointsData}
@@ -867,20 +947,64 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
             return base * (1.0 + 0.35 * ease);
           } catch { return base; }
         }}
+        labelsData={visiblePoints.length ? visiblePoints : pointsData}
+        labelText={(d: any) => {
+          try {
+            const isSelf = d?.id && d.id === userRefCodeRef.current;
+            const isFriend = d?.kind === 'friend';
+            const isOther = d?.kind === 'other' || (!isSelf && !isFriend && d?.kind !== 'aggregate');
+            // show initials for friends when zoomed into individual bucket
+            const inIndividual = isIndividualBucketRef.current;
+            const initials = (d?.name || '').split(/\s+/).map((s: string) => s[0]).filter(Boolean).slice(0,2).join('').toUpperCase();
+            if (isSelf) return '';
+            // friends: always on
+            if (isFriend) return initials;
+            // others: on hover only
+            if (isOther && hoveredPointId && hoveredPointId === d?.id) return initials;
+            return '';
+          } catch { return ''; }
+        }}
+        labelColor={(d: any) => {
+          const isFriend = d?.kind === 'friend';
+          return isFriend ? '#135E66' : '#ffffff';
+        }}
+        labelAltitude={(d: any) => 0.206}
+        labelSize={(d: any) => 0.6}
+        labelDotOrientation={() => 'bottom'}
         pointColor={(d: any) => {
           const isSelf = d?.id && d.id === userRefCodeRef.current;
           const isFriend = d?.kind === 'friend';
           const isAgg = d?.kind === 'aggregate';
-          const base = (isSelf ? "#2AA7B5" : isFriend ? "#135E66" : "#ffffff");
+          const baseHex = (isSelf ? "#2AA7B5" : isFriend ? "#135E66" : whiteSoft);
+          const toRgba = (hexOrCss: string, a: number) => {
+            try {
+              // If already rgba(...), just replace alpha
+              const m = /^rgba?\(([^)]+)\)$/.exec(hexOrCss);
+              if (m) {
+                const parts = m[1].split(',').map(s => s.trim());
+                const [r, g, b] = parts.map((v, i) => (i < 3 ? parseFloat(v) : v)) as any;
+                return `rgba(${r},${g},${b},${a})`;
+              }
+              // hex #rrggbb or #rgb
+              let hx = hexOrCss.replace('#','').trim();
+              if (hx.length === 3) {
+                hx = hx.split('').map(c => c + c).join('');
+              }
+              const r = parseInt(hx.substring(0,2), 16);
+              const g = parseInt(hx.substring(2,4), 16);
+              const b = parseInt(hx.substring(4,6), 16);
+              return `rgba(${r},${g},${b},${a})`;
+            } catch { return hexOrCss; }
+          };
           try {
-            if (!d?.id) return base;
+            if (!d?.id) return baseHex;
             const tHide = pointExitAtRef.current.get(d.id);
-            if (!tHide) return base;
+            if (!tHide) return baseHex;
             const now = performance.now();
             const t = Math.min(1, Math.max(0, (now - tHide) / 200));
             const alpha = 1 - t; // fade out
-            return base;
-          } catch { return base; }
+            return toRgba(baseHex, alpha);
+          } catch { return baseHex; }
         }}
         pointsMerge={true}
         pointsTransitionDuration={pointsTransitionMs}
@@ -898,7 +1022,46 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
           return isHovered ? 0.06 : 0.04;
         }}
         polygonsTransitionDuration={300}
-        onPolygonHover={handlePolygonHover}
+        onPolygonHover={(feature: any | null) => {
+          handlePolygonHover(feature);
+          try {
+            // Debounced hover-raise after ~1s
+            if (hoverRaiseTimerRef.current) window.clearTimeout(hoverRaiseTimerRef.current);
+            if (feature && feature.properties?.name) {
+              hoverRaiseTimerRef.current = window.setTimeout(() => {
+                try {
+                  setHoveredCountry(feature);
+                  const globe = globeEl.current;
+                  if (globe) {
+                    const controls = globe.controls();
+                    autoRotatePrevRef.current = !!controls.autoRotate;
+                    controls.autoRotate = false;
+                    if (autoRotateTimerRef.current) window.clearTimeout(autoRotateTimerRef.current);
+                    autoRotateTimerRef.current = window.setTimeout(() => {
+                      try { controls.autoRotate = autoRotatePrevRef.current; } catch {}
+                    }, 1800) as unknown as number;
+                  }
+                } catch {}
+              }, 1000) as unknown as number;
+            }
+          } catch {}
+        }}
+        onPolygonClick={(feat: any) => {
+          try {
+            if (!feat) return;
+            setHoveredCountry(feat);
+            const globe = globeEl.current;
+            if (globe) {
+              const controls = globe.controls();
+              autoRotatePrevRef.current = !!controls.autoRotate;
+              controls.autoRotate = false;
+              if (autoRotateTimerRef.current) window.clearTimeout(autoRotateTimerRef.current);
+              autoRotateTimerRef.current = window.setTimeout(() => {
+                try { controls.autoRotate = autoRotatePrevRef.current; } catch {}
+              }, 1800) as unknown as number;
+            }
+          } catch {}
+        }}
         onPointClick={(pt: any) => {
           try {
             if (pt?.id && pt.id === userRefCodeRef.current) {
@@ -906,7 +1069,12 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
               requestAnimationFrame(() => updateUserOverlaysPosition());
               return; // consume; don't raise country
             }
-            // For other nodes: raise country behavior via polygon hover/click already present
+            // For other nodes: raise the country by setting hoveredCountry using countryCode
+            const cc = pt?.countryCode;
+            if (cc) {
+              const name = getCountryNameFromCode(cc) || cc;
+              raiseCountryByName(name);
+            }
           } catch {}
         }}
         onPathHover={(d: any) => {
@@ -921,6 +1089,7 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
             ensureActiveBoat(d as ArcDataRich, true);
           } catch {}
         }}
+        onPointHover={(pt: any) => { try { setHoveredPointId(pt?.id || null); } catch {} }}
       />
       {/* Removed SVG overlay */}
       
@@ -951,7 +1120,7 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
         aria-label={`Your marker${userMeRef.current?.country_name ? ` — ${userMeRef.current?.country_name}` : ''}${typeof userMeRef.current?.boats_total === 'number' ? `, ${userMeRef.current?.boats_total} boats` : ''}`}
         onClick={(e) => { e.preventDefault(); setUserBadgeOpen(true); requestAnimationFrame(() => { try { userBadgeHeadingRef.current?.focus(); } catch {} updateUserOverlaysPosition(); }); }}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setUserBadgeOpen(true); requestAnimationFrame(() => { try { userBadgeHeadingRef.current?.focus(); } catch {} updateUserOverlaysPosition(); }); } if (e.key === 'Escape') { e.preventDefault(); setUserBadgeOpen(false); requestAnimationFrame(() => { try { (e.currentTarget as HTMLButtonElement).focus(); } catch {} updateUserOverlaysPosition(); }); } }}
-        aria-hidden="true"
+        
       />
       {/* Logged-in user badge (click target) */}
       {userBadgeOpen && (
@@ -974,28 +1143,7 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
           </div>
         </div>
       )}
-      {/* Overflow +K badges */}
-      {Array.from(overflowBadgesRef.current.entries()).map(([cc, b]) => (
-        <div key={cc} className="absolute" style={{ left: b.x, top: b.y, transform: 'translate(-50%, -50%)', zIndex: 45 }} aria-hidden="true">
-          <div className="rounded-full px-2 py-0.5 text-xs shadow-md backdrop-blur-sm transition-opacity duration-300" style={{ background: 'rgba(210,245,250,0.9)', border: '1px solid rgba(255,255,255,0.6)', color: 'var(--ink)', opacity: 0.95 }}>
-            {b.label}
-          </div>
-        </div>
-      ))}
-      {/* Cluster people count for countries (same as +K, show total) */}
-      {Array.from(overflowBadgesRef.current.entries()).map(([cc, b]) => (
-        <div key={`cpc-${cc}`} className="absolute text-[10px]" style={{ left: b.x, top: b.y + 14, transform: 'translate(-50%, 0)', zIndex: 43, color: 'var(--ink-2)' }} aria-hidden="true">
-          {b.label.replace('+', '')} people
-        </div>
-      ))}
-      {/* Near-full labels */}
-      {Array.from(nearFullBadgesRef.current.entries()).map(([cc, b]) => (
-        <div key={`nf-${cc}`} className="absolute" style={{ left: b.x, top: b.y, transform: 'translate(-50%, -50%)', zIndex: 44 }} aria-hidden="true">
-          <div className="rounded-full px-2 py-0.5 text-xs shadow-sm backdrop-blur-sm transition-opacity duration-300" style={{ background: 'rgba(210,245,250,0.75)', border: '1px solid rgba(255,255,255,0.5)', color: 'var(--ink)' }}>
-            {b.label}
-          </div>
-        </div>
-      ))}
+      {/* Legacy overlay badges removed */}
       <div className="sr-only" aria-live="polite">{srAnnounce}</div>
       <style jsx>{`
         /* Center the internal WebGL canvas within the globe container */
@@ -1003,13 +1151,20 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
       `}</style>
       {tooltip.content && (
         <div ref={tooltipRef} className="absolute bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md shadow-lg pointer-events-none" style={{ top: `${tooltip.y}px`, left: `${tooltip.x}px`, zIndex: 30 }}>
-          <p className="font-mono text-sm text-gray-800">{tooltip.content}</p>
+          <p className="font-mono text-sm text-gray-800" style={{ whiteSpace: 'pre-line' }}>{tooltip.content}</p>
         </div>
       )}
     </div>
   );
 }
 // --- Seeded randomness helpers ---
+function getCssVar(name: string, fallback: string): string {
+  try {
+    if (typeof window === 'undefined') return fallback;
+    const val = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return val || fallback;
+  } catch { return fallback; }
+}
 function mulberry32(a: number) {
   return function() {
     let t = (a += 0x6D2B79F5);
@@ -1029,10 +1184,6 @@ function hashString(s: string): number {
 function clamp01(x: number): number { return Math.min(1, Math.max(0, x)); }
 
 // --- Helpers ---
-function updateUserGlowPosition(this: any) {
-  try {
-    const self = (this as unknown) as void; // avoid TS this binding confusion
-  } catch {}
-}
+// removed dead helper updateUserGlowPosition
 
 

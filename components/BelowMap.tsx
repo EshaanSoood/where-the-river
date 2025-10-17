@@ -293,7 +293,7 @@ export default function BelowMap() {
   return (
     <div className="py-4 flex flex-col min-h-0 h-full">
       {/* Header inside site container; not sticky */}
-      <div className="sticky top-0 z-40" style={{ ['--hdr' as unknown as string]: '40px' }}>
+      <div className="top-0 z-40 lg:sticky" style={{ ['--hdr' as unknown as string]: '40px' }}>
         <div className="relative" ref={headerRef}>
           <div
             className="min-h-10 py-1.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
@@ -342,7 +342,7 @@ export default function BelowMap() {
                 >
                   <h1
                     className="font-seasons text-sm sm:text-base md:text-lg"
-                    style={{ lineHeight: 1.2 }}
+                    style={{ lineHeight: 1.2, textShadow: '0 1px 1px rgba(17,17,17,0.25)' }}
                   >
                     Dream River
                   </h1>
@@ -458,10 +458,8 @@ export default function BelowMap() {
           {/* Globe (center) */}
           <section aria-label="Global participation" className="min-w-0 h-full overflow-hidden">
             <div className="relative h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden" style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}>
-              <div className="relative flex items-center justify-center h-full p-3 md:p-4">
-                <div className="relative w-full h-full">
-                  <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
-                </div>
+              <div className="absolute inset-3 md:inset-4 min-h-0">
+                <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
               </div>
             </div>
           </section>
@@ -476,20 +474,12 @@ export default function BelowMap() {
               style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}
               ref={rightPanelRef}
             >
-              {showTopFade && (
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none sticky top-0 h-14 -mx-4 z-50"
-                  style={{ background: 'linear-gradient(to bottom, rgba(210,245,250,0) 0%, rgba(210,245,250,0.35) 100%)' }}
-                />
-              )}
               <Hero />
               {showBottomFade && (
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none sticky bottom-0 h-14 -mx-4 z-50"
-                  style={{ background: 'linear-gradient(to top, rgba(210,245,250,0.35) 0%, rgba(210,245,250,0) 100%)' }}
-                />
+                <div aria-hidden="true" className="pointer-events-none bottom-0 -mx-4 z-50 lg:sticky">
+                  <div className="h-10" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 100%)' }} />
+                  <div className="text-center text-[color:var(--ink-2)] pb-1">…</div>
+                </div>
               )}
             </div>
           </section>
