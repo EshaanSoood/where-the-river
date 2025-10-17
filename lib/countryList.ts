@@ -1,4 +1,4 @@
-import { countryCodeToLatLng } from "@/app/data/countryCentroids";
+import { ALL_ISO2 } from "@/lib/iso2";
 
 export type IsoCountry = { code: string; name: string };
 
@@ -8,8 +8,7 @@ type RegionDisplayNames = {
 
 export function getIsoCountries(locale: string = "en"): IsoCountry[] {
   const dn = createRegionDisplayNames(locale);
-  const codes = Object.keys(countryCodeToLatLng);
-  const list = codes.map((code) => ({ code, name: safeRegionName(dn, code) }));
+  const list = ALL_ISO2.map((code) => ({ code, name: safeRegionName(dn, code) }));
   list.sort((a, b) => a.name.localeCompare(b.name));
   return list;
 }

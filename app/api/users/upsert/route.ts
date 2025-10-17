@@ -8,6 +8,14 @@ export async function POST(req: Request) {
     const { name, email, country_code, message, photo_url, referred_by, boat_color } = body || {};
     if (!email || !country_code) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
+    // Name validation: trim, collapse spaces, length 2..80, must contain a letter or digit
+    const cleanedName = String(name || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const hasAlnum = /[\p{L}\p{N}]/u.test(cleanedName);
+    if (!cleanedName || cleanedName.length < 2 || !hasAlnum) {
+      console.warn('[upsert] invalid_name', { email });
+      return NextResponse.json({ error: "invalid_name" }, { status: 400 });
+    }
+
     // Normalize and validate country_code
     let cc: string | null = null;
     const raw = normalizeInput(String(country_code));
@@ -29,7 +37,7 @@ export async function POST(req: Request) {
         .from("users")
         .upsert(
           {
-            name: name ?? null,
+            name: cleanedName,
             email,
             country_code: cc,
             message: message ?? null,

@@ -66,19 +66,25 @@ export default function ShareTiles({ referralUrl, message, userFullName, onCopy 
 
   return (
     <>
-      {tiles.map(t => (
+      {tiles.map((t, idx) => (
         <button
           key={t.key}
           id={t.id}
           type="button"
-          className="flex-1 min-h-12 rounded-md border flex items-center justify-center"
-          style={{ background: 'var(--teal)', borderColor: 'rgba(0,0,0,0.1)' }}
+          className="flex-1 min-h-12 rounded-md border flex items-center justify-center font-seasons btn"
+          style={{ background: 'var(--teal)', borderColor: 'rgba(0,0,0,0.1)', animation: 'none', animationDelay: `${idx * 60}ms` }}
           aria-label={t.label}
           onClick={t.onClick}
         >
           <img src={t.src} alt="" className="h-6 w-6" />
         </button>
       ))}
+      <style jsx>{`
+        @media (prefers-reduced-motion: no-preference) {
+          @keyframes fadeScaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+          #share-tiles-wrap > button { animation: fadeScaleIn 200ms ease-out both; }
+        }
+      `}</style>
     </>
   );
 }

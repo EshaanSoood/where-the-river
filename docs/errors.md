@@ -31,3 +31,4 @@ Command: `npm run build` (Next.js + Turbopack)
 ## Notes
 - Only the three items under "Blocking Errors" prevent build from completing.
 - Address warnings as time permits to improve code quality and performance.
+

@@ -9,10 +9,12 @@ export default function ParticipatePage() {
   const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [countryName, setCountryName] = useState("");
   const [userMessage, setUserMessage] = useState("");
+  const [boatColor, setBoatColor] = useState<string>("#135E66");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code" | "done">("email");
   const [loading, setLoading] = useState(false);
@@ -23,10 +25,27 @@ export default function ParticipatePage() {
     setCountries(getIsoCountries("en"));
   }, []);
 
+  function sanitizeName(raw: string): string {
+    const collapsed = raw.replace(/\s+/g, " ").trim();
+    // Disallow all-punctuation or emoji-only
+    const lettersOrDigits = /[\p{L}\p{N}]/u.test(collapsed);
+    if (!lettersOrDigits) return "";
+    return collapsed.slice(0, 80);
+  }
+
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
+    const name = sanitizeName(`${firstName} ${lastName}`);
+    if (name.length < 2) {
+      setLoading(false);
+      setNameError("Please enter your full name (at least 2 characters).");
+      const el = document.getElementById("firstName");
+      if (el) (el as HTMLInputElement).focus();
+      return;
+    }
+    setNameError(null);
     try {
       const supabase = getSupabase();
       const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
@@ -54,7 +73,14 @@ export default function ParticipatePage() {
       });
       if (error) throw error;
       if (data?.user) {
-        const name = `${firstName} ${lastName}`.trim();
+        const name = sanitizeName(`${firstName} ${lastName}`);
+        if (name.length < 2) {
+          setMessage("Please enter your full name.");
+          const el = document.getElementById("firstName");
+          if (el) (el as HTMLInputElement).focus();
+          setLoading(false);
+          return;
+        }
         await fetch("/api/users/upsert", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -66,6 +92,7 @@ export default function ParticipatePage() {
             photo_url: null,
             // referral_id is generated server-side
             referred_by: null,
+            boat_color: boatColor,
           }),
         }).then((r) => { if (!r.ok) throw new Error("Profile creation failed"); });
         setStep("done");
@@ -91,13 +118,14 @@ export default function ParticipatePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label htmlFor="firstName" className="text-sm font-medium">First Name<span aria-hidden> *</span></label>
-              <input id="firstName" className="w-full border rounded-md px-3 py-2 bg-background" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+              <input id="firstName" className="w-full border rounded-md px-3 py-2 bg-background" type="text" value={firstName} onChange={(e) => { setFirstName(e.target.value); setNameError(null); }} required />
             </div>
             <div className="space-y-1">
               <label htmlFor="lastName" className="text-sm font-medium">Last Name<span aria-hidden> *</span></label>
-              <input id="lastName" className="w-full border rounded-md px-3 py-2 bg-background" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+              <input id="lastName" className="w-full border rounded-md px-3 py-2 bg-background" type="text" value={lastName} onChange={(e) => { setLastName(e.target.value); setNameError(null); }} required />
             </div>
           </div>
+          {nameError && <p className="text-sm text-red-600" role="alert">{nameError}</p>}
 
           <div className="space-y-1">
             <label htmlFor="email" className="text-sm font-medium">Email<span aria-hidden> *</span></label>
@@ -119,6 +147,10 @@ export default function ParticipatePage() {
                 ))}
               </select>
             </div>
+            <div className="space-y-1">
+              <label htmlFor="boatColor" className="text-sm font-medium">Boat Color<span aria-hidden> *</span></label>
+              <input id="boatColor" type="color" className="h-10 w-full border rounded-md bg-background p-1" value={boatColor} onChange={(e) => setBoatColor(e.target.value)} required />
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -126,7 +158,7 @@ export default function ParticipatePage() {
             <textarea id="message" className="w-full border rounded-md px-3 py-2 bg-background" rows={3} value={userMessage} onChange={(e) => setUserMessage(e.target.value)} placeholder="Say something to your river…" />
           </div>
 
-          <button className="w-full rounded-md bg-foreground text-background px-4 py-2 disabled:opacity-50" type="submit" disabled={loading || !firstName || !lastName || !email || !countryCode}>
+          <button className="w-full rounded-md bg-foreground text-background px-4 py-2 disabled:opacity-50" type="submit" disabled={loading || sanitizeName(`${firstName} ${lastName}`).length < 2 || !email || !countryCode}>
             {loading ? "Sending..." : "Send Code"}
           </button>
           {message && <p className="text-sm">{message}</p>}

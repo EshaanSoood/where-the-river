@@ -11,6 +11,9 @@ import dynamic from "next/dynamic";
 import GlobeSummarySR from "@/components/GlobeSummarySR";
 import ShareTiles from "@/components/ShareTiles";
 import ColorChips from "@/components/ColorChips";
+import { getCountryNameFromCode } from "@/lib/countryMap";
+import LeftPanelEmbeds from "@/components/LeftPanelEmbeds";
+import HowToPlayVideo from "@/components/HowToPlayVideo";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 
   const Globe = dynamic(() => import("@/components/GlobeRG"), { ssr: false });
@@ -42,7 +45,7 @@ export default function BelowMap() {
   const [globalBoats, setGlobalBoats] = useState<number | null>(null);
   const [top5, setTop5] = useState<{ first_name: string; country_code: string; boats_total: number }[]>([]);
   const [dashboardMode, setDashboardMode] = useState<"guest" | "user">("guest");
-  const [userProfile, setUserProfile] = useState<{ name: string | null; country_code: string | null; message: string | null; boat_color: string | null } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ name: string | null; country_code: string | null; country_name?: string | null; message: string | null; boat_color: string | null } | null>(null);
   const [boatsTotal, setBoatsTotal] = useState<number>(0);
   const [shareOpen, setShareOpen] = useState(false);
   const [rewardsOpen, setRewardsOpen] = useState(false);
@@ -79,17 +82,24 @@ export default function BelowMap() {
 
   // Resolve a human-friendly country name from ISO-2 codes using our list
   const resolvedCountryName = useMemo(() => {
+    // Prefer server-derived friendly name; fall back to mapping from code
+    const fromServer = userProfile?.country_name || null;
+    if (fromServer && fromServer.trim().length > 0) return fromServer;
     const codeRaw = (userProfile?.country_code || country || '').toUpperCase();
-    if (!codeRaw) return '—';
-    const match = countries.find((c) => c.code === codeRaw);
-    return match?.name || codeRaw;
-  }, [userProfile?.country_code, country, countries]);
+    if (!codeRaw) return 'Country not set';
+    try {
+      return getCountryNameFromCode(codeRaw);
+    } catch {
+      const match = countries.find((c) => c.code === codeRaw);
+      return match?.name || 'Country not set';
+    }
+  }, [userProfile?.country_name, userProfile?.country_code, country, countries]);
 
   // Lock body scroll while a panel is open and inert the rest of the page for SR/keyboard
   useEffect(() => {
     try {
       const update = () => {
-        const desktop = typeof window !== 'undefined' && window.innerWidth >= 1280; // xl breakpoint
+        const desktop = typeof window !== 'undefined' && window.innerWidth >= 1024; // lg breakpoint
         const shouldLock = anyPanelOpen || desktop;
         document.body.style.overflow = shouldLock ? 'hidden' : '';
         const inertify = (el: HTMLElement | null, on: boolean) => {
@@ -165,6 +175,7 @@ export default function BelowMap() {
           setUserProfile({
             name: j.me.name ?? null,
             country_code: j.me.country_code ?? null,
+            country_name: j.me.country_name ?? null,
             message: j.me.message ?? null,
             boat_color: j.me.boat_color ?? null,
           });
@@ -247,10 +258,10 @@ export default function BelowMap() {
   }
 
   return (
-    <div className="px-[20px] py-4">
-      {/* Sticky Top Bar */}
-      <div className="sticky top-0 z-50" style={{ ['--hdr' as unknown as string]: '40px' }}>
-        <div className="relative mx-auto max-w-6xl px-2 sm:px-4" ref={headerRef}>
+    <div className="py-4">
+      {/* Header inside site container; not sticky */}
+      <div style={{ ['--hdr' as unknown as string]: '40px' }}>
+        <div className="relative" ref={headerRef}>
           <div
             className="min-h-10 py-1.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
             style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
@@ -281,7 +292,7 @@ export default function BelowMap() {
                 )}
               </div>
               <div className="justify-self-center w-full max-w-[560px] mx-auto px-2 min-w-0 text-center">
-                <div className="xl:hidden">
+                <div className="lg:hidden">
                   <iframe
                     title="Bandcamp player (slim)"
                     aria-label="Bandcamp player for Dream River"
@@ -315,12 +326,12 @@ export default function BelowMap() {
       {/* Small margin below header */}
       <div className="h-4" />
 
-      {/* Content Wrapper */}
-      <div className="mx-auto max-w-6xl mt-0" ref={contentRef}>
+      {/* Content Wrapper (full-width within site container) */}
+      <div className="w-full h-full min-h-0 mt-0" ref={contentRef}>
         {/* Single SR summary for both layouts (avoid duplicate IDs across breakpoints) */}
         <GlobeSummarySR id="globe-sr-summary" />
-        {/* Mobile / small-screen layout (≤1279px) */}
-        <div className="xl:hidden space-y-4">
+        {/* Mobile / small-screen layout (<1024px) */}
+        <div className="lg:hidden space-y-4">
           {/* Header now contains buttons and slim player; no title shown */}
 
           {/* Globe dominant section */}
@@ -386,46 +397,30 @@ export default function BelowMap() {
           </div>
         </div>
 
-        {/* Desktop layout (≥1280px): 3 columns ~ 2:5:3 -> 3:6:3 over 12 cols */}
-        <div className="hidden xl:grid gap-8 overflow-hidden" style={{ gridTemplateColumns: '3fr 6fr 3fr', height: 'calc(100svh - var(--hdr, 40px))' }}>
-          {/* Left: Bandcamp + YouTube stack (original positioning) */}
-          <section aria-label="Bandcamp and YouTube stack" className="h-full min-h-0 flex flex-col gap-4">
-            {/* Bandcamp card (top half) */}
-            <div className="flex-1 min-h-0 rounded-[24px] shadow-md" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
-              <div className="p-4 h-full overflow-hidden">
-                <BandcampEmbed />
-              </div>
-            </div>
-            {/* YouTube card (bottom half) */}
-            <div className="flex-1 min-h-0 rounded-[24px] shadow-md" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
-              <div className="p-4 h-full">
-                <h2 className="mb-3 font-seasons" style={{ fontSize: '1.3rem', color: 'rgba(245,250,255,0.85)', fontWeight: 600 }}>How To Play</h2>
-                <div className="relative w-full" style={{ aspectRatio: '16 / 9' }}>
-                  <iframe width="560" height="315" src="https://www.youtube.com/embed/AlvMCxaiIno?si=ZkyjiCvfv2IRvSZ0" title="YouTube video player" frameBorder={0} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen className="absolute inset-0 w-full h-full rounded-[16px]"></iframe>
-                </div>
-                {/* Subtle divider to separate from center content visually */}
-                <div className="mt-4" style={{ height: 1.5, background: 'rgba(11,13,26,0.25)', boxShadow: '0 0 2px rgba(11,13,26,0.25)' }} />
-              </div>
+        {/* Desktop layout (≥1024px): 3 columns 1:2:1 over fluid container */}
+        <div className="hidden lg:grid gap-8 overflow-hidden" style={{ gridTemplateColumns: '3fr 6fr 3fr', height: '100%' }}>
+          {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
+          <section aria-label="Bandcamp and YouTube" className="h-full min-h-0 min-w-0 overflow-hidden">
+            <div className="h-full rounded-[24px] shadow-md flex flex-col" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+              <LeftPanelEmbeds />
             </div>
           </section>
 
           {/* Globe (center) */}
-          <section aria-label="Global participation">
+          <section aria-label="Global participation" className="min-w-0 overflow-hidden">
             <div className="relative h-full rounded-[24px] shadow-md overflow-hidden" style={{ background: '#0b0d1a' }}>
               {/* Subtle frosted texture overlay while staying dark */}
               <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(6px)' }} />
               <div className="relative flex items-center justify-center h-full p-4">
-                <div className="relative w-full" style={{ aspectRatio: '1 / 1', maxHeight: '100%', maxWidth: '100%' }}>
-                  <div className="absolute inset-0">
+                <div className="relative w-full h-full" style={{ aspectRatio: '1 / 1', maxHeight: '100%', maxWidth: '100%' }}>
                   <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
-                  </div>
                 </div>
               </div>
             </div>
           </section>
 
           {/* Text block (right) */}
-          <section aria-label="Project intro">
+          <section aria-label="Project intro" className="min-w-0">
             <div
               className="h-full rounded-[24px] shadow-md p-4 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]"
               tabIndex={0}
@@ -721,7 +716,7 @@ export default function BelowMap() {
                       </div>
                     </div>
                     <div className="flex flex-col leading-tight">
-                      <div className="font-seasons text-lg md:text-xl">{(userProfile?.name || '').trim() || (user?.email ? user.email.split('@')[0] : 'Friend')}</div>
+                      <div className="font-seasons text-lg md:text-xl">{(userProfile?.name || '').trim() || 'Friend'}</div>
                       <div className="flex items-center gap-2">
                         <span className="font-sans font-extrabold text-base md:text-lg">{boatsTotal}</span>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[color:var(--ink-2)]">
@@ -787,7 +782,14 @@ export default function BelowMap() {
                   </div>
 
                   <div>
-                    <div className="font-seasons text-base md:text-lg">Stream The Album</div>
+                  {(!userProfile?.name || userProfile.name.trim().length === 0) && (
+                    <div className="rounded-md p-3 border" style={{ borderColor: 'var(--mist)', background: 'rgba(255,255,255,0.8)' }}>
+                      <p className="text-sm">Please add your name to complete your profile.</p>
+                      <button className="text-sm underline mt-1" onClick={() => setDashboardMode('guest')}>Edit profile</button>
+                    </div>
+                  )}
+
+                  <div className="font-seasons text-base md:text-lg">Stream The Album</div>
                     <div className="mt-2 flex items-center gap-4 md:gap-6 flex-wrap">
                       <a href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify">
                         <img src="/logos/spotify.png" alt="Spotify" className="h-6 md:h-7 w-auto" />

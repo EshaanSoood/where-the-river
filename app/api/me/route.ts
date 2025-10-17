@@ -31,11 +31,13 @@ export async function POST(req: Request) {
     const referral_code = profile.referral_code;
     const boats_total = profile.boats_total ?? 0;
 
+    const needs_name = !name || String(name).trim().length === 0;
     return NextResponse.json({
       exists: true,
       me: {
         email,
         name,
+        needs_name,
         country_code,
         country_name,
         message,

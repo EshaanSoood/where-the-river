@@ -11,9 +11,51 @@
   - y5: 4 service buttons (Spotify, Apple, YouTube, Bandcamp) tinted light blue
 */
 
+import { useState, useEffect, useRef } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import ShareTiles from "@/components/ShareTiles";
+import { useUser } from "@/hooks/useUser";
+
 export default function DashboardBadge() {
+  const [mode, setMode] = useState<"default" | "share">("default");
+  const { user } = useUser();
+  const [referralUrl, setReferralUrl] = useState<string>("");
+  const [userFullName, setUserFullName] = useState<string>("");
+  const [announce, setAnnounce] = useState<string>("");
+  const defaultShareMessage = "Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I’ve been listening to Dream River by them lately and I think you’ll enjoy it too.";
+  const prefersReduced = useReducedMotion();
+  const shareButtonRef = useRef<HTMLButtonElement | null>(null);
+  const overlayHeaderRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (mode === 'share') {
+      setTimeout(() => overlayHeaderRef.current?.focus(), 0);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    // read minimal info from existing endpoints
+    (async () => {
+      try {
+        const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+        const email = user?.email || '';
+        if (!email) { setReferralUrl(base); return; }
+        const resp = await fetch('/api/profiles/by-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+        const j = await resp.json();
+        const code = j?.profile?.ref_code_8;
+        const name = j?.profile?.name || '';
+        setReferralUrl(code ? `${base}/?ref=${code}` : base);
+        setUserFullName(name);
+      } catch {
+        const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+        setReferralUrl(base);
+      }
+    })();
+  }, [user?.email]);
   return (
     <section
+      id="dashboard-overlay"
+      data-mode={mode}
       className="relative mx-auto w-full max-w-md aspect-[4/5] rounded-xl p-4"
       style={{ background: "var(--parchment)" }}
       aria-label="Profile badge"
@@ -51,7 +93,17 @@ export default function DashboardBadge() {
 
         {/* y3: Share button */}
         <div className="col-span-4 row-start-3 flex items-end pb-2">
-          <button className="w-full rounded-md px-4 py-3 btn">Share your Boat</button>
+          <motion.button
+            className="w-full rounded-md px-4 py-3 btn"
+            aria-controls="dashboard-overlay"
+            onClick={() => setMode("share")}
+            initial={false}
+            animate={mode === "share" && !prefersReduced ? { y: -24, scale: 0.92, opacity: 0 } : { y: 0, scale: 1, opacity: 1 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            ref={shareButtonRef}
+          >
+            Share your Boat
+          </motion.button>
         </div>
 
         {/* y4: Sail Through Your River (Seasons font) */}
@@ -71,6 +123,46 @@ export default function DashboardBadge() {
           ))}
         </div>
       </div>
+
+      {mode === "share" && (
+        <div
+          className="absolute inset-0 rounded-xl p-4"
+          style={{ background: 'var(--parchment)', border: '1px solid var(--mist)', boxShadow: '0 6px 20px rgba(0,0,0,.10)' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="share-title"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') { e.stopPropagation(); setMode('default'); setTimeout(() => shareButtonRef.current?.focus(), 0); }
+            if (e.key !== 'Tab') return;
+            const root = e.currentTarget as HTMLElement;
+            const focusable = root.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])');
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey) {
+              if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+            } else {
+              if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+          }}
+          onClick={() => { setMode('default'); setTimeout(() => shareButtonRef.current?.focus(), 0); }}
+        >
+          <div className="flex items-center justify-between mb-3" onClick={(e) => e.stopPropagation()}>
+            <button aria-label="Back" className="underline" onClick={() => { setMode('default'); setTimeout(() => shareButtonRef.current?.focus(), 0); }} ref={overlayHeaderRef}>Back</button>
+            <h3 id="share-title" className="font-seasons text-lg">Share your Boat</h3>
+            <div aria-live="polite" className="sr-only">{announce}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-3" id="share-tiles-wrap" onClick={(e) => e.stopPropagation()}>
+            <ShareTiles referralUrl={referralUrl} message={defaultShareMessage} userFullName={userFullName} onCopy={(ok) => setAnnounce(ok ? 'Copied!' : '')} />
+          </div>
+          <style jsx>{`
+            @media (prefers-reduced-motion: no-preference) {
+              @keyframes fadeScaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+              .staggerIn { animation: fadeScaleIn 200ms ease-out both; }
+            }
+          `}</style>
+        </div>
+      )}
     </section>
   );
 }

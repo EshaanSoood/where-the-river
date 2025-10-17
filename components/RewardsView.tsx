@@ -46,8 +46,11 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
 
   const [pointsOpen, setPointsOpen] = useState(false);
   const [claimedIds, setClaimedIds] = useState<string[]>([]);
+  const [claimedAt, setClaimedAt] = useState<Record<string, string>>({});
+  const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const [activeRewardModal, setActiveRewardModal] = useState<string | null>(null);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [announce, setAnnounce] = useState<string>("");
 
   const points = useMemo(() => getUserPoints(boatsTotal), [boatsTotal]);
   const currentTier = useMemo(() => {
@@ -56,9 +59,57 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
   const nextTier = useMemo(() => {
     return REWARDS.find(r => r.points > points) || null;
   }, [points]);
+  const prevTierPoints = useMemo(() => {
+    return currentTier?.points || 0;
+  }, [currentTier]);
+  const prevPointsRef = useRef<number>(points);
+  useEffect(() => {
+    try {
+      const prev = prevPointsRef.current;
+      if (points > prev) {
+        const newly = [...REWARDS].filter(r => r.points > prev && r.points <= points).sort((a,b)=>a.points-b.points).pop();
+        if (newly) setAnnounce(`Unlocked ${newly.title}`);
+      }
+      prevPointsRef.current = points;
+    } catch {}
+  }, [points]);
 
   async function handleClaim(tier: RewardConfig) {
     const supabase = getSupabase();
+    const fireConfetti = (root: HTMLElement | null) => {
+      if (!root) return;
+      try {
+        const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (prefersReduced) return;
+        const container = document.createElement('div');
+        container.setAttribute('aria-hidden', 'true');
+        Object.assign(container.style, { position: 'absolute', inset: '0', overflow: 'hidden', pointerEvents: 'none', zIndex: '20' });
+        root.appendChild(container);
+        const colors = ['#66c2ff', '#ffd700', '#ff9f1c', '#2aa7b5', '#a78bfa'];
+        const num = 24;
+        for (let i=0;i<num;i++) {
+          const s = document.createElement('span');
+          const size = 6 + Math.random()*6;
+          const x = Math.random()*100;
+          const dx = (Math.random()*2-1)*40;
+          const dur = 600 + Math.random()*500;
+          s.style.position='absolute';
+          s.style.left=`${x}%`; s.style.top='50%';
+          s.style.width=`${size}px`; s.style.height=`${size}px`;
+          s.style.background=colors[i%colors.length];
+          s.style.borderRadius='1px';
+          s.style.opacity='0.9';
+          s.style.transform='translate(-50%, -50%)';
+          s.style.transition=`transform ${dur}ms ease-out, opacity ${dur}ms ease-out`;
+          container.appendChild(s);
+          requestAnimationFrame(()=>{
+            s.style.transform=`translate(${dx}px, ${-120-Math.random()*60}px)`;
+            s.style.opacity='0';
+          });
+        }
+        setTimeout(()=>{ container.remove(); }, 1200);
+      } catch {}
+    };
     if (tier.id === "r150") {
       try {
         setClaimingId(tier.id);
@@ -71,9 +122,13 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
           .upsert({ user_id: userId, reward_id: 150, payload }, { onConflict: "user_id,reward_id" });
         if (error) throw error;
         setClaimedIds((ids) => (ids.includes(tier.id) ? ids : [...ids, tier.id]));
+        setClaimedAt((m) => ({ ...m, [tier.id]: new Date().toISOString() }));
+        fireConfetti(itemRefs.current[tier.id] || null);
         setActiveRewardModal(tier.id);
+        setAnnounce("Reward claimed. Details available in View Reward.");
       } catch {
         // Silently ignore for now; keep UI responsive
+        setAnnounce("Sorry, we couldn't claim that reward. Please try again.");
       } finally {
         setClaimingId(null);
       }
@@ -81,6 +136,9 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
     }
     // Other rewards: keep existing optimistic flow only
     setClaimedIds((ids) => (ids.includes(tier.id) ? ids : [...ids, tier.id]));
+    setClaimedAt((m) => ({ ...m, [tier.id]: new Date().toISOString() }));
+    fireConfetti(itemRefs.current[tier.id] || null);
+    setAnnounce("Reward claimed. Details available in View Reward.");
   }
 
   useEffect(() => {
@@ -116,6 +174,7 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
           <h4 id="rewards-title" ref={rewardsHeadingRef} tabIndex={-1} className="font-seasons text-lg" style={{ color: 'var(--ink)' }}>Rewards</h4>
           <button ref={pointsButtonRef} type="button" className="text-sm underline" aria-haspopup="dialog" aria-expanded={pointsOpen} onClick={() => setPointsOpen(true)}>How Points Work</button>
         </div>
+        <div aria-live="polite" className="sr-only">{announce}</div>
       </div>
 
       <section aria-label="Rewards intro">
@@ -129,8 +188,16 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
           <div className="font-semibold text-sm" style={{ color: 'var(--ink)' }}>Next Reward:</div>
           {nextTier ? (
             <>
-              <h2 className="font-seasons text-lg" style={{ color: 'var(--ink)' }}>{nextTier.points} Boats – {nextTier.title}</h2>
-              <div className="text-base italic opacity-80">Only {Math.max(0, nextTier.points - points)} boats to go!</div>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-seasons text-lg" style={{ color: 'var(--ink)' }}>{nextTier.points} Boats – {nextTier.title}</h2>
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(11,13,26,0.12)', color: 'var(--ink)' }}>+{Math.max(0, nextTier.points - points)} to unlock</span>
+              </div>
+              <div className="mt-1 text-sm opacity-80" style={{ color: 'var(--ink)' }}>{points} / {nextTier.points}</div>
+              <div className="mt-2 h-2 w-full rounded-full overflow-hidden" style={{ background: 'rgba(11,13,26,0.15)' }} aria-hidden="true">
+                {(() => { const denom = Math.max(1, nextTier.points - prevTierPoints); const pct = Math.max(0, Math.min(100, ((points - prevTierPoints) / denom) * 100)); return (
+                  <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${pct}%`, background: 'var(--teal)' }} />
+                ); })()}
+              </div>
             </>
           ) : (
             <div className="text-base italic opacity-80">You’ve reached the final island. Thank you for guiding the river!</div>
@@ -164,7 +231,7 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                 : "locked";
               const remaining = Math.max(0, tier.points - points);
               return (
-                <li key={tier.id} className="relative">
+                <li key={tier.id} className="relative" ref={(el) => { itemRefs.current[tier.id] = el; }}>
                   {/* Connector dot: left on mobile, center on md+ */}
                   <div className={`absolute -top-3 md:left-1/2 md:-translate-x-1/2 left-0`} aria-hidden="true" style={{ transform: 'translateX(-50%)' }}>
                     <div
@@ -172,11 +239,11 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                       style={{ width: 12, height: 12, background: 'var(--teal)' }}
                     />
                   </div>
-                  <div className="relative group rounded-[24px] border p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: '0 6px 16px rgba(0,0,0,0.05)' }}>
+                  <div className={`relative group rounded-[24px] border p-4 overflow-hidden ${status === 'claimable' ? 'claimable-glow' : ''}`} style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: '0 6px 16px rgba(0,0,0,0.05)' }}>
                     {/* Mist overlay for future tiers */}
                     {isMisted && (
                       <div
-                        className="absolute inset-0 z-0 rounded-2xl pointer-events-none transition-opacity duration-500 ease-in-out mist-overlay mix-blend-multiply backdrop-blur-[2px] group-hover:opacity-12 group-focus-within:opacity-12"
+                        className="absolute inset-0 z-[1] rounded-2xl pointer-events-none transition-opacity duration-500 ease-in-out mist-overlay backdrop-blur-[2px] group-hover:opacity-[0.12] group-focus-within:opacity-[0.12]"
                         style={{ background: 'linear-gradient(180deg, rgba(9,11,26,0.4) 0%, rgba(11,13,26,0.25) 35%, rgba(130,180,255,0.15) 70%, rgba(255,255,255,0) 100%)' }}
                         aria-hidden="true"
                       >
@@ -186,14 +253,18 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                           className="mist-drift absolute inset-0"
                           style={{
                             background: 'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(210,245,250,0.12) 40%, rgba(255,255,255,0) 100%)',
-                            opacity: 0.08,
+                            opacity: 0.18,
                             willChange: 'transform, opacity',
-                            animation: 'mistDrift 30s ease-in-out infinite'
                           }}
                         />
                       </div>
                     )}
                     <div className="relative z-10">
+                      {status === 'claimed' && (
+                        <div className="absolute top-2 right-2 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider" style={{ background: 'rgba(11,13,26,0.12)', color: 'var(--ink)' }}>
+                          CLAIMED{claimedAt[tier.id] ? ` • ${new Date(claimedAt[tier.id]).toLocaleDateString()} ${new Date(claimedAt[tier.id]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                        </div>
+                      )}
                       <h3 className="font-seasons text-lg font-semibold mb-1" style={{ color: 'var(--ink)' }}>{tier.points} Boats – {tier.title}</h3>
                       {tier.subtitle ? (
                         <div className="font-semibold text-sm mb-1" style={{ color: 'var(--ink)' }}>{tier.subtitle}</div>
@@ -203,13 +274,13 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                         {status === "locked" && (
                           <>
                             <button type="button" className="rounded-md btn px-4 py-2 font-seasons opacity-70 cursor-not-allowed" disabled aria-disabled="true">Claim Reward</button>
-                            <span className="text-sm opacity-80" aria-live="polite">{remaining} boats to go</span>
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(11,13,26,0.12)', color: 'var(--ink)' }} aria-live="polite">+{remaining} to unlock</span>
                           </>
                         )}
                         {status === "claimable" && (
                           <button
                             type="button"
-                            className="rounded-md btn px-4 py-2 font-seasons"
+                            className="rounded-md btn px-4 py-2 font-seasons focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]"
                             onClick={() => handleClaim(tier)}
                             disabled={claimingId === tier.id}
                             aria-disabled={claimingId === tier.id}
@@ -221,7 +292,7 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                           tier.id === 'r150' ? (
                             <button type="button" className="rounded-md btn px-4 py-2 font-seasons opacity-70 cursor-not-allowed" disabled aria-disabled="true">Claimed</button>
                           ) : (
-                            <button type="button" className="rounded-md btn px-4 py-2 font-seasons">View Reward</button>
+                            <button type="button" className="rounded-md btn px-4 py-2 font-seasons focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]">View Reward</button>
                           )
                         )}
                       </div>
@@ -310,10 +381,20 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
           50%  { transform: translate3d(10%, 8%, 0) scale(1.08); }
           100% { transform: translate3d(-12%, -8%, 0) scale(1.02); }
         }
+        .mist-drift { animation: mistDrift 40s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
           .mist-drift { animation: none !important; }
         }
-        .mist-overlay { opacity: 0.45; }
+        .mist-overlay { opacity: 0.56; }
+        @keyframes gentlePulse {
+          0%, 100% { box-shadow: 0 6px 16px rgba(0,0,0,0.05), 0 0 0 0 rgba(102, 194, 255, 0.0); }
+          50% { box-shadow: 0 8px 20px rgba(0,0,0,0.08), 0 0 0 6px rgba(102, 194, 255, 0.25); }
+        }
+        .claimable-glow { animation: gentlePulse 1800ms ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .claimable-glow { animation: none; }
+        }
+        .claimable-glow:hover, .claimable-glow:focus-within { transform: translateY(-1px); transition: transform 180ms ease-out; }
       `}</style>
     </div>
   );

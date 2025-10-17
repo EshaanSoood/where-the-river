@@ -1,4 +1,4 @@
-import { countryCodeToLatLng } from "@/app/data/countryCentroids";
+import { ALL_ISO2 } from "@/lib/iso2";
 
 export function normalizeInput(raw: string): string {
   const s = String(raw || "");
@@ -7,7 +7,7 @@ export function normalizeInput(raw: string): string {
 }
 
 export function getAllIso2Codes(): string[] {
-  return Object.keys(countryCodeToLatLng);
+  return ALL_ISO2;
 }
 
 export function isIso2(code: string): boolean {
