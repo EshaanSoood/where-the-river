@@ -76,14 +76,14 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
 
   async function handleClaim(tier: RewardConfig) {
     const supabase = getSupabase();
-    const fireConfetti = (root: HTMLElement | null) => {
+        const fireConfetti = (root: HTMLElement | null) => {
       if (!root) return;
       try {
         const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (prefersReduced) return;
         const container = document.createElement('div');
         container.setAttribute('aria-hidden', 'true');
-        Object.assign(container.style, { position: 'absolute', inset: '0', overflow: 'hidden', pointerEvents: 'none', zIndex: '20' });
+        Object.assign(container.style, { position: 'absolute', inset: '0', overflow: 'hidden', pointerEvents: 'none', zIndex: '40' });
         root.appendChild(container);
         const colors = ['#66c2ff', '#ffd700', '#ff9f1c', '#2aa7b5', '#a78bfa'];
         const num = 24;
@@ -145,6 +145,13 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
     setTimeout(() => rewardsHeadingRef.current?.focus(), 0);
   }, []);
 
+  // Shift SR/keyboard focus into the points modal when it opens
+  useEffect(() => {
+    if (pointsOpen) {
+      setTimeout(() => pointsModalRef.current?.focus(), 0);
+    }
+  }, [pointsOpen]);
+
   const trapFocus = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Tab") return;
     const root = e.currentTarget;
@@ -166,10 +173,10 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
   };
 
   return (
-    <div role="region" aria-labelledby="rewards-title" className="space-y-4 md:space-y-5">
+    <div role="region" aria-labelledby="rewards-title" className="rewards-body flex flex-col min-h-0 h-full">
       {/* Sticky header bar */}
       <div className="sticky top-0 z-10" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)' }}>
-        <div className="flex items-center justify-between px-2 py-3">
+        <div className="flex items-center justify-between px-2 py-2.5">
           <button type="button" className="text-sm underline" aria-label="Back" onClick={onBack}>Back</button>
           <h4 id="rewards-title" ref={rewardsHeadingRef} tabIndex={-1} className="font-seasons text-lg" style={{ color: 'var(--ink)' }}>Rewards</h4>
           <button ref={pointsButtonRef} type="button" className="text-sm underline" aria-haspopup="dialog" aria-expanded={pointsOpen} onClick={() => setPointsOpen(true)}>How Points Work</button>
@@ -177,14 +184,17 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
         <div aria-live="polite" className="sr-only">{announce}</div>
       </div>
 
+      {/* Scrollable content area below fixed header */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-3.5 md:space-y-4">
+
       <section aria-label="Rewards intro">
-        <div className="rounded-[24px] border p-6 text-center" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: '0 6px 16px rgba(0,0,0,0.06)' }}>
+        <div className="rounded-[24px] border px-6 py-5 text-center" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: '0 6px 16px rgba(0,0,0,0.06)' }}>
           <p className="opacity-80 text-base" style={{ color: 'var(--ink)' }}>Make the world a happier place. One boat at a time.</p>
         </div>
       </section>
 
       <section aria-label="Next reward">
-        <div className="rounded-[24px] border p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(102,194,255,0.6)', boxShadow: '0 0 10px rgba(102,194,255,0.35)' }}>
+        <div className="rounded-[24px] border px-4 py-3" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(102,194,255,0.6)', boxShadow: '0 0 10px rgba(102,194,255,0.35)' }}>
           <div className="font-semibold text-sm" style={{ color: 'var(--ink)' }}>Next Reward:</div>
           {nextTier ? (
             <>
@@ -193,9 +203,9 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(11,13,26,0.12)', color: 'var(--ink)' }}>+{Math.max(0, nextTier.points - points)} to unlock</span>
               </div>
               <div className="mt-1 text-sm opacity-80" style={{ color: 'var(--ink)' }}>{points} / {nextTier.points}</div>
-              <div className="mt-2 h-2 w-full rounded-full overflow-hidden" style={{ background: 'rgba(11,13,26,0.15)' }} aria-hidden="true">
+              <div className="mt-2 h-2 w-full rounded-full overflow-hidden" style={{ background: 'rgba(11,13,26,0.15)', border: '1px solid rgba(11,13,26,0.25)' }} aria-hidden="true">
                 {(() => { const denom = Math.max(1, nextTier.points - prevTierPoints); const pct = Math.max(0, Math.min(100, ((points - prevTierPoints) / denom) * 100)); return (
-                  <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${pct}%`, background: 'var(--teal)' }} />
+                  <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${pct}%`, background: '#0E3E45', border: '1px solid rgba(255,255,255,0.35)' }} />
                 ); })()}
               </div>
             </>
@@ -206,7 +216,7 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
       </section>
 
       <section aria-label="Mystery hint">
-        <div className="rounded-[24px] border p-4" style={{ background: 'rgba(210, 245, 250, 0.25)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: '0 6px 16px rgba(0,0,0,0.04)' }}>
+        <div className="rounded-[24px] border px-4 py-3" style={{ background: 'rgba(210, 245, 250, 0.25)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: '0 6px 16px rgba(0,0,0,0.04)' }}>
           <div className="text-base opacity-80 italic" style={{ color: 'var(--ink)' }}>
             A rare island lies beyond…
             <br />
@@ -217,12 +227,12 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
 
       {/* River spine with tier cards */}
       <section aria-label="Reward tiers">
-        <div className="relative mx-auto max-w-md md:max-w-lg py-4">
+        <div className="relative mx-auto max-w-md md:max-w-lg py-3">
           {/* Mobile left gradient spine */}
           <div className="md:hidden absolute left-0 top-0 bottom-0" style={{ width: 2, background: 'linear-gradient(180deg, #8EE5E9, rgba(142,229,233,0))' }} aria-hidden="true" />
           {/* Center spine on md+ */}
           <div className="hidden md:block absolute left-1/2 top-0 bottom-0 -translate-x-1/2" style={{ width: 1.5, background: 'linear-gradient(180deg, #8EE5E9, rgba(142,229,233,0))' }} aria-hidden="true" />
-          <ul className="space-y-4">
+          <ul className="space-y-3">
             {REWARDS.map((tier) => {
               const isUnlocked = points >= tier.points;
               const isMisted = !isUnlocked;
@@ -239,11 +249,11 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                       style={{ width: 12, height: 12, background: 'var(--teal)' }}
                     />
                   </div>
-                  <div className={`relative group rounded-[24px] border p-4 overflow-hidden ${status === 'claimable' ? 'claimable-glow' : ''}`} style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: '0 6px 16px rgba(0,0,0,0.05)' }}>
+                  <div className={`relative group rounded-[24px] border px-4 py-3 overflow-hidden ${status === 'claimable' ? 'claimable-glow' : ''}`} style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: 'inset 0 0 0 1px rgba(14,62,69,0.22), inset 0 -10px 24px rgba(14,62,69,0.18), 0 6px 16px rgba(0,0,0,0.05)' }}>
                     {/* Mist overlay for future tiers */}
                     {isMisted && (
                       <div
-                        className="absolute inset-0 z-[1] rounded-2xl pointer-events-none transition-opacity duration-500 ease-in-out mist-overlay backdrop-blur-[2px] group-hover:opacity-[0.12] group-focus-within:opacity-[0.12]"
+                        className="absolute inset-0 z-[90] rounded-2xl pointer-events-none transition-opacity duration-500 ease-in-out mist-overlay backdrop-blur-[2px] group-hover:opacity-[0.12] group-focus-within:opacity-[0.12]"
                         style={{ background: 'linear-gradient(180deg, rgba(9,11,26,0.4) 0%, rgba(11,13,26,0.25) 35%, rgba(130,180,255,0.15) 70%, rgba(255,255,255,0) 100%)' }}
                         aria-hidden="true"
                       >
@@ -253,7 +263,7 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                           className="mist-drift absolute inset-0"
                           style={{
                             background: 'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(210,245,250,0.12) 40%, rgba(255,255,255,0) 100%)',
-                            opacity: 0.18,
+                            opacity: 0.30,
                             willChange: 'transform, opacity',
                           }}
                         />
@@ -284,6 +294,7 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                             onClick={() => handleClaim(tier)}
                             disabled={claimingId === tier.id}
                             aria-disabled={claimingId === tier.id}
+                            style={{ background: '#0E3E45', border: '2px solid rgba(19,94,102,0.9)' }}
                           >
                             {claimingId === tier.id ? 'Claiming…' : 'Claim Reward'}
                           </button>
@@ -304,6 +315,8 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
           </ul>
         </div>
       </section>
+
+      </div>
 
       {pointsOpen && (
         <>
@@ -381,7 +394,7 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
           50%  { transform: translate3d(10%, 8%, 0) scale(1.08); }
           100% { transform: translate3d(-12%, -8%, 0) scale(1.02); }
         }
-        .mist-drift { animation: mistDrift 40s ease-in-out infinite; }
+        .mist-drift { animation: mistDrift 32s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
           .mist-drift { animation: none !important; }
         }
@@ -395,6 +408,11 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
           .claimable-glow { animation: none; }
         }
         .claimable-glow:hover, .claimable-glow:focus-within { transform: translateY(-1px); transition: transform 180ms ease-out; }
+        /* Bold Helvetica for body text in rewards panel only (avoid headings) */
+        .rewards-body :where(p, .text-sm, .text-base, .font-sans, span, li, label, input, textarea) {
+          font-family: Helvetica, Arial, sans-serif;
+          font-weight: 700;
+        }
       `}</style>
     </div>
   );

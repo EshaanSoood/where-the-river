@@ -1,0 +1,15 @@
+me contains name,country_code,country_name,boat_color → PASS
+{
+  "exists": true,
+  "me": {
+    "email": "diaguser@example.com",
+    "name": "Test User",
+    "country_code": "IN",
+    "country_name": "India",
+    "message": null,
+    "boat_color": "#ff00aa",
+    "referral_code": "12345678",
+    "ref_code_8": "12345678",
+    "boats_total": 0
+  }
+}

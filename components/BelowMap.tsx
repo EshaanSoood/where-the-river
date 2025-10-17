@@ -64,12 +64,36 @@ export default function BelowMap() {
   const privacyLinkRef = useRef<HTMLButtonElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const rightPanelRef = useRef<HTMLDivElement | null>(null);
   const dashboardToggleRef = useRef<HTMLButtonElement | null>(null);
   const dashboardHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const shareHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const shareButtonRef = useRef<HTMLButtonElement | null>(null);
   // Rewards handled within lazy-loaded RewardsView
   
+  const [showTopFade, setShowTopFade] = useState(false);
+  const [showBottomFade, setShowBottomFade] = useState(false);
+
+  useEffect(() => {
+    const el = rightPanelRef.current;
+    if (!el) return;
+    const update = () => {
+      try {
+        const st = el.scrollTop;
+        const ch = el.clientHeight;
+        const sh = el.scrollHeight;
+        setShowTopFade(st > 1);
+        setShowBottomFade(st + ch < sh - 1);
+      } catch {}
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true } as AddEventListenerOptions);
+    window.addEventListener('resize', update);
+    return () => {
+      try { el.removeEventListener('scroll', update as EventListener); } catch {}
+      try { window.removeEventListener('resize', update); } catch {}
+    };
+  }, [rightPanelRef.current]);
 
   const rewardTiers: { boats: number; title: string; subtitle: string; copy: string }[] = [
     { boats: 20, title: "Watch The Documentary", subtitle: "Early access documentary", copy: "Unlocks early access to a short film about Dream River and the making of this project." },
@@ -97,10 +121,18 @@ export default function BelowMap() {
 
   // Lock body scroll while a panel is open and inert the rest of the page for SR/keyboard
   useEffect(() => {
+    // If nocache requested, unregister service workers once to avoid stale bundles (Safari-friendly)
+    try {
+      const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
+      if (url && url.searchParams.get('nocache') === '1' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((regs) => { regs.forEach((r) => r.unregister().catch(() => {})); }).catch(() => {});
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
     try {
       const update = () => {
-        const desktop = typeof window !== 'undefined' && window.innerWidth >= 1024; // lg breakpoint
-        const shouldLock = anyPanelOpen || desktop;
+        const shouldLock = anyPanelOpen;
         document.body.style.overflow = shouldLock ? 'hidden' : '';
         const inertify = (el: HTMLElement | null, on: boolean) => {
           if (!el) return;
@@ -258,21 +290,21 @@ export default function BelowMap() {
   }
 
   return (
-    <div className="py-4">
+    <div className="py-4 flex flex-col min-h-0 h-full">
       {/* Header inside site container; not sticky */}
-      <div style={{ ['--hdr' as unknown as string]: '40px' }}>
+      <div className="sticky top-0 z-40" style={{ ['--hdr' as unknown as string]: '40px' }}>
         <div className="relative" ref={headerRef}>
           <div
             className="min-h-10 py-1.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
             style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
           >
-            <div className="grid grid-cols-3 items-center gap-2 w-full">
+            <div className="grid grid-cols-3 items-baseline gap-2 w-full">
               <div className="justify-self-start">
                 {!loading && (
                   <button
                     ref={dashboardToggleRef}
                     type="button"
-                    className="inline-flex px-3 py-2 rounded-[24px] bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
+                    className="inline-flex items-center px-3 py-2 rounded-[24px] bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm self-baseline"
                     aria-label={user ? "Open Dashboard" : "Participate / Log in"}
                     aria-controls="panel-dashboard"
                     aria-expanded={dashboardOpen}
@@ -303,7 +335,17 @@ export default function BelowMap() {
                     <a href="https://eshaansood.bandcamp.com/album/the-sonic-alchemists-i-dream-river">The Sonic Alchemists I: Dream River by Eshaan Sood</a>
                   </iframe>
                 </div>
-                <h1 className="hidden xl:block font-seasons text-base sm:text-lg">Dream River</h1>
+                <div
+                  className="inline-block rounded-full px-3 py-1.5 align-middle"
+                  style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+                >
+                  <h1
+                    className="font-seasons text-sm sm:text-base md:text-lg"
+                    style={{ lineHeight: 1.2 }}
+                  >
+                    Dream River
+                  </h1>
+                </div>
               </div>
               <div className="justify-self-end">
                 <button
@@ -311,7 +353,7 @@ export default function BelowMap() {
                   aria-label="Open Leaderboard"
                   aria-controls="panel-leaderboard"
                   aria-expanded={leaderboardOpen}
-                  className="inline-flex px-3 py-2 rounded-[24px] bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm"
+                  className="inline-flex items-center px-3 py-2 rounded-[24px] bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm self-baseline"
                   onClick={() => setLeaderboardOpen((v) => !v)}
                   onKeyDown={(e) => { if (e.key === "Escape") setLeaderboardOpen(false); }}
                 >
@@ -323,11 +365,10 @@ export default function BelowMap() {
         </div>
       </div>
       
-      {/* Small margin below header */}
-      <div className="h-4" />
+      {/* Margin handled by --section-gap on panels */}
 
-      {/* Content Wrapper (full-width within site container) */}
-      <div className="w-full h-full min-h-0 mt-0" ref={contentRef}>
+      {/* Content Wrapper (fills leftover space between sticky header and footer) */}
+      <div className="w-full flex-1 min-h-0 mt-0" ref={contentRef}>
         {/* Single SR summary for both layouts (avoid duplicate IDs across breakpoints) */}
         <GlobeSummarySR id="globe-sr-summary" />
         {/* Mobile / small-screen layout (<1024px) */}
@@ -344,6 +385,13 @@ export default function BelowMap() {
                   <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* Intro: Where The River Flows (always visible on mobile, not in accordion) */}
+          <section aria-label="Project intro (mobile)">
+            <div className="rounded-[24px] shadow-md p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+              <Hero />
             </div>
           </section>
 
@@ -398,21 +446,19 @@ export default function BelowMap() {
         </div>
 
         {/* Desktop layout (≥1024px): 3 columns 1:2:1 over fluid container */}
-        <div className="hidden lg:grid gap-8 overflow-hidden" style={{ gridTemplateColumns: '3fr 6fr 3fr', height: '100%' }}>
+        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-start" style={{ gridTemplateColumns: '3fr 6fr 3fr' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
           <section aria-label="Bandcamp and YouTube" className="h-full min-h-0 min-w-0 overflow-hidden">
-            <div className="h-full rounded-[24px] shadow-md flex flex-col" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div className="h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}>
               <LeftPanelEmbeds />
             </div>
           </section>
 
           {/* Globe (center) */}
-          <section aria-label="Global participation" className="min-w-0 overflow-hidden">
-            <div className="relative h-full rounded-[24px] shadow-md overflow-hidden" style={{ background: '#0b0d1a' }}>
-              {/* Subtle frosted texture overlay while staying dark */}
-              <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(6px)' }} />
+          <section aria-label="Global participation" className="min-w-0 h-full overflow-hidden">
+            <div className="relative h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden" style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}>
               <div className="relative flex items-center justify-center h-full p-4">
-                <div className="relative w-full h-full" style={{ aspectRatio: '1 / 1', maxHeight: '100%', maxWidth: '100%' }}>
+                <div className="relative w-full h-full">
                   <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
                 </div>
               </div>
@@ -420,15 +466,30 @@ export default function BelowMap() {
           </section>
 
           {/* Text block (right) */}
-          <section aria-label="Project intro" className="min-w-0">
+          <section aria-label="Project intro" className="min-w-0 h-full">
             <div
-              className="h-full rounded-[24px] shadow-md p-4 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]"
+              className="h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] p-4 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] relative leading-normal text-[color:var(--ink)]"
               tabIndex={0}
               role="region"
               aria-label="About Dream River"
-              style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+              style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}
+              ref={rightPanelRef}
             >
+              {showTopFade && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none sticky top-0 h-14 -mx-4 z-50"
+                  style={{ background: 'linear-gradient(to bottom, rgba(210,245,250,0) 0%, rgba(210,245,250,0.35) 100%)' }}
+                />
+              )}
               <Hero />
+              {showBottomFade && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none sticky bottom-0 h-14 -mx-4 z-50"
+                  style={{ background: 'linear-gradient(to top, rgba(210,245,250,0.35) 0%, rgba(210,245,250,0) 100%)' }}
+                />
+              )}
             </div>
           </section>
         </div>
@@ -716,7 +777,7 @@ export default function BelowMap() {
                       </div>
                     </div>
                     <div className="flex flex-col leading-tight">
-                      <div className="font-seasons text-lg md:text-xl">{(userProfile?.name || '').trim() || 'Friend'}</div>
+                      <div className="font-seasons text-lg md:text-xl">{userProfile?.name || ''}</div>
                       <div className="flex items-center gap-2">
                         <span className="font-sans font-extrabold text-base md:text-lg">{boatsTotal}</span>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[color:var(--ink-2)]">
@@ -782,13 +843,6 @@ export default function BelowMap() {
                   </div>
 
                   <div>
-                  {(!userProfile?.name || userProfile.name.trim().length === 0) && (
-                    <div className="rounded-md p-3 border" style={{ borderColor: 'var(--mist)', background: 'rgba(255,255,255,0.8)' }}>
-                      <p className="text-sm">Please add your name to complete your profile.</p>
-                      <button className="text-sm underline mt-1" onClick={() => setDashboardMode('guest')}>Edit profile</button>
-                    </div>
-                  )}
-
                   <div className="font-seasons text-base md:text-lg">Stream The Album</div>
                     <div className="mt-2 flex items-center gap-4 md:gap-6 flex-wrap">
                       <a href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify">

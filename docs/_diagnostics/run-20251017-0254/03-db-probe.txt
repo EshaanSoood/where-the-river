@@ -1,0 +1,16 @@
+Row has name/country_code/boat_color → PASS
+{
+  "id": "d5c4bc6b-dfd0-4bdf-afce-5eba88a11021",
+  "name": "Eshaan Sood",
+  "email": "eshaansoood@gmail.com",
+  "referral_id": "84432662",
+  "referred_by": null,
+  "city": null,
+  "message": "Miss Lightning",
+  "photo_url": null,
+  "hidden": false,
+  "created_at": "2025-10-17T01:13:23.138327+00:00",
+  "country_code": "IN",
+  "boat_color": "#f7b0a5",
+  "otp_verified": true
+}

@@ -1,0 +1,16 @@
+Row has name/country_code/boat_color → PASS
+{
+  "id": "ba546007-4513-4642-9480-f99435e91d09",
+  "name": "Test User",
+  "email": "diaguser2@example.com",
+  "referral_id": "82440135",
+  "referred_by": null,
+  "city": null,
+  "message": null,
+  "photo_url": null,
+  "hidden": false,
+  "created_at": "2025-10-17T01:41:16.070713+00:00",
+  "country_code": "US",
+  "boat_color": "#00cc44",
+  "otp_verified": true
+}

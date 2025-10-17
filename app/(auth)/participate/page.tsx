@@ -81,19 +81,29 @@ export default function ParticipatePage() {
           setLoading(false);
           return;
         }
+        // Diagnostics marker (pass through if present)
+        const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
+        const diagRun = url && (url.searchParams.get('diag') === '1' || url.searchParams.get('nocache') === '1');
+        const stamp = new Date().toISOString().slice(0,16).replace(/[-:T]/g, '').replace(/(\d{8})(\d{4}).*/, '$1-$2');
+        const headers: Record<string,string> = { "Content-Type": "application/json" };
+        if (diagRun) headers['x-diag-run-id'] = `run-${stamp}`;
+
+        const payload = {
+          name,
+          email,
+          country_code: countryCode,
+          message: userMessage || null,
+          photo_url: null,
+          referred_by: null,
+          boat_color: boatColor,
+        };
+        if (diagRun) {
+          try { console.log('[diag] signup payload', payload); } catch {}
+        }
         await fetch("/api/users/upsert", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name,
-            email,
-            country_code: countryCode,
-            message: userMessage || null,
-            photo_url: null,
-            // referral_id is generated server-side
-            referred_by: null,
-            boat_color: boatColor,
-          }),
+          headers,
+          body: JSON.stringify(payload),
         }).then((r) => { if (!r.ok) throw new Error("Profile creation failed"); });
         setStep("done");
         router.push("/dashboard");

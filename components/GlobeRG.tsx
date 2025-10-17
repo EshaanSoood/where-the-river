@@ -617,10 +617,10 @@ export default function GlobeRG({ describedById = "globe-sr-summary", ariaLabel 
         polygonsData={polygonsData}
         polygonCapColor={(feat: any) => {
           const isHovered = hoveredCountry && feat.properties.name === hoveredCountry.properties.name;
-          if (feat.properties.layer === "bottom") return "#c0a000";
-          return isHovered ? "#fff59d" : "#ffd700";
+          if (feat.properties.layer === "bottom") return "#7C4A33";
+          return isHovered ? "#DCA87E" : "#B56B45";
         }}
-        polygonSideColor={(feat: any) => (feat.properties.layer === "bottom" ? "transparent" : "#c0a000")}
+        polygonSideColor={(feat: any) => (feat.properties.layer === "bottom" ? "transparent" : "#7C4A33")}
         polygonStrokeColor={() => "transparent"}
         polygonAltitude={(feat: any) => {
           if (feat.properties.layer === "bottom") return 0.001;

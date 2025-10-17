@@ -1,0 +1,57 @@
+PASS: collected diagnostics for run-20251016-2129
+
+===== 01-signup-payload.txt =====
+Payload included name,email,country_code,boat_color → PASS
+{
+  "name": "Test User",
+  "email": "diaguser@example.com",
+  "country_code": "IN",
+  "boat_color": "#ff00aa",
+  "message": null,
+  "photo_url": null,
+  "referred_by": null
+}
+===== 02-upsert-input.txt =====
+Sanitized contains expected fields → PASS
+{
+  "name": "Test User",
+  "email": "diaguser@example.com",
+  "country_code": "IN",
+  "message": null,
+  "photo_url": null,
+  "referred_by": null,
+  "boat_color": "#ff00aa"
+}
+===== 03-db-probe.txt =====
+Row has name/country_code/boat_color → PASS
+{
+  "id": "181d5ab4-83cf-4715-b00c-f61847bf20bd",
+  "name": "Test User",
+  "email": "diaguser@example.com",
+  "referral_id": "78616983",
+  "referred_by": null,
+  "city": null,
+  "message": null,
+  "photo_url": null,
+  "hidden": false,
+  "created_at": "2025-10-17T01:29:54.850037+00:00",
+  "country_code": "IN",
+  "boat_color": "#ff00aa",
+  "otp_verified": true
+}
+===== 04-api-me-response.txt =====
+me contains name,country_code,country_name,boat_color → PASS
+{
+  "exists": true,
+  "me": {
+    "email": "diaguser@example.com",
+    "name": "Test User",
+    "country_code": "IN",
+    "country_name": "India",
+    "message": null,
+    "boat_color": "#ff00aa",
+    "referral_code": "12345678",
+    "ref_code_8": "12345678",
+    "boats_total": 0
+  }
+}

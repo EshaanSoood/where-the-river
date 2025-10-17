@@ -1,16 +1,16 @@
-type Props = { height?: number };
+type Props = { height?: number; fill?: boolean };
 
-export default function BandcampEmbed({ height = 120 }: Props) {
+export default function BandcampEmbed({ height = 120, fill = false }: Props) {
   // Brand colors from globals: --parchment (bg), --aqua (link)
   const bg = "f7f0e4"; // var(--parchment)
   const link = "2aa7b5"; // var(--aqua)
   return (
-    <div className="p-2">
+    <div className={fill ? "p-0 h-full min-h-0" : "p-0"}>
       {/* Desktop: compact player to ensure full visibility without cropping */}
-      <div className="hidden md:block">
+      <div className={fill ? "hidden md:flex flex-col h-full min-h-0" : "hidden md:block"}>
         <iframe
           title="Bandcamp player (compact)"
-          style={{ border: 0, width: '100%', height }}
+          style={{ border: 0, width: '100%', height: fill ? '100%' : height }}
           src={`https://bandcamp.com/EmbeddedPlayer/album=672398703/size=small/bgcol=${bg}/linkcol=${link}/transparent=true/`}
           seamless
           loading="lazy"

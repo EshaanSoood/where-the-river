@@ -21,6 +21,8 @@ export default function DashboardBadge() {
   const { user } = useUser();
   const [referralUrl, setReferralUrl] = useState<string>("");
   const [userFullName, setUserFullName] = useState<string>("");
+  const [boatsTotal, setBoatsTotal] = useState<number>(0);
+  const [countryName, setCountryName] = useState<string>("");
   const [announce, setAnnounce] = useState<string>("");
   const defaultShareMessage = "Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I’ve been listening to Dream River by them lately and I think you’ll enjoy it too.";
   const prefersReduced = useReducedMotion();
@@ -40,12 +42,28 @@ export default function DashboardBadge() {
         const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
         const email = user?.email || '';
         if (!email) { setReferralUrl(base); return; }
-        const resp = await fetch('/api/profiles/by-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-        const j = await resp.json();
-        const code = j?.profile?.ref_code_8;
-        const name = j?.profile?.name || '';
+        // profiles/by-email for referral + name
+        const respProf = await fetch(`${base}/api/profiles/by-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+        if (!respProf.ok) throw new Error('profiles/by-email failed');
+        const jp = await respProf.json();
+        const code = jp?.profile?.ref_code_8 || '';
+        const name = (jp?.profile?.name || '').trim();
         setReferralUrl(code ? `${base}/?ref=${code}` : base);
-        setUserFullName(name);
+        if (name) setUserFullName(name);
+
+        // /api/me for boatsTotal and country
+        try {
+          const respMe = await fetch(`${base}/api/me`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+          if (respMe.ok) {
+            const jm = await respMe.json();
+            const boats = typeof jm?.me?.boats_total === 'number' ? jm.me.boats_total : 0;
+            const cname = (jm?.me?.country_name || '').trim();
+            const fallbackName = (jm?.me?.name || '').trim();
+            setBoatsTotal(boats || 0);
+            if (!name && fallbackName) setUserFullName(fallbackName);
+            if (cname) setCountryName(cname);
+          }
+        } catch {}
       } catch {
         const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
         setReferralUrl(base);
@@ -73,12 +91,12 @@ export default function DashboardBadge() {
 
         {/* x3 y1: first name (Seasons) */}
         <div className="col-start-3 col-end-4 row-start-1 flex items-end">
-          <div className="font-seasons text-2xl leading-none truncate">FirstName</div>
+          <div className="font-seasons text-2xl leading-none truncate">{userFullName?.split(' ')[0] || '—'}</div>
         </div>
 
         {/* x3 y2: connections number */}
         <div className="col-start-3 col-end-4 row-start-2 flex items-start">
-          <div className="font-sans font-bold text-xl">12</div>
+          <div className="font-sans font-bold text-xl">{boatsTotal || 0}</div>
         </div>
 
         {/* x4 y2: paper boat icon placeholder */}
@@ -97,6 +115,7 @@ export default function DashboardBadge() {
             className="w-full rounded-md px-4 py-3 btn"
             aria-controls="dashboard-overlay"
             onClick={() => setMode("share")}
+            disabled={!referralUrl}
             initial={false}
             animate={mode === "share" && !prefersReduced ? { y: -24, scale: 0.92, opacity: 0 } : { y: 0, scale: 1, opacity: 1 }}
             transition={{ duration: 0.18, ease: "easeOut" }}

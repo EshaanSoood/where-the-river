@@ -61,6 +61,41 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
   - Added `react-globe.gl`, bumped `three` to `^0.169.0` to satisfy subpath imports.
 
 ## Recent Changes — Today
+- Layout container & footer
+  - Unified site container with clamp gutters (max 32px) wrapping header, 3‑column grid, and thin footer; page uses flex column with min‑vh.
+  - Desktop grid locked to 1:2:1; right column is independently scrollable (internal overflow); center globe scales without transforms; left embeds consolidated into one frosted panel.
+  - Columns aligned: grid `items-start`; shared side-panel top offset `margin-top: var(--section-gap, 16px)`; center globe has no extra top margin; shared borders for visual alignment.
+  - Bandcamp/YouTube embeds: responsive 100% width, 16:9 for YouTube; compact Bandcamp height with dynamic adjustment based on column space.
+  - Left panel order: YouTube on top, Bandcamp below; Bandcamp height auto-computed from remaining space; lighter divider (1px rgba(255,255,255,0.25)).
+  - Globe container: frosted glass background (`rgba(11,13,26,0.80)` + `backdrop-filter: blur(12px)`), matching borders.
+  - Right text panel: sticky bottom gradient hint to suggest more content.
+  - Footer: slim frosted bar (40px) inside container; if hidden, fallbacks documented; later restored and visible.
+- Dashboard – Share overlay
+  - Added `DashboardBadge` overlay with `data-mode` (default|share); Share button toggles to share mode and morphs into four tiles via staggered animation (reduced-motion aware).
+  - Share screen mounts `ShareTiles` (WhatsApp/Email/SMS/Web Share) with default message, referral URL, fallback copy; Back restores focus to Share button; focus trap, ESC/outside click handled.
+- Rewards – Mist & progression
+  - Mist effect moved to CSS keyframes; visible layering (z‑index) with pointer‑events:none; opacity and duration tuned (40s) with reduced‑motion guard.
+  - Fixed invalid opacity utilities; only the card container clips; mist shows only on locked tiers.
+  - Added Next Reward panel with X/Y progress, pill “+N to unlock”, and progress bar; locked cards show matching pill.
+  - Claimable cards glow/pulse; one‑shot confetti on claim; claimed stamp with date/time and persistent View Reward.
+  - Persist `user_rewards` for all tiers (20/50/100/150/250/400); reload reconstructs claimed state.
+  - Aria‑live announcements for unlocks/claims/errors; visible focus rings.
+- Name required
+  - Client: name sanitization, required, error UI; submit disabled until valid.
+  - Server: `/api/users/upsert` validates name (`2..80`, has letter/digit); logs invalid_name; persists name.
+  - Dashboard: email fallback removed; banner prompts legacy users to add name; `/api/me` returns `needs_name`.
+- Country completeness
+  - Introduced `lib/iso2.ts` (250 ISO‑2 incl. XK); UI dropdown now uses full set; artifacts generated under `.tmp/`; seeded `public.country_map` to 250 rows.
+- SVG rivers (organic, stable)
+  - ReactGlobe native arcs disabled; SVG overlay is the only link layer.
+  - Per‑session seed + per‑edge params `{ sign, curvFactor (10–22%), wiggleAmp (1.5–5%), wiggleFreq (1–3), phase }` cached once.
+  - Two‑control‑point Bézier in screen space; lateral clamp ≤ 22% of chord; gentle sine wiggle along perpendicular; single‑sided (no backtracking).
+  - Fade easing: opacity = clamp(dot(camera, midpoint),0,1)^2.5 × 0.45; no floor, smooth horizon fade.
+  - DOM reuse: one persistent `<path>` per edge; camera changes only reproject and update `d`/opacity; resize debounced (~150ms).
+  - Tiny per‑edge hue variance (cyan/blue) and non‑scaling strokes; slow dash‑offset animation (reduced‑motion aware).
+  - Boats’ 3D curves biased to the same side as rivers with bounded curvature; visually follow rivers.
+- Build & deploy
+  - Clean compile; deployed to Vercel; stable alias updated; pushed to GitHub. `.gitignore` excludes `.env*`.
 - Share Your Boat flow (no layout changes):
   - New API `POST /api/profiles/by-email` returns `{ id, name, ref_code_8 }` for building referral URLs.
   - `components/ShareTiles.tsx` with four actions: WhatsApp, Email, Messages (SMS), and Web Share API; IDs: `#btn-whatsapp`, `#btn-email`, `#btn-messages`, `#btn-webshare`.
@@ -68,14 +103,27 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
   - Copy-to-clipboard fallback with `aria-live` confirmation; modal remains open; focus preserved.
   - Processed white glyph icons placed under `/public/logos/` for dark-blue tiles.
 - Globe containment & spacing:
-  - Dedicated globe container with `overflow-hidden` and responsive height `clamp(45vh, 60vh, 70vh)`.
-  - CSS vars `--globe-offset-y` and `--globe-scale` applied to canvas layer; tuned per breakpoint to maintain safe gap from CTAs and keep the globe fully contained.
+  - Center globe panel uses dark frosted glass (`rgba(11,13,26,0.80)` + blur) with matching borders; square wrapper removed to prevent clipping; globe fills available height.
+  - Mobile: added always-visible intro card (“Where The River Flows”) below the globe (not in accordion).
 - Bandcamp mobile sizing: increased small player height to ~100px while keeping large desktop player.
 - Lint/build hygiene:
   - Typed `navigator.share/clipboard` guards and `Intl.DisplayNames` wrapper; eliminated blocking ESLint errors.
-  - Build verified locally with Next.js 15 + Turbopack; remaining warnings are non-blocking (unused vars in legacy code, next/no-img-element on logos).
+  - Build verified locally with Next.js 15 + Turbopack; remaining warnings are non-blocking (unused vars in legacy code, next/no-img-element on logos). Dev server restarts used `?nocache=1` to bust cache.
 - Deployment:
   - Deployed to Vercel production and pushed to git (main). Alias remains `riverflowseshaan.vercel.app`.
+
+## Rewards – Additional Tweaks (Accessibility & UX)
+- Mist overlay: z-index bumped to 90; opacity 0.30; drift speed +20% (32s). Confetti container z-index 40. Mist remains clipped by cards.
+- Contrast: deeper teal progress fill and border; claim button with stronger border/fill; improved legibility for low-vision users.
+- Layout: tightened vertical paddings by ~15–20% across sections and cards to reduce scroll.
+- Bold body text (scoped): rewards panel body text uses bold Helvetica; site-wide body remains normal.
+- Header/content scrolling: rewards header stays fixed; only content scrolls; focus trap intact.
+- Modal focus: when “How Points Work” opens, focus auto-shifts to the modal container; close restores focus.
+
+## Globe – Land Colors
+- Main land: `#B56B45`
+- Hover land: `#DCA87E`
+- Back/side land: `#7C4A33`
 
 ## Deployment
 - Vercel project linked: `riverflows` (org: eshaans-projects-d91d58e1)
