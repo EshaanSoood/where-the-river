@@ -14,15 +14,11 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import ShareTiles from "@/components/ShareTiles";
-import { useUser } from "@/hooks/useUser";
+import { useMe } from "@/hooks/useMe";
 
 export default function DashboardBadge() {
   const [mode, setMode] = useState<"default" | "share">("default");
-  const { user } = useUser();
-  const [referralUrl, setReferralUrl] = useState<string>("");
-  const [userFullName, setUserFullName] = useState<string>("");
-  const [boatsTotal, setBoatsTotal] = useState<number>(0);
-  const [countryName, setCountryName] = useState<string>("");
+  const { me } = useMe();
   const [announce, setAnnounce] = useState<string>("");
   const defaultShareMessage = "Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I’ve been listening to Dream River by them lately and I think you’ll enjoy it too.";
   const prefersReduced = useReducedMotion();
@@ -35,48 +31,7 @@ export default function DashboardBadge() {
     }
   }, [mode]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
-        const email = user?.email || '';
-        if (!email) { setReferralUrl(base); return; }
-        // Fetch /api/me first for totals/country and fallback name+ref
-        try {
-          const respMe = await fetch(`${base}/api/me`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-          if (respMe.ok) {
-            const jm = await respMe.json();
-            if (cancelled) return;
-            const boats = typeof jm?.me?.boats_total === 'number' ? jm.me.boats_total : 0;
-            const cname = (jm?.me?.country_name || '').trim();
-            const fallbackName = (jm?.me?.name || '').trim();
-            const codeMe = jm?.me?.ref_code_8 || jm?.me?.referral_code || '';
-            setBoatsTotal(boats || 0);
-            if (fallbackName && !userFullName) setUserFullName(fallbackName);
-            if (cname) setCountryName(cname);
-            if (codeMe) setReferralUrl((r) => r || `${base}/?ref=${codeMe}`);
-          }
-        } catch {}
-        // Prefer /api/profiles/by-email for ref + canonical name
-        try {
-          const respProf = await fetch(`${base}/api/profiles/by-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-          if (respProf.ok) {
-            const jp = await respProf.json();
-            if (cancelled) return;
-            const code = jp?.profile?.ref_code_8 || '';
-            const name = (jp?.profile?.name || '').trim();
-            if (code) setReferralUrl(`${base}/?ref=${code}`);
-            if (name) setUserFullName(name);
-          }
-        } catch {}
-      } catch {
-        const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
-        setReferralUrl(base);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user?.email]);
+  // Data bindings removed for overhaul. UI uses placeholders until rebuilt.
   return (
     <section
       id="dashboard-overlay"
@@ -98,12 +53,12 @@ export default function DashboardBadge() {
 
         {/* x3 y1: first name (Seasons) */}
         <div className="col-start-3 col-end-4 row-start-1 flex items-end">
-          <div className="font-seasons text-2xl leading-none truncate">{userFullName?.split(' ')[0] || '—'}</div>
+          <div className="font-seasons text-2xl leading-none truncate">{me?.name ? String(me.name).split(' ')[0] : '—'}</div>
         </div>
 
         {/* x3 y2: connections number */}
         <div className="col-start-3 col-end-4 row-start-2 flex items-start">
-          <div className="font-sans font-bold text-xl">{boatsTotal || 0}</div>
+          <div className="font-sans font-bold text-xl">{me?.boats_total ?? 0}</div>
         </div>
 
         {/* x4 y2: paper boat icon placeholder */}
@@ -122,7 +77,7 @@ export default function DashboardBadge() {
             className="w-full rounded-md px-4 py-3 btn"
             aria-controls="dashboard-overlay"
             onClick={() => setMode("share")}
-            disabled={!referralUrl}
+            disabled={!me?.referral_url}
             initial={false}
             animate={mode === "share" && !prefersReduced ? { y: -24, scale: 0.92, opacity: 0 } : { y: 0, scale: 1, opacity: 1 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
@@ -179,7 +134,7 @@ export default function DashboardBadge() {
             <div aria-live="polite" className="sr-only">{announce}</div>
           </div>
           <div className="grid grid-cols-2 gap-3" id="share-tiles-wrap" onClick={(e) => e.stopPropagation()}>
-            <ShareTiles referralUrl={referralUrl} message={defaultShareMessage} userFullName={userFullName} onCopy={(ok) => setAnnounce(ok ? 'Copied!' : '')} />
+            <ShareTiles referralUrl={me?.referral_url || ""} message={defaultShareMessage} userFullName={me?.name || ""} onCopy={(ok) => setAnnounce(ok ? 'Copied!' : '')} />
           </div>
           <style jsx>{`
             @media (prefers-reduced-motion: no-preference) {

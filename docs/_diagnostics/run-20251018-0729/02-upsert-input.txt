@@ -1,0 +1,10 @@
+Sanitized contains expected fields → PASS
+{
+  "name": "Eshaan Sood",
+  "email": "eshaansoood@gmail.com",
+  "country_code": "IN",
+  "message": "Miss Lightning",
+  "photo_url": null,
+  "referred_by": null,
+  "boat_color": "#f7b0a5"
+}

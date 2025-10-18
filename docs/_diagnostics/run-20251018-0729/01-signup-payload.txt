@@ -1,0 +1,10 @@
+Payload included name,email,country_code,boat_color → PASS
+{
+  "name": "Eshaan Sood",
+  "email": "eshaansoood@gmail.com",
+  "country_code": "IN",
+  "boat_color": "#f7b0a5",
+  "message": "Miss Lightning",
+  "photo_url": null,
+  "referred_by": null
+}

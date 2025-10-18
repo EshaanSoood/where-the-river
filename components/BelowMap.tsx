@@ -11,20 +11,15 @@ import dynamic from "next/dynamic";
 import GlobeSummarySR from "@/components/GlobeSummarySR";
 import ShareTiles from "@/components/ShareTiles";
 import ColorChips from "@/components/ColorChips";
-import { getCountryNameFromCode } from "@/lib/countryMap";
 import LeftPanelEmbeds from "@/components/LeftPanelEmbeds";
 import HowToPlayVideo from "@/components/HowToPlayVideo";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 
   const Globe = dynamic(() => import("@/components/GlobeRG"), { ssr: false });
   const RewardsView = dynamic(() => import("@/components/RewardsView"), { ssr: false });
+  import { useMe } from "@/hooks/useMe";
 
-  type UserRow = {
-    name: string | null;
-    country_code: string | null;
-    message: string | null;
-    boat_color: string | null;
-  };
+  // Dashboard data bindings removed for overhaul; UI will use placeholders.
 
 export default function BelowMap() {
   const router = useRouter();
@@ -46,14 +41,12 @@ export default function BelowMap() {
   const [globalBoats, setGlobalBoats] = useState<number | null>(null);
   const [top5, setTop5] = useState<{ first_name: string; country_code: string; boats_total: number }[]>([]);
   const [dashboardMode, setDashboardMode] = useState<"guest" | "user">("guest");
-  const [userProfile, setUserProfile] = useState<{ name: string | null; country_code: string | null; country_name?: string | null; message: string | null; boat_color: string | null } | null>(null);
-  const [boatsTotal, setBoatsTotal] = useState<number>(0);
+  const { me, refresh: refreshMe } = useMe();
   const [shareOpen, setShareOpen] = useState(false);
   const [rewardsOpen, setRewardsOpen] = useState(false);
   // Points modal state lives inside RewardsView now
   const [shareMessage, setShareMessage] = useState("Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I’ve been listening to Dream River by them lately and I think you’ll enjoy it too.");
-  const [referralUrl, setReferralUrl] = useState("");
-  const [userFullName, setUserFullName] = useState("");
+  
   const [announce, setAnnounce] = useState("");
   const dashboardRef = useRef<HTMLDivElement | null>(null);
   const leaderboardRef = useRef<HTMLDivElement | null>(null);
@@ -106,76 +99,7 @@ export default function BelowMap() {
     { boats: 400, title: "Signed Poster (Digital)", subtitle: "Digital signed artwork", copy: "Receive a signed digital poster to commemorate your river’s milestone." },
   ];
 
-  // Resolve a human-friendly country name from ISO-2 codes using our list
-  const resolvedCountryName = useMemo(() => {
-    // Prefer server-derived friendly name; fall back to mapping from code
-    const fromServer = userProfile?.country_name || null;
-    if (fromServer && fromServer.trim().length > 0) return fromServer;
-    const codeRaw = (userProfile?.country_code || country || '')
-      .replace(/[\u2013\u2014—]/g, '')
-      .trim()
-      .toUpperCase();
-    if (!codeRaw) return 'Country not set';
-    try {
-      return getCountryNameFromCode(codeRaw);
-    } catch {
-      const match = countries.find((c) => c.code === codeRaw);
-      return match?.name || 'Country not set';
-    }
-  }, [userProfile?.country_name, userProfile?.country_code, country, countries]);
-
-  // Helper: unified fetch for dashboard data with simple retry if fields are missing
-  const fetchDashboardData = async (emailAddr: string) => {
-    try {
-      const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : ''))
-        .replace(/\/$/, '');
-      // /api/me
-      const respMe = await fetch(`${base}/api/me`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailAddr })
-      });
-      if (respMe.ok) {
-        const jm = await respMe.json();
-        const boats = typeof jm?.me?.boats_total === 'number' ? jm.me.boats_total : 0;
-        const cname = (jm?.me?.country_name || '').trim();
-        const fallbackName = (jm?.me?.name || '').trim();
-        setBoatsTotal((v) => v || boats || 0);
-        if (!userFullName && fallbackName) setUserFullName(fallbackName);
-        if (cname) setUserProfile((prev) => ({
-          name: prev?.name ?? null,
-          country_code: prev?.country_code ?? null,
-          country_name: cname,
-          message: prev?.message ?? null,
-          boat_color: prev?.boat_color ?? null,
-        }));
-        // referral from /api/me if available
-        if (!referralUrl) {
-          const codeMe = jm?.me?.ref_code_8 || jm?.me?.referral_code || '';
-          if (codeMe) setReferralUrl(`${base}/?ref=${codeMe}`);
-        }
-      }
-      // /api/profiles/by-email for ref + name (preferred)
-      const respProf = await fetch(`${base}/api/profiles/by-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailAddr })
-      });
-      if (respProf.ok) {
-        const jp = await respProf.json();
-        const code = jp?.profile?.ref_code_8 || '';
-        const name = (jp?.profile?.name || '').trim();
-        if (code) setReferralUrl((r) => r || `${base}/?ref=${code}`);
-        if (!userFullName && name) setUserFullName(name);
-      }
-      // background retry if critical fields are missing (max 3 tries)
-      const missing = (!userFullName || !referralUrl);
-      if (missing && dashboardFetchAttemptsRef.current < 3) {
-        dashboardFetchAttemptsRef.current += 1;
-        setTimeout(() => { fetchDashboardData(emailAddr).catch(() => {}); }, 1200);
-      }
-    } catch {}
-  };
+  // Data-binding fetches removed for overhaul
 
   // Lock body scroll while a panel is open and inert the rest of the page for SR/keyboard
   useEffect(() => {
@@ -249,19 +173,11 @@ export default function BelowMap() {
     return () => { isMounted = false; };
   }, []);
 
-  // On overlay open in user mode: fetch now
+  // Refresh once dashboard opens in user mode
   useEffect(() => {
-    if (!dashboardOpen || dashboardMode !== 'user' || !user?.email) return;
-    dashboardFetchAttemptsRef.current = 0;
-    fetchDashboardData(user.email).catch(() => {});
-  }, [dashboardOpen, dashboardMode, user?.email]);
-
-  // Also kick off fetch as soon as auth resolves, even if overlay isn’t open
-  useEffect(() => {
-    if (!user?.email) return;
-    dashboardFetchAttemptsRef.current = 0;
-    fetchDashboardData(user.email).catch(() => {});
-  }, [user?.email]);
+    if (!dashboardOpen || dashboardMode !== 'user') return;
+    refreshMe().catch(() => {});
+  }, [dashboardOpen, dashboardMode, refreshMe]);
 
   // Manage focus when switching into/out of the inline Share view
   useEffect(() => {
@@ -316,13 +232,13 @@ export default function BelowMap() {
             className="min-h-10 py-1.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
             style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
           >
-            <div className="grid grid-cols-3 items-baseline gap-2 w-full">
+            <div className="grid grid-cols-3 items-center gap-2 w-full">
               <div className="justify-self-start">
                 {!loading && (
                   <button
                     ref={dashboardToggleRef}
                     type="button"
-                    className="inline-flex items-center px-3 py-2 rounded-[24px] bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm self-baseline"
+                    className="inline-flex items-center h-8 md:h-9 px-3 rounded-[24px] bg-white/85 backdrop-blur-sm border border-white/40 text-[color:var(--ink)] text-xs md:text-sm whitespace-nowrap overflow-hidden self-center shadow-sm"
                     aria-label={user ? "Open Dashboard" : "Participate / Log in"}
                     aria-controls="panel-dashboard"
                     aria-expanded={dashboardOpen}
@@ -371,7 +287,7 @@ export default function BelowMap() {
                   aria-label="Open Leaderboard"
                   aria-controls="panel-leaderboard"
                   aria-expanded={leaderboardOpen}
-                  className="inline-flex items-center px-3 py-2 rounded-[24px] bg-white/90 shadow-sm border border-purple-200 text-purple-900 text-sm self-baseline"
+                  className="inline-flex items-center h-8 md:h-9 px-3 rounded-[24px] bg-white/85 backdrop-blur-sm border border-white/40 text-[color:var(--ink)] text-xs md:text-sm whitespace-nowrap overflow-hidden self-center shadow-sm"
                   onClick={() => setLeaderboardOpen((v) => !v)}
                   onKeyDown={(e) => { if (e.key === "Escape") setLeaderboardOpen(false); }}
                 >
@@ -703,7 +619,7 @@ export default function BelowMap() {
                               }),
                             });
                             // Immediately fetch dashboard data post-verification
-                            try { dashboardFetchAttemptsRef.current = 0; await fetchDashboardData(email.trim().toLowerCase()); } catch {}
+                            // Data-binding removed; will rebuild
                             setAlert('Verified! You are in.');
                             setTimeout(() => setDashboardOpen(false), 900);
                             return;
@@ -782,7 +698,7 @@ export default function BelowMap() {
                           if (error) throw error;
                           if (data?.user) {
                             setAlert('Welcome back!');
-                            try { dashboardFetchAttemptsRef.current = 0; await fetchDashboardData(email.trim().toLowerCase()); } catch {}
+                            // Data-binding removed; will rebuild
                             setTimeout(() => setDashboardOpen(false), 900);
                             return;
                           }
@@ -811,21 +727,21 @@ export default function BelowMap() {
               </div>
               <div className="p-4">
                 {rewardsOpen ? (
-                  <RewardsView boatsTotal={boatsTotal} onBack={() => { setRewardsOpen(false); setTimeout(() => dashboardHeadingRef.current?.focus(), 0); }} />
+                  <RewardsView boatsTotal={me?.boats_total ?? 0} onBack={() => { setRewardsOpen(false); setTimeout(() => dashboardHeadingRef.current?.focus(), 0); }} />
                 ) : (
                 <div className="space-y-4 md:space-y-5">
                   <div className="flex items-center justify-between gap-4">
                     <div className="w-14 h-14 rounded-full overflow-hidden border" style={{ borderColor: 'var(--mist)' }} aria-label="Boat badge">
                       <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--white-soft)' }}>
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path d="M3 15l9-9 9 9-9 3-9-3z" fill={userProfile?.boat_color || '#135E66'} />
+                          <path d="M3 15l9-9 9 9-9 3-9-3z" fill={me?.boat_color || '#135E66'} />
                         </svg>
                       </div>
                     </div>
                     <div className="flex flex-col leading-tight">
-                      <div className="font-seasons text-lg md:text-xl">{userProfile?.name || ''}</div>
+                      <div className="font-seasons text-lg md:text-xl">{me?.name || ''}</div>
                       <div className="flex items-center gap-2">
-                        <span className="font-sans font-extrabold text-base md:text-lg">{boatsTotal}</span>
+                        <span className="font-sans font-extrabold text-base md:text-lg">{me?.boats_total ?? 0}</span>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[color:var(--ink-2)]">
                           <path d="M3 15l9-9 9 9-9 3-9-3z" fill="currentColor" />
                         </svg>
@@ -833,9 +749,9 @@ export default function BelowMap() {
                     </div>
                   </div>
 
-                        <div className="font-sans text-sm md:text-base">Country : {resolvedCountryName}</div>
+                  <div className="font-sans text-sm md:text-base">Country : {me?.country_name || 'Country not set'}</div>
 
-                  <div className="font-seasons text-base md:text-lg">{userProfile?.message || '—'}</div>
+                  <div className="font-seasons text-base md:text-lg">{me?.message || '—'}</div>
 
                   <div className="space-y-2">
                           {!shareOpen && (
@@ -844,7 +760,7 @@ export default function BelowMap() {
                         className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons transition-all duration-300 ease-out"
                         aria-label="Share Your Boat"
                               onClick={() => setShareOpen(true)}
-                        disabled={!referralUrl}
+                        disabled={!me?.referral_url}
                       >
                         Share Your Boat
                       </button>
@@ -867,17 +783,17 @@ export default function BelowMap() {
                               aria-label="Share"
                             >Share</h4>
                               <div className="grid grid-cols-2 gap-4">
-                                <ShareTiles referralUrl={referralUrl} message={shareMessage} userFullName={userFullName} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
+                                <ShareTiles referralUrl={me?.referral_url || ''} message={shareMessage} userFullName={me?.name || ''} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
                               </div>
                         <div className="mt-3 space-y-2">
                           <label className="font-sans text-sm" htmlFor="shareMessage">Message</label>
                           <textarea id="shareMessage" className="w-full border rounded-md px-3 py-2" rows={4} value={shareMessage} onChange={(e) => setShareMessage(e.target.value)} />
                           <div className="flex items-center gap-2">
-                            <input className="flex-1 border rounded-md px-3 py-2 bg-background" value={referralUrl} readOnly aria-label="Referral link" />
+                            <input className="flex-1 border rounded-md px-3 py-2 bg-background" value={me?.referral_url || ''} readOnly aria-label="Referral link" />
                             <button
                               type="button"
                               className="rounded-md px-3 py-2 btn"
-                              onClick={async () => { try { await navigator.clipboard.writeText(`${shareMessage} ${referralUrl}`); setAnnounce('Copied invite to clipboard'); } catch {} }}
+                              onClick={async () => { try { await navigator.clipboard.writeText(`${shareMessage} ${me?.referral_url || ''}`); setAnnounce('Copied invite to clipboard'); } catch {} }}
                             >Copy</button>
                           </div>
                         </div>
@@ -921,10 +837,7 @@ export default function BelowMap() {
                           const supabase = getSupabase();
                           await supabase.auth.signOut();
                         } catch {}
-                        setUserProfile(null);
-                        setBoatsTotal(0);
-                        setReferralUrl("");
-                        setUserFullName("");
+                        // Clear panel UI state only; user data is read via useMe
                         setShareOpen(false);
                         setDashboardMode("guest");
                         setGuestStep('menu');

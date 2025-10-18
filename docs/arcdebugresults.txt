@@ -1,0 +1,7 @@
+nodes=21, links=18, arcsData=10, ssotEdges=10
+joinMisses=0 samples=[]
+coordRejects=8 samples=[{"scc":"US","sa":[39.78,-100.45],"tcc":"US","sb":[39.78,-100.45]},{"scc":"US","sa":[39.78,-100.45],"tcc":"US","sb":[39.78,-100.45]}]
+caps PER_PAIR=1000 GLOBAL=1000
+topPairs=[["JP->IN",1],["IN->DE",1],["DE->GB",1]]
+dashing=off
+testEdgeInjected=no

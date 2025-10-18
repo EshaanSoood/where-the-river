@@ -29,43 +29,21 @@ export type GlobeLink = {
 export type TimeFilter = "all" | "30d" | "7d";
 
 export async function fetchGlobeData(filter: TimeFilter = "all") {
-  const supabase = getSupabase();
-  const since = filter === "all" ? null : new Date(Date.now() - (filter === "30d" ? 30 : 7) * 24 * 3600 * 1000);
-  let query = supabase
-    .from("users")
-    .select("id,name,country_code,referred_by,referral_id,created_at")
-    .order("created_at", { ascending: true });
-  if (since) query = query.gte("created_at", since.toISOString());
-  const { data, error } = await query;
-  if (error) throw error;
-
-  const nodes: GlobeNode[] = [];
-  const links: GlobeLink[] = [];
-  const referralToUser: Record<string, UserRow> = {};
-
-  (data || []).forEach((u: unknown) => {
-    const row = u as UserRow;
-    referralToUser[row.referral_id] = row;
-  });
-
-  (data || []).forEach((u: unknown) => {
-    const row = u as UserRow;
-    const cc = (row.country_code || "").toUpperCase();
+  // Use server API to avoid client RLS/env issues; project URL inferred at runtime
+  const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+  const url = `${base}/api/globe?filter=${encodeURIComponent(filter)}`;
+  const resp = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+  if (!resp.ok) throw new Error(`globe api failed: ${resp.status}`);
+  const json = await resp.json();
+  const nodesRaw = (json?.nodes || []) as Array<{ id: string; name: string; countryCode: string; createdAt: string }>;
+  const linksRaw = (json?.links || []) as Array<{ source: string; target: string }>;
+  const nodes: GlobeNode[] = nodesRaw.map(n => {
+    const cc = (n.countryCode || '').toUpperCase();
     const base = countryCodeToLatLng[cc];
     const [lat, lng] = base ? jitterLatLng(base[0], base[1], 2.0) : [0, 0];
-    nodes.push({
-      id: row.referral_id,
-      name: row.name || "Anonymous",
-      countryCode: cc,
-      lat,
-      lng,
-      createdAt: new Date(row.created_at),
-    });
-    if (row.referred_by && referralToUser[row.referred_by]) {
-      links.push({ source: row.referred_by, target: row.referral_id });
-    }
+    return { id: n.id, name: n.name || 'Anonymous', countryCode: cc, lat, lng, createdAt: new Date(n.createdAt) };
   });
-
+  const links: GlobeLink[] = linksRaw.map(l => ({ source: l.source, target: l.target }));
   return { nodes, links };
 }
 
