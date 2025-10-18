@@ -90,14 +90,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   });
   const [currentLOD, setCurrentLOD] = useState<'low' | 'high'>('low');
   const [arcsData, setArcsData] = useState<ArcData[]>([]);
-  const [renderArcs, setRenderArcs] = useState<ArcData[]>([]);
   const [nodesData, setNodesData] = useState<NodeData[]>([]);
-  const [renderNodes, setRenderNodes] = useState<PointData[]>([]);
   // Logged-in user + connections (from DB)
   const myIdRef = useRef<string | null>(null);
   const myFirstNameRef = useRef<string>("");
   const myConnectionsRef = useRef<Set<string>>(new Set());
   const reservedPosRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
+  const [zoomScale, setZoomScale] = useState<number>(1);
   const [hoveredCountry, setHoveredCountry] = useState<any | null>(null);
   const [tooltipContent, setTooltipContent] = useState('');
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
@@ -210,12 +209,12 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     return [0, 0];
   };
 
-  // Combine persistent points with the temporary start point for rendering
+  // Points for rendering (no clustering): deterministic positions computed at load
   const displayPoints = useMemo<PointData[]>(() => {
-    const pts: PointData[] = renderNodes.length ? renderNodes : nodesData.map(n => ({ lat: n.lat, lng: n.lng, size: n.size, color: n.color }));
+    const pts: PointData[] = nodesData.map(n => ({ id: n.id, lat: n.lat, lng: n.lng, size: n.size, color: n.color }));
     if (startNode) pts.push({ lat: startNode.lat, lng: startNode.lng, size: Math.max(0.26, (startNode.size || 0.20) + 0.06), color: 'rgba(255, 255, 0, 0.9)' });
     return pts;
-  }, [renderNodes, nodesData, startNode]);
+  }, [nodesData, startNode]);
 
 
   // Create more translucent globe material
@@ -228,6 +227,32 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   }, []);
 
   const paperTexture = useMemo(() => createPaperTexture(), []);
+
+  // Deterministic jitter helpers
+  const hashString = (s: string): number => {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  };
+  const mulberry32 = (seed: number) => {
+    return () => {
+      let t = (seed += 0x6D2B79F5);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  const seededJitterAround = (lat: number, lng: number, id: string): [number, number] => {
+    const seed = hashString(id);
+    const rnd = mulberry32(seed);
+    const angle = rnd() * Math.PI * 2;
+    const r = 0.18 + rnd() * 0.12; // 0.18°..0.30°
+    const dLat = r * Math.sin(angle);
+    const dLng = r * Math.cos(angle) / Math.max(0.5, Math.cos(lat * Math.PI / 180));
+    const jLat = Math.max(-85, Math.min(85, lat + dLat));
+    const jLng = ((lng + dLng + 540) % 360) - 180;
+    return [jLat, jLng];
+  };
 
   const createPaperBoatGeometry = () => {
     const geometry = new THREE.BufferGeometry();
@@ -263,13 +288,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     CN: [35.000074, 104.999927], SG: [1.357107, 103.8194992], ZA: [-28.8166236, 24.991639], KE: [-0.1768696, 37.9083264],
     NG: [9.6000359, 7.9999721], MX: [23.6585116, -102.0077097], RU: [64.6863136, 97.7453061], TR: [39.0616, 35.1623],
   };
-  const jitterLatLng = (lat: number, lng: number, magnitudeDeg = 2.0): [number, number] => {
-    const r1 = (Math.random() - 0.5) * magnitudeDeg;
-    const r2 = (Math.random() - 0.5) * magnitudeDeg;
-    const jLat = Math.max(-85, Math.min(85, lat + r1));
-    const jLng = ((lng + r2 + 540) % 360) - 180;
-    return [jLat, jLng];
-  };
+  // Deprecated random jitter (avoid non-determinism). Use seededJitterAround instead.
   const fetchGlobeData = async (filter: 'all' | '30d' | '7d' = 'all'): Promise<{ nodes: GlobeNode[]; links: GlobeLink[] }> => {
     const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || 'https://riverflowseshaan.vercel.app';
     const base = guessedBase.replace(/\/$/, '');
@@ -311,7 +330,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         nodes.forEach(n => {
           const cc = (n.countryCode || '').toUpperCase();
           const base = resolveLatLngForCode(cc);
-          const [lat, lng] = jitterLatLng(base[0], base[1], 2.0);
+          const [lat, lng] = seededJitterAround(base[0], base[1], n.id);
           nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: 'rgba(255,255,255,0.95)', countryCode: cc, name: n.name || null });
         });
         setNodesData(Array.from(nodeMap.values()));
@@ -426,89 +445,24 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     } catch { return null; }
   };
 
-  // Recompute clustering and reroute arcs to cluster hubs without breaking chains
-  useEffect(() => {
+  // Project only if the point is on the camera-facing side of the globe
+  const projectLatLngIfFront = (lat: number, lng: number): { x: number; y: number } | null => {
     try {
-      const globe = globeEl.current; if (!globe) return;
+      const globe = globeEl.current; if (!globe) return null;
       const cam = globe.camera();
-      const dist = cam.position.length();
-      const ratio = Math.max(0.0001, baselineDistanceRef.current / dist);
-      const buckets = [1.0,1.2,1.4,1.6,1.8,2.0,2.2,2.4];
-      const pick = buckets.reduce((acc, b) => (Math.abs(b - ratio) < Math.abs(acc - ratio) ? b : acc), buckets[0]);
-      const byCountry = new Map<string, NodeData[]>();
-      nodesData.forEach(n => {
-        const key = (n.countryCode || '__unknown__').toUpperCase();
-        if (!byCountry.has(key)) byCountry.set(key, []);
-        byCountry.get(key)!.push(n);
-      });
-      const nextPoints: PointData[] = [];
-      const clusterPos = new Map<string, { lat: number; lng: number }>();
-      const minSpacingPx = 12;
-      const reserved = myConnectionsRef.current;
-      const myId = myIdRef.current;
-      reservedPosRef.current.clear();
-      byCountry.forEach((arr, cc) => {
-        const centroid = (() => {
-          const base = resolveLatLngForCode(cc);
-          if (base) return { lat: base[0], lng: base[1] };
-          return (arr[0] ? { lat: arr[0].lat, lng: arr[0].lng } : null);
-        })();
-        if (!centroid) return;
-        const c0 = projectLatLng(centroid.lat, centroid.lng);
-        const c1 = projectLatLng(centroid.lat, Math.min(179.999, centroid.lng + 1));
-        let r = 10;
-        if (c0 && c1) {
-          const dx = Math.hypot(c1.x - c0.x, c1.y - c0.y);
-          r = Math.max(10, dx * 0.45 * pick);
-        }
-        const pixelBudget = 2 * Math.PI * r; // circumference approximation
-        const cap = Math.max(4, Math.floor(pixelBudget / minSpacingPx));
-        const priority = arr.filter(n => n.id === myId || reserved.has(n.id));
-        const others = arr.filter(n => !(n.id === myId || reserved.has(n.id)));
-        // Always show priority nodes, jittered uniquely; if a cluster exists here, push them farther out
-        const clusterHere = (others.length + priority.length) > cap;
-        const ampDeg = clusterHere ? 0.6 : 0.2;
-        priority.forEach((n, i) => {
-          const angle = (i / Math.max(1, priority.length)) * Math.PI * 2;
-          const dLat = ampDeg * Math.sin(angle);
-          const dLng = ampDeg * Math.cos(angle) / Math.max(0.5, Math.cos(centroid.lat * Math.PI / 180));
-          const isMe = n.id === myId;
-          const color = isMe ? '#2AA7B5' : '#135E66';
-          const size = isMe ? 0.26 : Math.max(0.22, n.size);
-          nextPoints.push({ id: n.id, lat: centroid.lat + dLat, lng: centroid.lng + dLng, size, color, kind: 'node' });
-          reservedPosRef.current.set(n.id, { lat: centroid.lat + dLat, lng: centroid.lng + dLng });
-        });
-        // Remaining budget for others
-        if (clusterHere) {
-          const clusterSizePx = 0.3 * pixelBudget;
-          const size = Math.min(0.6, 0.20 + clusterSizePx / 400);
-          nextPoints.push({ lat: centroid.lat, lng: centroid.lng, size, color: 'rgba(255,255,255,0.95)', kind: 'cluster', label: `${others.length} people listening.` });
-          clusterPos.set(cc, { lat: centroid.lat, lng: centroid.lng });
-        } else {
-          others.forEach((n, i) => {
-            const angle = (i / Math.max(1, others.length)) * Math.PI * 2 + Math.PI / 4;
-            const dLat = ampDeg * Math.sin(angle);
-            const dLng = ampDeg * Math.cos(angle) / Math.max(0.5, Math.cos(centroid.lat * Math.PI / 180));
-            nextPoints.push({ id: n.id, lat: centroid.lat + dLat, lng: centroid.lng + dLng, size: n.size, color: n.color, kind: 'node' });
-          });
-        }
-      });
-      setRenderNodes(nextPoints);
-      // Reroute arcs: if endpoint country clustered, snap to cluster hub
-      const idToCc = new Map<string, string>();
-      nodesData.forEach(n => { if (n.id && n.countryCode) idToCc.set(n.id, (n.countryCode || '').toUpperCase()); });
-      const routed = arcsData.map(a => {
-        const sReserved = reservedPosRef.current.get(a.startId);
-        const eReserved = reservedPosRef.current.get(a.endId);
-        const sCc = idToCc.get(a.startId) || '';
-        const eCc = idToCc.get(a.endId) || '';
-        const sPos = sReserved || clusterPos.get(sCc) || { lat: a.startLat, lng: a.startLng };
-        const ePos = eReserved || clusterPos.get(eCc) || { lat: a.endLat, lng: a.endLng };
-        return { ...a, startLat: sPos.lat, startLng: sPos.lng, endLat: ePos.lat, endLng: ePos.lng };
-      });
-      setRenderArcs(routed);
-    } catch {}
-  }, [nodesData, arcsData]);
+      const c = globe.getCoords(lat, lng); if (!c) return null;
+      const world = new THREE.Vector3(c.x, c.y, c.z);
+      const dot = world.clone().normalize().dot(cam.position.clone().normalize());
+      if (dot <= 0) return null;
+      const v = world.project(cam);
+      const rect = globe.renderer()?.domElement?.getBoundingClientRect?.() || { width: window.innerWidth, height: window.innerHeight } as any;
+      const x = (v.x * 0.5 + 0.5) * rect.width;
+      const y = (-v.y * 0.5 + 0.5) * rect.height;
+      return { x, y };
+    } catch { return null; }
+  };
+
+  // No clustering: we keep deterministic node positions and original arc endpoints
 
   // Handler for clicking on the globe (ocean)
   const handleGlobeClick = () => {
@@ -534,6 +488,14 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       } else {
         setCurrentLOD('low');
       }
+      // Update zoom scale for node sizing (no re-layout)
+      try {
+        const ratio = Math.max(0.0001, baselineDistanceRef.current / distance);
+        const raw = Math.min(2.0, Math.max(0.6, 0.85 + 0.55 * ratio));
+        // Quantize to 0.1 steps to reduce re-renders
+        const quant = Math.round(raw * 10) / 10;
+        setZoomScale(prev => (Math.abs((prev ?? 0) - quant) >= 0.05 ? quant : prev));
+      } catch {}
     };
 
     controls.addEventListener('change', handleZoom);
@@ -740,19 +702,33 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         // Atmosphere
         atmosphereColor="#66c2ff"
         atmosphereAltitude={0.25}
-        // Arcs (node→node, routed via clusters when applicable)
-        arcsData={renderArcs.length ? renderArcs : arcsData}
-        arcColor={() => 'rgba(102, 194, 255, 0.8)'}
+        // Arcs: no motion (static), but face-aware + priority color alpha
+        arcsData={arcsData}
+        arcColor={(d: any) => {
+          try {
+            const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)';
+            const midLat = (d.startLat + d.endLat) / 2;
+            const midLng = (d.startLng + d.endLng) / 2;
+            const c = globe.getCoords(midLat, midLng); if (!c) return 'rgba(102, 194, 255, 0.8)';
+            const cam = globe.camera();
+            const world = new THREE.Vector3(c.x, c.y, c.z);
+            const dot = world.clone().normalize().dot(cam.position.clone().normalize());
+            const isPri = !!(d.startId && (d.startId === myIdRef.current || myConnectionsRef.current.has(d.startId))) || !!(d.endId && (d.endId === myIdRef.current || myConnectionsRef.current.has(d.endId)));
+            const base = '102, 194, 255';
+            const alpha = dot >= 0 ? (isPri ? 0.95 : 0.8) : (isPri ? 0.35 : 0.12);
+            return `rgba(${base}, ${alpha})`;
+          } catch { return 'rgba(102, 194, 255, 0.8)'; }
+        }}
         arcStroke={2}
         arcAltitude={0.2}
-        arcDashLength={0.4}
-        arcDashGap={0.15}
-        arcDashAnimateTime={2500}
+        arcDashLength={1}
+        arcDashGap={0}
+        arcDashAnimateTime={0}
         arcCircularResolution={64}
         // Points: nodes or cluster hubs
         pointsData={displayPoints}
         pointAltitude={0.201} // Set just above the arc altitude
-        pointRadius="size"
+        pointRadius={(d: any) => (d?.size || 0.20) * zoomScale}
         pointColor={(d: any) => d?.color || 'rgba(255,255,255,0.95)'}
         pointsMerge={true}
         pointsTransitionDuration={0}
@@ -779,12 +755,12 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         onPolygonHover={handlePolygonHover}
       />
       {/* User glow and labels rendered via DOM overlay */}
-      {renderNodes.map((p, i) => {
+      {nodesData.slice(0, 12).map((p, i) => {
         if (!p.id) return null;
         const isMe = myIdRef.current && p.id === myIdRef.current;
         const isFriend = myConnectionsRef.current.has(p.id);
         if (!(isMe || isFriend)) return null;
-        const px = projectLatLng(p.lat, p.lng);
+        const px = projectLatLngIfFront(p.lat, p.lng);
         if (!px) return null;
         return (
           <div key={`ux-${i}`} style={{ position: 'absolute', left: px.x, top: px.y, transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 60 }} aria-hidden="true">
@@ -792,25 +768,12 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
               <div style={{ width: 32, height: 32, borderRadius: '50%', boxShadow: '0 0 18px 8px rgba(42,167,181,0.35)' }} />
             )}
             <div className="font-seasons" style={{ position: 'absolute', left: '50%', top: 18, transform: 'translate(-50%, 0)', color: 'var(--ink, #e6e6e6)', fontSize: 12, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}>
-              {isMe ? (myFirstNameRef.current || '') : ((p as any).name ? String((p as any).name).split(/\s+/)[0]?.[0]?.toUpperCase() : '')}
+              {isMe ? (myFirstNameRef.current || '') : (p.name ? String(p.name).split(/\s+/)[0]?.[0]?.toUpperCase() : '')}
             </div>
           </div>
         );
       })}
-      {/* Cluster labels under points: project to screen and position absolutely */}
-      {renderNodes
-        .filter(p => p.kind === 'cluster' && p.label)
-        .map((p, i) => {
-          const px = projectLatLng(p.lat, p.lng);
-          if (!px) return null;
-          return (
-            <div key={i} style={{ position: 'absolute', left: px.x, top: px.y, transform: 'translate(-50%, 8px)', pointerEvents: 'none' }} aria-hidden="true">
-              <span style={{ color: '#fff', fontFamily: 'sans-serif', fontSize: 12, textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
-                {p.label}
-              </span>
-            </div>
-          );
-        })}
+      {/* No cluster labels (clustering removed) */}
     </div>
   );
 };
