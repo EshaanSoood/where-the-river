@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 import { getIsoCountries, type IsoCountry } from "@/lib/countryList";
 import { useUser } from "@/hooks/useUser";
+import { useMe } from "@/hooks/useMe";
 import Hero from "@/components/Hero";
 import BandcampEmbed from "@/components/BandcampEmbed";
 import dynamic from "next/dynamic";
@@ -15,9 +16,8 @@ import LeftPanelEmbeds from "@/components/LeftPanelEmbeds";
 import HowToPlayVideo from "@/components/HowToPlayVideo";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 
-  const Globe = dynamic(() => import("@/components/GlobeRG"), { ssr: false });
+  const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
   const RewardsView = dynamic(() => import("@/components/RewardsView"), { ssr: false });
-  import { useMe } from "@/hooks/useMe";
 
   // Dashboard data bindings removed for overhaul; UI will use placeholders.
 

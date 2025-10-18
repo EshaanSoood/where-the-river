@@ -7,7 +7,7 @@ import { resolveIso2, isIso2, toIso2Upper, normalizeInput } from "@/lib/countryM
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, email, country_code, message, photo_url, referred_by, boat_color } = body || {};
+    const { name, email, country_code, message, photo_url, referred_by, boat_color } = body || {} as Record<string, unknown>;
     if (!email || !country_code) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
     // Diagnostics: prepare run folder when header present
@@ -48,54 +48,64 @@ export async function POST(req: Request) {
     }
 
     // 02 — upsert sanitized input
-    const sanitized = { name: cleanedName, email, country_code: cc, message: message ?? null, photo_url: photo_url ?? null, referred_by: referred_by ?? null, boat_color: boat_color ?? null };
+    const sanitized = { name: cleanedName, email: String(email), country_code: cc, message: message ?? null, photo_url: photo_url ?? null, referred_by: referred_by ?? null, boat_color: boat_color ?? null };
     await writeDiag("02-upsert-input.txt", [
       "Sanitized contains expected fields → " + ((sanitized.name && sanitized.email && sanitized.country_code) ? "PASS" : "FAIL"),
       JSON.stringify(sanitized, null, 2)
     ]);
 
-    // Generate 8-digit numeric referral_id server-side with retry on conflict
+    // Lookup auth user by email
+    type AuthMeta = Record<string, unknown>;
+    type AuthUserRow = { id: string; email: string; user_metadata: AuthMeta | null; raw_user_meta_data: AuthMeta | null };
+    const { data: authUser, error: authErr } = await supabaseServer
+      .from('auth.users')
+      .select('id,email,user_metadata,raw_user_meta_data')
+      .eq('email', sanitized.email)
+      .maybeSingle();
+    if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 });
+    if (!authUser) return NextResponse.json({ error: 'auth_user_not_found' }, { status: 404 });
+
+    // Generate 8-digit numeric referral_id server-side with retry on metadata uniqueness
     const gen = () => String(Math.floor(10_000_000 + Math.random() * 89_999_999));
     let referral = gen();
 
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      const { data, error } = await supabaseServer
-        .from("users")
-        .upsert(
-          {
-            name: cleanedName,
-            email,
-            country_code: cc,
-            message: message ?? null,
-            photo_url: photo_url ?? null,
-            referral_id: referral,
-            referred_by: referred_by ?? null,
-            otp_verified: true,
-            boat_color: boat_color ?? null,
-          },
-          { onConflict: "email" }
-        )
-        .select()
-        .single();
-
-      if (!error) {
-        // 03 — db probe (row returned by upsert)
-        await writeDiag("03-db-probe.txt", [
-          "Row has name/country_code/boat_color → " + ((data?.name && data?.country_code) ? "PASS" : "FAIL"),
-          JSON.stringify(data, null, 2)
-        ]);
-        return NextResponse.json({ user: data });
-      }
-
-      // Retry on referral_id uniqueness violations only
-      if (/referral_id/i.test(error.message) && /duplicate|unique/i.test(error.message)) {
-        referral = gen();
-        continue;
-      }
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    for (let attempt = 1; attempt <= 8; attempt++) {
+      const { data: exists } = await supabaseServer
+        .from('auth.users')
+        .select('id')
+        .filter('raw_user_meta_data->>referral_id', 'eq', referral)
+        .maybeSingle();
+      if (!exists) break;
+      referral = gen();
     }
 
-    return NextResponse.json({ error: "referral_generation_failed" }, { status: 400 });
+    const row = authUser as unknown as AuthUserRow;
+    const prevMeta: AuthMeta = (row.raw_user_meta_data || {}) as AuthMeta;
+    const nextMeta: AuthMeta = {
+      ...prevMeta,
+      name: sanitized.name,
+      country_code: sanitized.country_code,
+      message: sanitized.message,
+      boat_color: sanitized.boat_color,
+      referred_by: sanitized.referred_by,
+      referral_id: (prevMeta as { referral_id?: unknown }).referral_id ?? referral,
+      otp_verified: true,
+    };
+
+    // Update auth user metadata via admin API
+    const { error: updErr } = await supabaseServer.auth.admin.updateUserById(
+      row.id,
+      { user_metadata: nextMeta }
+    );
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 400 });
+
+    // 03 — db probe (updated auth user metadata)
+    await writeDiag("03-db-probe.txt", [
+      "Updated auth.users user_metadata contains expected fields → " + ((nextMeta as { name?: unknown; country_code?: unknown }).name && (nextMeta as { name?: unknown; country_code?: unknown }).country_code ? "PASS" : "FAIL"),
+      JSON.stringify({ id: row.id, user_metadata: nextMeta }, null, 2)
+    ]);
+
+    return NextResponse.json({ user: { email: row.email, name: sanitized.name, country_code: sanitized.country_code, message: sanitized.message, referral_id: (nextMeta as { referral_id?: string | null }).referral_id ?? null, boat_color: sanitized.boat_color } });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });

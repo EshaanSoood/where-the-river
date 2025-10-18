@@ -1,18 +1,6 @@
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getCountryNameFromCode } from "@/lib/countryMap";
-
-type UserMeta = {
-  first_name?: string;
-  last_name?: string;
-  name?: string;
-  country_code?: string;
-  boat_color?: string;
-  message?: string;
-  boats_total?: number;
-};
 
 export async function POST(req: Request) {
   try {
@@ -20,67 +8,41 @@ export async function POST(req: Request) {
     const { email } = body || {};
     if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
 
-    // Read profile from auth.users.user_metadata (server role)
-    const { data: authUser, error: authErr } = await supabaseServer
+    // Source of truth: auth.users metadata
+    type AuthUserRow = { id: string; email: string; raw_user_meta_data: AuthMeta | null };
+    const { data: authUser, error: userErr } = await supabaseServer
       .from('auth.users')
-      .select('id,email,user_metadata')
+      .select('id,email,raw_user_meta_data')
       .eq('email', email)
       .maybeSingle();
-    if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 });
+    if (userErr) return NextResponse.json({ error: userErr.message }, { status: 400 });
     if (!authUser) return NextResponse.json({ exists: false }, { status: 404 });
-    const um = ((authUser as unknown as { user_metadata?: UserMeta }).user_metadata || {}) as UserMeta;
-    const fullName = [um.first_name, um.last_name].filter(Boolean).join(" ").trim() || (um.name || "").trim();
-    let name = fullName || null;
-    const country_code = String(um.country_code || "").replace(/\u2014|—/g, '').trim().toUpperCase() || null;
+
+    type AuthMeta = { name?: string | null; country_code?: string | null; message?: string | null; boat_color?: string | null; boats_total?: number | null; referral_id?: string | null };
+    const row = authUser as unknown as AuthUserRow;
+    const meta = (row.raw_user_meta_data || {}) as AuthMeta;
+    const name = (meta.name ? String(meta.name).trim() : null) as string | null;
+    const country_code = (meta.country_code ? String(meta.country_code).trim().toUpperCase() : null) as string | null;
     const country_name = country_code ? getCountryNameFromCode(country_code) : null;
-    const message = um.message ?? null;
-    const boat_color = um.boat_color ?? null;
-    const boats_total = typeof um.boats_total === 'number' ? um.boats_total : 0;
+    const message = (meta.message ?? null) as string | null;
+    const boat_color = (meta.boat_color ?? null) as string | null;
+    const boats_total = typeof meta.boats_total === 'number' ? meta.boats_total : 0;
+    const referral_code = (meta.referral_id ?? null) as string | null;
 
-    // Referral code: read from users table if available (legacy source)
-    let referral_code: string | null = null;
-    let fallbackNameFromUsers: string | null = null;
-    try {
-      const { data: userRow } = await supabaseServer
-        .from("users")
-        .select("referral_id,name")
-        .eq("email", email)
-        .maybeSingle();
-      referral_code = userRow?.referral_id ?? null;
-      fallbackNameFromUsers = userRow?.name ? String(userRow.name).trim() : null;
-    } catch {}
-    if (!name && fallbackNameFromUsers) {
-      name = fallbackNameFromUsers;
-    }
-
-    const resp = {
+    return NextResponse.json({
       exists: true,
       me: {
-        email,
+        email: row.email || email,
         name,
         country_code,
         country_name,
         message,
         boat_color,
+        boats_total,
         referral_code,
         ref_code_8: referral_code,
-        boats_total,
       },
-    };
-
-    // Diagnostics (when header present)
-    const hdr = req.headers.get("x-diag-run-id");
-    if (hdr) {
-      try {
-        const diagBase = path.join(process.cwd(), "docs", "_diagnostics", hdr);
-        await fs.mkdir(diagBase, { recursive: true });
-        await fs.writeFile(path.join(diagBase, "04-api-me-response.txt"), [
-          `me contains name,country_code,country_name,boat_color → ${(resp.me.name && resp.me.country_code && resp.me.country_name !== undefined) ? 'PASS' : 'FAIL'}`,
-          JSON.stringify(resp, null, 2)
-        ].join('\n'), 'utf8');
-      } catch {}
-    }
-    return NextResponse.json(resp);
+    });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });

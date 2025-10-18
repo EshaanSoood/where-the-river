@@ -18,7 +18,7 @@ import { useMe } from "@/hooks/useMe";
 
 export default function DashboardBadge() {
   const [mode, setMode] = useState<"default" | "share">("default");
-  const { me } = useMe();
+  const { me, loading, error, refresh } = useMe();
   const [announce, setAnnounce] = useState<string>("");
   const defaultShareMessage = "Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I’ve been listening to Dream River by them lately and I think you’ll enjoy it too.";
   const prefersReduced = useReducedMotion();
@@ -31,7 +31,7 @@ export default function DashboardBadge() {
     }
   }, [mode]);
 
-  // Data bindings removed for overhaul. UI uses placeholders until rebuilt.
+  // Robust UI states: loading, error, empty
   return (
     <section
       id="dashboard-overlay"
@@ -53,12 +53,14 @@ export default function DashboardBadge() {
 
         {/* x3 y1: first name (Seasons) */}
         <div className="col-start-3 col-end-4 row-start-1 flex items-end">
-          <div className="font-seasons text-2xl leading-none truncate">{me?.name ? String(me.name).split(' ')[0] : '—'}</div>
+          <div className="font-seasons text-2xl leading-none truncate" title={me?.name || undefined}>
+            {loading ? '…' : (me?.name ? String(me.name).split(' ')[0] : (error ? '—' : '—'))}
+          </div>
         </div>
 
         {/* x3 y2: connections number */}
         <div className="col-start-3 col-end-4 row-start-2 flex items-start">
-          <div className="font-sans font-bold text-xl">{me?.boats_total ?? 0}</div>
+          <div className="font-sans font-bold text-xl">{loading ? '…' : (me?.boats_total ?? 0)}</div>
         </div>
 
         {/* x4 y2: paper boat icon placeholder */}
@@ -77,7 +79,7 @@ export default function DashboardBadge() {
             className="w-full rounded-md px-4 py-3 btn"
             aria-controls="dashboard-overlay"
             onClick={() => setMode("share")}
-            disabled={!me?.referral_url}
+            disabled={loading || !!error || !me?.referral_url}
             initial={false}
             animate={mode === "share" && !prefersReduced ? { y: -24, scale: 0.92, opacity: 0 } : { y: 0, scale: 1, opacity: 1 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
@@ -142,6 +144,18 @@ export default function DashboardBadge() {
               .staggerIn { animation: fadeScaleIn 200ms ease-out both; }
             }
           `}</style>
+        </div>
+      )}
+
+      {/* Footer row: error and refresh control */}
+      {(error || loading) && (
+        <div className="absolute bottom-2 left-0 right-0 px-4">
+          <div className="text-xs flex items-center justify-between">
+            <span>{loading ? 'Loading your dashboard…' : (error ? 'Could not load your data.' : '')}</span>
+            {!loading && (
+              <button className="underline" onClick={() => refresh().catch(() => {})}>Retry</button>
+            )}
+          </div>
         </div>
       )}
     </section>

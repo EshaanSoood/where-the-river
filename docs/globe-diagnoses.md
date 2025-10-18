@@ -59,3 +59,4 @@ Conclusion
 - Server confirms: policies allow anon read, and data exists (21 nodes, 18 links). Issue is likely at the client side: either fetchGlobeData returns 0 (env/session) or the runtime transformation yields empty arrays. Next, collect client runtime counts to pinpoint which stage loses data.
 
 
+

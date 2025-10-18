@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+type AuthMeta = { referral_id?: string | null } & Record<string, unknown>;
+
 function getServerSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string);
@@ -21,15 +23,19 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getServerSupabase();
-    const { data: user, error } = await supabase
-      .from("users")
-      .insert({ referral_id: token, referred_by: inviterId })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    return NextResponse.json({ referral: `/r/${user.referral_id}` });
+    // Update inviter's metadata with a new generated token if not present
+    const { data: inviter, error: invErr } = await supabase
+      .from('auth.users')
+      .select('id,raw_user_meta_data')
+      .eq('id', inviterId)
+      .maybeSingle();
+    if (invErr || !inviter) throw new Error(invErr?.message || 'inviter_not_found');
+    const meta = ((inviter as unknown as { raw_user_meta_data: AuthMeta | null }).raw_user_meta_data || {}) as AuthMeta;
+    const referral_id = (typeof meta.referral_id === 'string' && meta.referral_id) ? meta.referral_id : token;
+    const nextMeta: AuthMeta = { ...meta, referral_id };
+    const { error: updErr } = await supabase.auth.admin.updateUserById(inviterId, { user_metadata: nextMeta });
+    if (updErr) throw updErr;
+    return NextResponse.json({ referral: `/r/${referral_id}` });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unexpected error";
     return NextResponse.json({ error: message }, { status: 500 });
