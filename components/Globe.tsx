@@ -1,6 +1,6 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 // Note: when used in Next.js, import via dynamic(() => import(...), { ssr: false })
 import ReactGlobe from 'react-globe.gl';
 import * as THREE from 'three';
@@ -97,6 +97,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const myConnectionsRef = useRef<Set<string>>(new Set());
   const reservedPosRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
   const [zoomScale, setZoomScale] = useState<number>(1);
+  const [overlayNodes, setOverlayNodes] = useState<NodeData[]>([]);
+  const overlayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const overlayUpdatePendingRef = useRef<boolean>(false);
   const [hoveredCountry, setHoveredCountry] = useState<any | null>(null);
   const [tooltipContent, setTooltipContent] = useState('');
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
@@ -222,7 +225,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     return new THREE.MeshPhongMaterial({
       color: '#a8c5cd', // Light blue for ocean
       opacity: 0.6, // 40% transparent for a more glass-like appearance
-      transparent: true,
+        transparent: true,
     });
   }, []);
 
@@ -414,7 +417,15 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         boatMesh.scale.set(6, 6, 6);
         
         const boatId = Date.now() + Math.random();
-        
+        // Cap total animated boats to 1: replace existing if present
+        if (boatsRef.current.length >= 1) {
+          try {
+            const old = boatsRef.current.shift();
+            if (old && sceneRef.current) {
+              sceneRef.current.remove(old.mesh);
+            }
+          } catch {}
+        }
         boatsRef.current.push({
             id: boatId,
             mesh: boatMesh,
@@ -496,6 +507,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         const quant = Math.round(raw * 10) / 10;
         setZoomScale(prev => (Math.abs((prev ?? 0) - quant) >= 0.05 ? quant : prev));
       } catch {}
+      try { scheduleOverlayUpdate(); } catch {}
     };
 
     controls.addEventListener('change', handleZoom);
@@ -591,6 +603,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       resizeTimer = window.setTimeout(() => { refitCamera(); try { renderer?.setPixelRatio?.(Math.min(1.75, (window.devicePixelRatio || 1))); } catch {} }, 150) as unknown as number;
     };
     try { window.addEventListener('resize', onResize); } catch {}
+    try { controls.addEventListener('change', () => scheduleOverlayUpdate()); } catch {}
   };
   
   // Animation loop for boats (skip on low-power)
@@ -640,8 +653,58 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     }
   };
 
+  // Throttle tooltip updates to ~15fps
+  const tooltipRefPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const rafPendingRef = useRef<boolean>(false);
   const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
-    setTooltipPosition({ x: event.clientX, y: event.clientY });
+    tooltipRefPos.current = { x: event.clientX, y: event.clientY };
+    if (rafPendingRef.current) return;
+    rafPendingRef.current = true;
+    requestAnimationFrame(() => {
+      rafPendingRef.current = false;
+      setTooltipPosition(tooltipRefPos.current);
+    });
+  };
+
+  // Compute the small overlay set (self + up to 5 friends) whenever nodes change
+  useEffect(() => {
+    try {
+      const max = 6;
+      const result: NodeData[] = [];
+      const byId = new Map<string, NodeData>();
+      nodesData.forEach(n => byId.set(n.id, n));
+      const meId = myIdRef.current;
+      if (meId && byId.has(meId)) result.push(byId.get(meId)!);
+      for (const id of Array.from(myConnectionsRef.current.values())) {
+        if (result.length >= max) break;
+        const n = byId.get(id);
+        if (n) result.push(n);
+      }
+      setOverlayNodes(result.slice(0, max));
+      // schedule position update after DOM paints
+      requestAnimationFrame(() => scheduleOverlayUpdate());
+    } catch {}
+  }, [nodesData]);
+
+  // Imperatively update overlay positions on RAF, tied to controls/resize
+  const scheduleOverlayUpdate = () => {
+    if (overlayUpdatePendingRef.current) return;
+    overlayUpdatePendingRef.current = true;
+    requestAnimationFrame(() => {
+      overlayUpdatePendingRef.current = false;
+      try {
+        const globe = globeEl.current; if (!globe) return;
+        overlayNodes.forEach(n => {
+          const el = overlayRefs.current.get(n.id);
+          if (!el) return;
+          const px = projectLatLngIfFront(n.lat, n.lng);
+          if (!px) { el.style.opacity = '0'; return; }
+          el.style.left = `${px.x}px`;
+          el.style.top = `${px.y}px`;
+          el.style.opacity = '1';
+        });
+      } catch {}
+    });
   };
 
   // Container with explicit size and dark background for space theme
@@ -690,10 +753,10 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     <div style={containerStyle} onMouseMove={handleMouseMove} role="region" aria-label={ariaLabel} aria-describedby={describedById} tabIndex={tabIndex as number | undefined}>
       <div aria-live="polite" role="status" style={{ position: 'absolute', left: -9999, top: 'auto', width: 1, height: 1, overflow: 'hidden' as unknown as any }}>
         {srSummary}
-      </div>
+            </div>
       <div style={tooltipStyle}>
         {tooltipContent}
-      </div>
+        </div>
       <ReactGlobe
         ref={globeEl}
         onGlobeReady={onGlobeReady}
@@ -704,7 +767,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         atmosphereAltitude={0.25}
         // Arcs: no motion (static), but face-aware + priority color alpha
         arcsData={arcsData}
-        arcColor={(d: any) => {
+        arcColor={useCallback((d: any) => {
           try {
             const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)';
             const midLat = (d.startLat + d.endLat) / 2;
@@ -718,52 +781,57 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
             const alpha = dot >= 0 ? (isPri ? 0.95 : 0.8) : (isPri ? 0.35 : 0.12);
             return `rgba(${base}, ${alpha})`;
           } catch { return 'rgba(102, 194, 255, 0.8)'; }
-        }}
+        }, [])}
         arcStroke={2}
         arcAltitude={0.2}
         arcDashLength={1}
         arcDashGap={0}
         arcDashAnimateTime={0}
-        arcCircularResolution={64}
+        arcCircularResolution={24}
         // Points: nodes or cluster hubs
         pointsData={displayPoints}
         pointAltitude={0.201} // Set just above the arc altitude
-        pointRadius={(d: any) => (d?.size || 0.20) * zoomScale}
-        pointColor={(d: any) => d?.color || 'rgba(255,255,255,0.95)'}
+        pointRadius={useCallback((d: any) => (d?.size || 0.20) * zoomScale, [zoomScale])}
+        pointColor={useCallback((d: any) => d?.color || 'rgba(255,255,255,0.95)', [])}
         pointsMerge={true}
         pointsTransitionDuration={0}
         // Countries styled as continents
         polygonsData={polygonsData}
-        polygonCapColor={(feat: any) => {
-          const isHovered = hoveredCountry && feat.properties.name === hoveredCountry.properties.name;
+        polygonCapColor={useCallback((feat: any) => {
+          const name = hoveredCountry?.properties?.name as string | undefined;
+          const isHovered = !!name && feat.properties.name === name;
           if (feat.properties.layer === 'bottom') return '#7C4A33';
           return isHovered ? '#B56B45' : '#DCA87E';
-        }}
-        polygonSideColor={(feat: any) => (feat.properties.layer === 'bottom' ? 'transparent' : '#7C4A33')}
+        }, [hoveredCountry])}
+        polygonSideColor={useCallback((feat: any) => (feat.properties.layer === 'bottom' ? 'transparent' : '#7C4A33'), [])}
         polygonStrokeColor={() => 'transparent'} // Hide borders
-        polygonAltitude={(feat: any) => {
+        polygonAltitude={useCallback((feat: any) => {
           if (feat.properties.layer === 'bottom') {
-            return 0.001; // Constant low altitude for the base to prevent z-fighting
+            return 0.001;
           }
-          const isHovered = hoveredCountry && feat.properties.name === hoveredCountry.properties.name;
-          return isHovered ? 0.06 : 0.04; // Altitude for the top surface
-        }}
+          const name = hoveredCountry?.properties?.name as string | undefined;
+          const isHovered = !!name && feat.properties.name === name;
+          return isHovered ? 0.06 : 0.04;
+        }, [hoveredCountry])}
         polygonsTransitionDuration={300}
         // Interaction
         onGlobeClick={handleGlobeClick}
         onPolygonClick={handlePolygonClick}
         onPolygonHover={handlePolygonHover}
       />
-      {/* User glow and labels rendered via DOM overlay */}
-      {nodesData.slice(0, 12).map((p, i) => {
+      {/* User glow and labels rendered via DOM overlay (capped to 6) */}
+      {overlayNodes.map((p, i) => {
         if (!p.id) return null;
         const isMe = myIdRef.current && p.id === myIdRef.current;
         const isFriend = myConnectionsRef.current.has(p.id);
         if (!(isMe || isFriend)) return null;
-        const px = projectLatLngIfFront(p.lat, p.lng);
-        if (!px) return null;
         return (
-          <div key={`ux-${i}`} style={{ position: 'absolute', left: px.x, top: px.y, transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 60 }} aria-hidden="true">
+          <div
+            key={`ux-${p.id}`}
+            ref={(el) => { if (el) overlayRefs.current.set(p.id, el); else overlayRefs.current.delete(p.id); }}
+            style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 60, opacity: 0 }}
+            aria-hidden="true"
+          >
             {isMe && (
               <div style={{ width: 32, height: 32, borderRadius: '50%', boxShadow: '0 0 18px 8px rgba(42,167,181,0.35)' }} />
             )}
@@ -774,7 +842,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         );
       })}
       {/* No cluster labels (clustering removed) */}
-    </div>
+        </div>
   );
 };
 

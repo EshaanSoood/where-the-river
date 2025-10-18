@@ -16,15 +16,35 @@ export async function GET(req: Request) {
     const filter = url.searchParams.get("filter") || "all";
     const since = filter === "all" ? null : new Date(Date.now() - (filter === "30d" ? 30 : 7) * 24 * 3600 * 1000);
 
-    type AuthUsersRow = { raw_user_meta_data: UserMeta | null };
-    const { data, error } = await supabaseServer
-      .from('auth.users')
-      .select('raw_user_meta_data')
-      .limit(20000);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // Prefer Auth Admin listUsers to ensure we see newly seeded users consistently
+    type AdminUser = { email: string | null; created_at: string; user_metadata?: UserMeta };
+    type AdminListUsersData = { users: AdminUser[] } | null;
+    type AdminListUsersResult = { data: AdminListUsersData; error: { message: string } | null };
+    type AdminClient = { auth: { admin: { listUsers: (args: { page: number; perPage: number }) => Promise<AdminListUsersResult> } } };
 
-    const metas: UserMeta[] = (data || []).map((r) => ((r as unknown as AuthUsersRow).raw_user_meta_data || {}) as UserMeta);
-    const rows = metas.map((m) => ({
+    const adminClient = supabaseServer as unknown as AdminClient;
+    const allMetas: UserMeta[] = [];
+    let page = 1;
+    while (true) {
+      const { data: pageData, error: pageErr } = await adminClient.auth.admin.listUsers({ page, perPage: 1000 });
+      if (pageErr) return NextResponse.json({ error: pageErr.message }, { status: 500 });
+      const users: AdminUser[] = pageData?.users || [];
+      if (!users.length) break;
+      users.forEach((u) => {
+        const m = (u.user_metadata || {});
+        allMetas.push({
+          name: m.name || null,
+          email: m.email || u.email || null,
+          country_code: m.country_code || null,
+          referred_by: m.referred_by || null,
+          referral_id: m.referral_id || null,
+          created_at: m.created_at || u.created_at || null,
+        });
+      });
+      if (users.length < 1000) break;
+      page += 1;
+    }
+    const rows = allMetas.map((m) => ({
       name: (m.name || null) as string | null,
       email: (m.email || null) as string | null,
       country_code: (m.country_code || null) as string | null,
