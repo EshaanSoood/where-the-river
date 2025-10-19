@@ -45,6 +45,7 @@ button, .btn {
   color: #fff;
   font-weight: 700;
   font-family: Helvetica, Arial, sans-serif;
+  border-radius: 24px;
 }
 
 /* Divider with thinning edges in amber */
@@ -52,3 +53,16 @@ button, .btn {
   height: 2px;
   background: linear-gradient(90deg, transparent, var(--amber), transparent);
 }
+
+/* Frosted panel utility — apply everywhere for consistency */
+.frosted-panel {
+  border-radius: 24px;
+  background: rgba(210, 245, 250, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(255,255,255,0.25);
+}
+
+/* Ensure common containers inherit 24px rounding */
+.rounded-global { border-radius: 24px; }
+

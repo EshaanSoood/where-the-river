@@ -436,15 +436,15 @@ export default function BelowMap() {
         <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-start" style={{ gridTemplateColumns: '3fr 6fr 3fr', maxWidth: 'min(2048px, 92vw)', marginInline: 'auto' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
           <section aria-label="Bandcamp and YouTube" className="h-full min-h-0 min-w-0 overflow-hidden">
-            <div className="h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
+            <div className="h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4 frosted-panel" style={{ marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
               <LeftPanelEmbeds />
             </div>
           </section>
 
           {/* Globe (center) */}
           <section aria-label="Global participation" className="min-w-0 h-full overflow-hidden">
-            <div className="relative h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden" style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
-              <div className="absolute inset-4 min-h-0">
+            <div className="relative h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden p-4 frosted-panel" style={{ marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
+              <div className="absolute inset-0 min-h-0">
                 <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
               </div>
             </div>
@@ -453,11 +453,11 @@ export default function BelowMap() {
           {/* Text block (right) */}
           <section aria-label="Project intro" className="min-w-0 h-full">
             <div
-              className="h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] p-4 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] relative leading-relaxed text-[color:var(--ink)]"
+              className="h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] p-4 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] relative leading-relaxed text-[color:var(--ink)] frosted-panel"
               tabIndex={0}
               role="region"
               aria-label="About Dream River"
-              style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}
+              style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}
               ref={rightPanelRef}
               id="right-panel-content"
             >
@@ -1189,11 +1189,13 @@ export default function BelowMap() {
           [role="dialog"] { transition: none !important; }
         }
         /* Right column typography: clearer subheads and comfortable line height */
-        #right-panel-content { --line-ch: 14ch; }
-        #right-panel-content p { line-height: 1.6; margin: 0 0 0.9rem 0; max-width: var(--line-ch); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Noto Sans", sans-serif; }
-        #right-panel-content li { max-width: var(--line-ch); }
+        #right-panel-content { --line-ch: 14ch; color: #0b0d1a; }
+        #right-panel-content p { color: #0b0d1a; line-height: 1.6; margin: 0 0 0.9rem 0; max-width: var(--line-ch); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Noto Sans", sans-serif; }
+        #right-panel-content li { color: #0b0d1a; max-width: var(--line-ch); }
+        #right-panel-content a { color: var(--teal); text-underline-offset: 2px; }
         #right-panel-content h1, #right-panel-content h2, #right-panel-content h3 {
           font-family: var(--font-seasons, 'Seasons', serif);
+          color: #0a0c10;
           line-height: 1.35;
           margin: 1.25rem 0 0.8rem 0; /* extra space around headings */
           font-weight: 600;

@@ -536,14 +536,21 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         return Math.max(d, (100 * 1.3));
       } catch { return camera.position.length(); }
     };
+    // Robust camera/frustum defaults
+    camera.near = 0.1;
+    camera.far = 5000;
+    camera.updateProjectionMatrix();
+
     const fitD = getFitDistance();
     controls.target.set(0, 0, 0);
     camera.position.set(0, 0, fitD);
+    camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
     baselineDistanceRef.current = fitD;
     controls.maxDistance = fitD;                 // max zoom-out locked to baseline
     controls.minDistance = Math.max(fitD / 3, 80); // ~3× max zoom-in bound
     try { controls.addEventListener('start', () => { hasInteractedRef.current = true; }); } catch {}
+    controls.screenSpacePanning = false;
 
     // Cap DPR for perf; keep crispness on HiDPI
     try { renderer?.setPixelRatio?.(Math.min(1.75, (window.devicePixelRatio || 1))); } catch {}
@@ -583,8 +590,19 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       scene.add(stars);
     }
 
-    // Initial zoom check
+    // Initial zoom check and one-shot recenter after first render
     handleZoom();
+    try {
+      requestAnimationFrame(() => {
+        if (!globeEl.current) return;
+        if (!hasInteractedRef.current) {
+          controls.target.set(0, 0, 0);
+          camera.position.set(0, 0, getFitDistance());
+          camera.lookAt(0, 0, 0);
+          camera.updateProjectionMatrix();
+        }
+      });
+    } catch {}
 
     // Responsive refit: preserve current zoom ratio on container/FOV changes
     let resizeTimer: number | null = null;
@@ -598,9 +616,16 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         baselineDistanceRef.current = newFit;
         controls.maxDistance = newFit;
         controls.minDistance = Math.max(newFit / 3, 80);
-        const dir = camera.position.clone().normalize();
-        const newPos = dir.multiplyScalar(newFit * ratio);
-        camera.position.copy(newPos);
+        if (!hasInteractedRef.current) {
+          // Hard recenter when user hasn't interacted yet
+          controls.target.set(0, 0, 0);
+          camera.position.set(0, 0, newFit * ratio);
+          camera.lookAt(0, 0, 0);
+        } else {
+          const dir = camera.position.clone().normalize();
+          const newPos = dir.multiplyScalar(newFit * ratio);
+          camera.position.copy(newPos);
+        }
         camera.updateProjectionMatrix();
         handleZoom();
       } catch {}
