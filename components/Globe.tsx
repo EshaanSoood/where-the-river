@@ -118,6 +118,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const boatsRef = useRef<Boat[]>([]);
   const countryCentroidsRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
   // Precomputed name->centroid map; use as fallback when ISO-2 missing in static table
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const refitCameraRef = useRef<() => void>(() => {});
 
   // Load Country Polygons with LOD
   useEffect(() => {
@@ -528,7 +530,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         const aspect = rect && rect.height > 0 ? (rect.width / rect.height) : (camera.aspect || 1);
         // Account for maximum rendered altitude (points ~0.201, arcs ~0.2, polygons ~0.06)
         const R = 100 * (1 + 0.22);
-        const margin = 1.12; // extra padding to avoid top/side cropping
+        const margin = 1.15; // extra padding to avoid top/side cropping
         const dV = (R * margin) / Math.tan(vFov / 2);
         const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
         const dH = (R * margin) / Math.tan(hFov / 2);
@@ -630,6 +632,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         handleZoom();
       } catch {}
     };
+    refitCameraRef.current = refitCamera;
     const onResize = () => {
       if (resizeTimer) window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => { refitCamera(); try { renderer?.setPixelRatio?.(Math.min(1.75, (window.devicePixelRatio || 1))); } catch {} }, 150) as unknown as number;
@@ -637,6 +640,27 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     try { window.addEventListener('resize', onResize); } catch {}
     try { controls.addEventListener('change', () => scheduleOverlayUpdate()); } catch {}
   };
+
+  // Observe container/renderer size changes to keep fit accurate beyond window resizes
+  useEffect(() => {
+    let ro: ResizeObserver | null = null;
+    try {
+      const attach = () => {
+        const renderer = globeEl.current?.renderer?.();
+        const targets: Element[] = [];
+        if (containerRef.current) targets.push(containerRef.current);
+        if (renderer?.domElement) targets.push(renderer.domElement);
+        if (targets.length === 0) return;
+        ro = new ResizeObserver(() => { try { refitCameraRef.current(); } catch {} });
+        targets.forEach(t => ro!.observe(t));
+      };
+      // Defer attach to allow onGlobeReady to run
+      const id = window.setTimeout(attach, 0);
+      return () => { window.clearTimeout(id); try { ro?.disconnect(); } catch {} };
+    } catch {
+      return () => {};
+    }
+  }, []);
   
   // Animation loop for boats (skip on low-power)
   useEffect(() => {

@@ -436,7 +436,7 @@ export default function BelowMap() {
         <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-start" style={{ gridTemplateColumns: '3fr 6fr 3fr', maxWidth: 'min(2048px, 92vw)', marginInline: 'auto' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
           <section aria-label="Bandcamp and YouTube" className="h-full min-h-0 min-w-0 overflow-hidden">
-            <div className="h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4 frosted-panel" style={{ marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
+            <div className="h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4 frosted-panel overflow-x-hidden" style={{ marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
               <LeftPanelEmbeds />
             </div>
           </section>
@@ -447,13 +447,15 @@ export default function BelowMap() {
               <div className="absolute inset-0 min-h-0">
                 <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
               </div>
+              {/* Subtle inner glow ring to keep globe away from edges */}
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.08)' }} />
             </div>
           </section>
 
           {/* Text block (right) */}
           <section aria-label="Project intro" className="min-w-0 h-full">
             <div
-              className="h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] p-4 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] relative leading-relaxed text-[color:var(--ink)] frosted-panel"
+              className="h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] p-4 overflow-y-auto overflow-x-hidden outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] relative leading-relaxed text-[color:var(--ink)] frosted-panel"
               tabIndex={0}
               role="region"
               aria-label="About Dream River"

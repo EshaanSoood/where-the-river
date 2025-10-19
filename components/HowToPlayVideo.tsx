@@ -5,8 +5,8 @@ type Props = { onHeightChange?: (height: number) => void };
 export default function HowToPlayVideo({ onHeightChange }: Props) {
   return (
     <div className="px-0 pt-0 pb-0">
-      <h2 className="mb-2 font-seasons" style={{ fontSize: '1.3rem', color: 'var(--ink)', fontWeight: 600 }}>How To Play</h2>
-      <div className="relative w-full rounded-[16px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] overflow-hidden" style={{ aspectRatio: '16 / 9', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.25)' }}>
+      <h2 className="mb-3 font-seasons" style={{ fontSize: '1.3rem', color: 'var(--ink)', fontWeight: 600 }}>How To Play</h2>
+      <div className="relative w-full rounded-[16px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] overflow-hidden p-2" style={{ aspectRatio: '16 / 9', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.25)' }}>
         <iframe
           width="560"
           height="315"
@@ -16,7 +16,7 @@ export default function HowToPlayVideo({ onHeightChange }: Props) {
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
           allowFullScreen
-          className="absolute inset-0 w-full h-full"
+          className="absolute inset-2 w-[calc(100%-1rem)] h-[calc(100%-1rem)] rounded-[12px]"
         ></iframe>
       </div>
     </div>
