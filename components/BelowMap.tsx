@@ -272,38 +272,45 @@ export default function BelowMap() {
       <div className="top-0 z-40 lg:sticky" style={{ ['--hdr' as unknown as string]: '40px' }}>
         <div className="relative" ref={headerRef}>
           <div
-            className="min-h-10 py-1.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
+            className="min-h-12 py-2.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
             style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
           >
             <div className="grid grid-cols-3 items-center gap-2 w-full lg:[grid-template-columns:1fr_4fr_1fr]">
-              <div className="justify-self-start">
+              <div className="justify-self-start lg:min-w-[176px]">
                 {!loading && (
-                  <button
-                    ref={dashboardToggleRef}
-                    type="button"
-                    className="inline-flex items-center h-8 md:h-9 px-3 rounded-[24px] bg-white/85 backdrop-blur-sm border border-white/40 text-[color:var(--ink)] text-xs md:text-sm whitespace-nowrap overflow-hidden self-center shadow-sm"
-                    aria-label={user ? "Open Dashboard" : "Participate / Log in"}
-                    aria-controls="panel-dashboard"
-                    aria-expanded={dashboardOpen}
-                    onClick={() => {
-                      if (user) {
-                        setDashboardMode("user");
-                        setDashboardOpen((v) => !v);
-                      } else {
-                        setDashboardMode("guest");
-                        setGuestStep('menu');
-                        setDashboardOpen(true);
-                      }
-                    }}
-                  >
-                    {user ? "Dashboard" : "Participate / Log in"}
-                  </button>
+                  user ? (
+                    <button
+                      ref={dashboardToggleRef}
+                      type="button"
+                      className="inline-flex items-center justify-center h-11 w-11 min-w-[44px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] shadow-sm"
+                      style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
+                      aria-label="Dashboard"
+                      aria-controls="panel-dashboard"
+                      aria-expanded={dashboardOpen}
+                      onClick={() => { setDashboardMode('user'); setDashboardOpen(v => !v); }}
+                    >
+                      <img src="/logos/bars-3.svg" alt="" width="18" height="18" aria-hidden="true" className="header-icon" />
+                    </button>
+                  ) : (
+                    <button
+                      ref={dashboardToggleRef}
+                      type="button"
+                      className="inline-flex items-center h-11 px-5 min-w-[176px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] text-sm whitespace-nowrap overflow-hidden self-center shadow-sm"
+                      style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
+                      aria-label="Participate / Log in"
+                      aria-controls="panel-dashboard"
+                      aria-expanded={dashboardOpen}
+                      onClick={() => { setDashboardMode('guest'); setGuestStep('menu'); setDashboardOpen(true); }}
+                    >
+                      Participate / Log in
+                    </button>
+                  )
                 )}
               </div>
               <div className="justify-self-center w-full max-w-[560px] mx-auto min-w-0 text-center hidden lg:block">
                 <div
-                  className="inline-block rounded-full px-3 py-1.5 align-middle"
-                  style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+                  className="inline-block rounded-full px-5 py-2.5 align-middle"
+                  style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', marginTop: 2, marginBottom: 2 }}
                 >
                   <h1
                     className="font-seasons text-sm sm:text-base md:text-lg"
@@ -313,17 +320,18 @@ export default function BelowMap() {
                   </h1>
                 </div>
               </div>
-              <div className="justify-self-end">
+              <div className="justify-self-end lg:min-w-[176px]">
                 <button
                   type="button"
-                  aria-label="Open Leaderboard"
+                  aria-label="Leaderboard"
                   aria-controls="panel-leaderboard"
                   aria-expanded={leaderboardOpen}
-                  className="inline-flex items-center h-8 md:h-9 px-3 rounded-[24px] bg-white/85 backdrop-blur-sm border border-white/40 text-[color:var(--ink)] text-xs md:text-sm whitespace-nowrap overflow-hidden self-center shadow-sm"
-                  onClick={() => setLeaderboardOpen((v) => !v)}
-                  onKeyDown={(e) => { if (e.key === "Escape") setLeaderboardOpen(false); }}
+                  className="inline-flex items-center justify-center h-11 w-11 min-w-[44px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] self-center shadow-sm"
+                  style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
+                  onClick={() => setLeaderboardOpen(v => !v)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setLeaderboardOpen(false); }}
                 >
-                  Leaderboard
+                  <img src="/logos/trophy.svg" alt="" width="18" height="18" aria-hidden="true" className="header-icon" />
                 </button>
               </div>
             </div>
@@ -433,19 +441,26 @@ export default function BelowMap() {
         </div>
 
         {/* Desktop layout (≥1024px): 3 columns 1:2:1 over fluid container */}
-        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-start" style={{ gridTemplateColumns: '3fr 6fr 3fr', maxWidth: 'min(2048px, 92vw)', marginInline: 'auto' }}>
+        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-start" style={{ gridTemplateColumns: '3fr 6fr 3fr', maxWidth: 'min(2048px, 92vw)', marginInline: 'auto', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
           <section aria-label="Bandcamp and YouTube" className="h-full min-h-0 min-w-0 overflow-hidden">
-            <div className="h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4 frosted-panel overflow-x-hidden" style={{ marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
+            <div className="relative h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4 frosted-panel overflow-x-hidden">
               <LeftPanelEmbeds />
+              {/* Normalize ring across all panels for optical alignment */}
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.06)' }} />
             </div>
           </section>
 
           {/* Globe (center) */}
           <section aria-label="Global participation" className="min-w-0 h-full overflow-hidden">
-            <div className="relative h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden p-4 frosted-panel" style={{ marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
-              <div className="absolute inset-0 min-h-0">
-                <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
+            <div className="relative h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden p-4 frosted-panel">
+              {/* Frame centers canvas and provides equal inset */}
+              <div className="absolute inset-0 min-h-0 grid place-items-center">
+                <div className="relative w-full h-full" style={{ maxWidth: '100%', maxHeight: '100%', padding: 8 }}>
+                  <div className="absolute inset-0">
+                    <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
+                  </div>
+                </div>
               </div>
               {/* Subtle inner glow ring to keep globe away from edges */}
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.08)' }} />
@@ -455,14 +470,16 @@ export default function BelowMap() {
           {/* Text block (right) */}
           <section aria-label="Project intro" className="min-w-0 h-full">
             <div
-              className="h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] p-4 overflow-y-auto overflow-x-hidden outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] relative leading-relaxed text-[color:var(--ink)] frosted-panel"
+              className="relative h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] pt-6 px-4 pb-4 overflow-y-auto overflow-x-hidden outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] leading-relaxed text-[color:var(--ink)] frosted-panel"
               tabIndex={0}
               role="region"
               aria-label="About Dream River"
-              style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}
+              style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth' }}
               ref={rightPanelRef}
               id="right-panel-content"
             >
+              {/* Normalize ring across all panels for optical alignment */}
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.06)' }} />
               <Hero />
               {showBottomFade && (
                 <div aria-hidden="true" className="pointer-events-none bottom-0 z-50 lg:sticky">
@@ -1190,6 +1207,8 @@ export default function BelowMap() {
         @media (prefers-reduced-motion: reduce) {
           [role="dialog"] { transition: none !important; }
         }
+        /* Header icons: same visual treatment as footer icons */
+        .header-icon { width: 18px; height: 18px; filter: opacity(0.8) drop-shadow(0 0 2px rgba(0,0,0,0.35)) hue-rotate(160deg) saturate(120%); }
         /* Right column typography: clearer subheads and comfortable line height */
         #right-panel-content { --line-ch: 14ch; color: #0b0d1a; }
         #right-panel-content p { color: #0b0d1a; line-height: 1.6; margin: 0 0 0.9rem 0; max-width: var(--line-ch); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Noto Sans", sans-serif; }
