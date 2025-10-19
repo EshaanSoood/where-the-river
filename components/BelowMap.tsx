@@ -275,7 +275,7 @@ export default function BelowMap() {
             className="min-h-10 py-1.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
             style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
           >
-            <div className="grid grid-cols-3 items-center gap-2 w-full">
+            <div className="grid grid-cols-3 items-center gap-2 w-full lg:[grid-template-columns:1fr_4fr_1fr]">
               <div className="justify-self-start">
                 {!loading && (
                   <button
@@ -300,7 +300,7 @@ export default function BelowMap() {
                   </button>
                 )}
               </div>
-              <div className="justify-self-center w-full max-w-[560px] mx-auto px-2 min-w-0 text-center">
+              <div className="justify-self-center w-full max-w-[560px] mx-auto min-w-0 text-center hidden lg:block">
                 <div
                   className="inline-block rounded-full px-3 py-1.5 align-middle"
                   style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
@@ -338,7 +338,7 @@ export default function BelowMap() {
         {/* Single SR summary for both layouts (avoid duplicate IDs across breakpoints) */}
         <GlobeSummarySR id="globe-sr-summary" />
         {/* Mobile / small-screen layout (<1024px) */}
-        <div className="lg:hidden space-y-4 px-3">
+        <div className="lg:hidden space-y-4">
           {/* Slim Bandcamp player directly under the header, same horizontal space */}
           <section aria-label="Bandcamp player (mobile)">
             <div className="rounded-[16px] shadow p-2" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.25)' }}>
@@ -1189,10 +1189,13 @@ export default function BelowMap() {
           [role="dialog"] { transition: none !important; }
         }
         /* Right column typography: clearer subheads and comfortable line height */
-        #right-panel-content p { line-height: 1.6; margin: 0 0 0.9rem 0; }
-        #right-panel-content h2, #right-panel-content h3 {
+        #right-panel-content { --line-ch: 14ch; }
+        #right-panel-content p { line-height: 1.6; margin: 0 0 0.9rem 0; max-width: var(--line-ch); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Noto Sans", sans-serif; }
+        #right-panel-content li { max-width: var(--line-ch); }
+        #right-panel-content h1, #right-panel-content h2, #right-panel-content h3 {
+          font-family: var(--font-seasons, 'Seasons', serif);
           line-height: 1.35;
-          margin: 1.2rem 0 0.6rem 0;
+          margin: 1.25rem 0 0.8rem 0; /* extra space around headings */
           font-weight: 600;
           letter-spacing: 0.01em;
         }

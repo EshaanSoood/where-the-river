@@ -527,8 +527,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         const rect = canvas?.getBoundingClientRect?.();
         const aspect = rect && rect.height > 0 ? (rect.width / rect.height) : (camera.aspect || 1);
         // Account for maximum rendered altitude (points ~0.201, arcs ~0.2, polygons ~0.06)
-        const R = 100 * (1 + 0.21);
-        const margin = 1.08; // padding to avoid top/side cropping
+        const R = 100 * (1 + 0.22);
+        const margin = 1.12; // extra padding to avoid top/side cropping
         const dV = (R * margin) / Math.tan(vFov / 2);
         const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
         const dH = (R * margin) / Math.tan(hFov / 2);
