@@ -21,6 +21,7 @@ export default function DashboardBadge() {
   const { me, loading, error, refresh } = useMe();
   const [announce, setAnnounce] = useState<string>("");
   const defaultShareMessage = "Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I’ve been listening to Dream River by them lately and I think you’ll enjoy it too.";
+  const [shareMessage, setShareMessage] = useState<string>(defaultShareMessage);
   const prefersReduced = useReducedMotion();
   const shareButtonRef = useRef<HTMLButtonElement | null>(null);
   const overlayHeaderRef = useRef<HTMLButtonElement | null>(null);
@@ -131,18 +132,61 @@ export default function DashboardBadge() {
           onClick={() => { setMode('default'); setTimeout(() => shareButtonRef.current?.focus(), 0); }}
         >
           <div className="flex items-center justify-between mb-3" onClick={(e) => e.stopPropagation()}>
-            <button aria-label="Back" className="underline" onClick={() => { setMode('default'); setTimeout(() => shareButtonRef.current?.focus(), 0); }} ref={overlayHeaderRef}>Back</button>
-            <h3 id="share-title" className="font-seasons text-lg">Share your Boat</h3>
+            <button
+              aria-label="Back"
+              onClick={() => { setMode('default'); setTimeout(() => shareButtonRef.current?.focus(), 0); }}
+              ref={overlayHeaderRef}
+              className="inline-flex items-center gap-1 rounded-[24px] border px-3 py-1.5 text-sm"
+              style={{ borderColor: 'var(--mist)', color: 'var(--teal)', background: 'rgba(255,255,255,0.7)' }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              ‹ Back
+            </button>
+            <h3 id="share-title" className="font-seasons text-lg" style={{ color: 'var(--teal)' }}>Share Your Boat</h3>
             <div aria-live="polite" className="sr-only">{announce}</div>
           </div>
-          <div className="grid grid-cols-2 gap-3" id="share-tiles-wrap" onClick={(e) => e.stopPropagation()}>
-            <ShareTiles referralUrl={me?.referral_url || ""} message={defaultShareMessage} userFullName={me?.name || ""} onCopy={(ok) => setAnnounce(ok ? 'Copied!' : '')} />
+          {/* Text box under the heading */}
+          <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+            <label className="font-sans text-sm" htmlFor="share-message-input" style={{ color: 'var(--ink)' }}>Message</label>
+            <textarea
+              id="share-message-input"
+              className="w-full border rounded-[12px] px-3 py-2"
+              rows={4}
+              value={shareMessage}
+              onChange={(e) => setShareMessage(e.target.value)}
+            />
+            {/* Copy button below the text box */}
+            <button
+              type="button"
+              className="w-full min-h-12 rounded-[24px] font-seasons text-white mt-2 mb-3 px-4 py-3"
+              style={{ background: 'var(--teal)' }}
+              onClick={async () => {
+                try {
+                  const msg = (shareMessage || '').trim();
+                  const url = (me?.referral_url || '').trim();
+                  const text = msg ? `${msg} ${url}` : url;
+                  await navigator.clipboard.writeText(text);
+                  setAnnounce('Copied to clipboard.');
+                } catch {
+                  setAnnounce('');
+                }
+              }}
+            >
+              Copy Message & Link
+            </button>
+          </div>
+
+          {/* Share buttons in a 2x2 grid below the copy button */}
+          <div className="grid grid-cols-2 gap-3 mt-3" id="share-tiles-wrap" onClick={(e) => e.stopPropagation()}>
+            <ShareTiles referralUrl={me?.referral_url || ""} message={shareMessage || ""} userFullName={me?.name || ""} onCopy={(ok) => setAnnounce(ok ? 'Copied!' : '')} />
           </div>
           <style jsx>{`
             @media (prefers-reduced-motion: no-preference) {
               @keyframes fadeScaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
               .staggerIn { animation: fadeScaleIn 200ms ease-out both; }
             }
+            /* Share overlay: ensure all buttons have 24px corners */
+            #share-tiles-wrap button { border-radius: 24px !important; }
           `}</style>
         </div>
       )}

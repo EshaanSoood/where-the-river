@@ -3,7 +3,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 
 export async function GET() {
   try {
-    // Aggregate from auth.users metadata
+    // Aggregate from Auth Admin user metadata to avoid direct table read
     type AuthMeta = {
       name?: string | null;
       country_code?: string | null;
@@ -11,18 +11,12 @@ export async function GET() {
       otp_verified?: boolean | null;
       boats_total?: number | null;
     };
-    type AuthUsersRow = { raw_user_meta_data: AuthMeta | null };
 
-    const { data, error } = await supabaseServer
-      .from('auth.users')
-      .select('raw_user_meta_data')
-      .limit(10000);
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-    const metas: AuthMeta[] = (data || []).map((row) => {
-      const r = row as AuthUsersRow;
-      return (r.raw_user_meta_data || {}) as AuthMeta;
-    });
+    const { data: list, error: listErr } = await supabaseServer.auth.admin.listUsers({ page: 1, perPage: 10000 });
+    if (listErr) return NextResponse.json({ error: listErr.message }, { status: 400 });
+    type AdminUser = { user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null };
+    const users = (list?.users || []) as AdminUser[];
+    const metas: AuthMeta[] = users.map((u) => ((u.user_metadata || u.raw_user_meta_data) || {}) as AuthMeta);
 
     const isCountable = (m: AuthMeta) => Boolean(m && m.otp_verified && m.boat_color);
     const getBoats = (m: AuthMeta) => (typeof m.boats_total === 'number' ? m.boats_total : 0);

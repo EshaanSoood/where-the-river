@@ -33,7 +33,7 @@ export function useMe(emailOverride?: string | null): UseMeResult {
 
   const baseUrl = useMemo(() => {
     try {
-      const base = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "")) as string;
+      const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.PUBLIC_APP_BASE_URL || (typeof window !== "undefined" ? window.location.origin : "")) as string;
       return base.replace(/\/$/, "");
     } catch {
       return "";
@@ -88,6 +88,7 @@ export function useMe(emailOverride?: string | null): UseMeResult {
 
   return { me, loading: authLoading || loading, error, refresh: fetchMe };
 }
+
 
 
 

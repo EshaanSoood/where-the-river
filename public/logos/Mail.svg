@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?><!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+<svg width="800px" height="800px" viewBox="0 0 125 125" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="14" y="14" width="97" height="97" fill="white"/>
+<path d="M30 62.5C30 80.4493 44.5507 95 62.5 95C70.2492 95 77.365 92.2879 82.9499 87.7611C83.5848 87.2465 83.7687 86.3645 83.4302 85.6206L81.6371 81.6811C80.8846 80.0278 85.2433 75.4623 87 75C89.3333 74.1667 94.2 70.5 95 62.5C95 44.5507 80.4493 30 62.5 30C44.5507 30 30 44.5507 30 62.5Z" fill="url(#paint0_angular)"/>
+<path d="M93.7184 66.7029C94.7049 59.3756 93.0825 51.9347 89.1354 45.683C85.1882 39.4314 79.1678 34.7673 72.1281 32.5075C65.0885 30.2477 57.4783 30.536 50.6299 33.3221C43.7814 36.1082 38.1312 41.2145 34.6685 47.7469C31.2057 54.2793 30.1511 61.8217 31.6893 69.0533C33.2274 76.285 37.2603 82.7453 43.0819 87.3029C48.9035 91.8606 56.1427 94.2254 63.5322 93.9831C70.9217 93.7408 77.9905 90.907 83.5011 85.9778" stroke="#3F3F3F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M74.5 64.5C74.5 77 93 81.5 94 64" stroke="#3F3F3F" stroke-width="2"/>
+<circle cx="62.5" cy="62.5" r="12" fill="white" stroke="#3F3F3F" stroke-width="3"/>
+<defs>
+<radialGradient id="paint0_angular" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(62.5 62.5) rotate(31.2184) scale(77.1751)">
+<stop stop-color="#35F0E5" stop-opacity="0"/>
+<stop offset="1" stop-color="#34F0E5" stop-opacity="0.55"/>
+</radialGradient>
+</defs>
+</svg>

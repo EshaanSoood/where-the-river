@@ -46,6 +46,7 @@ export default function BelowMap() {
   const [rewardsOpen, setRewardsOpen] = useState(false);
   // Points modal state lives inside RewardsView now
   const [shareMessage, setShareMessage] = useState("Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I’ve been listening to Dream River by them lately and I think you’ll enjoy it too.");
+  const [signupReferralId, setSignupReferralId] = useState<string | null>(null);
   
   const [announce, setAnnounce] = useState("");
   const dashboardRef = useRef<HTMLDivElement | null>(null);
@@ -173,6 +174,48 @@ export default function BelowMap() {
     return () => { isMounted = false; };
   }, []);
 
+  // Mobile: tapping a heading scrolls it into view (avoid wall-of-text navigation issues)
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      try {
+        if (typeof window === 'undefined') return;
+        if (window.innerWidth >= 1024) return; // mobile only
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+        const container = document.getElementById('mobile-intro');
+        if (!container) return;
+        if (!container.contains(target)) return;
+        const heading = target.closest('h1, h2, h3, h4, h5, h6') as HTMLElement | null;
+        if (!heading) return;
+        // Smooth scroll the heading to the top of the viewport and focus it for AT
+        heading.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+        const prevTabIndex = heading.getAttribute('tabindex');
+        if (!prevTabIndex) heading.setAttribute('tabindex', '-1');
+        setTimeout(() => {
+          try { heading.focus(); } catch {}
+          if (!prevTabIndex) heading.removeAttribute('tabindex');
+        }, 250);
+      } catch {}
+    };
+    try { document.addEventListener('click', onClick, true as unknown as boolean); } catch {}
+    return () => { try { document.removeEventListener('click', onClick, true as unknown as boolean); } catch {} };
+  }, []);
+
+  // Focus management: move focus to the first relevant input for each step
+  useEffect(() => {
+    try {
+      if (guestStep === 'signup_email') {
+        setTimeout(() => { const el = document.getElementById('firstNameField') as HTMLInputElement | null; el?.focus(); }, 0);
+      } else if (guestStep === 'login_email') {
+        setTimeout(() => { const el = document.getElementById('loginEmailField') as HTMLInputElement | null; el?.focus(); }, 0);
+      } else if (guestStep === 'signup_code') {
+        setTimeout(() => { const el = document.getElementById('signupCodeField') as HTMLInputElement | null; el?.focus(); }, 0);
+      } else if (guestStep === 'login_code') {
+        setTimeout(() => { const el = document.getElementById('loginCodeField') as HTMLInputElement | null; el?.focus(); }, 0);
+      }
+    } catch {}
+  }, [guestStep]);
+
   // Refresh once dashboard opens in user mode
   useEffect(() => {
     if (!dashboardOpen || dashboardMode !== 'user') return;
@@ -258,17 +301,6 @@ export default function BelowMap() {
                 )}
               </div>
               <div className="justify-self-center w-full max-w-[560px] mx-auto px-2 min-w-0 text-center">
-                <div className="lg:hidden">
-                  <iframe
-                    title="Bandcamp player (slim)"
-                    aria-label="Bandcamp player for Dream River"
-                    style={{ border: 0, width: '100%', height: 68 }}
-                    src={`https://bandcamp.com/EmbeddedPlayer/album=672398703/size=small/bgcol=f7f0e4/linkcol=2aa7b5/transparent=true/`}
-                    seamless
-                  >
-                    <a href="https://eshaansood.bandcamp.com/album/the-sonic-alchemists-i-dream-river">The Sonic Alchemists I: Dream River by Eshaan Sood</a>
-                  </iframe>
-                </div>
                 <div
                   className="inline-block rounded-full px-3 py-1.5 align-middle"
                   style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
@@ -306,15 +338,29 @@ export default function BelowMap() {
         {/* Single SR summary for both layouts (avoid duplicate IDs across breakpoints) */}
         <GlobeSummarySR id="globe-sr-summary" />
         {/* Mobile / small-screen layout (<1024px) */}
-        <div className="lg:hidden space-y-4">
+        <div className="lg:hidden space-y-4 px-3">
+          {/* Slim Bandcamp player directly under the header, same horizontal space */}
+          <section aria-label="Bandcamp player (mobile)">
+            <div className="rounded-[16px] shadow p-2" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.25)' }}>
+              <iframe
+                title="Bandcamp player (slim)"
+                aria-label="Bandcamp player for Dream River"
+                style={{ border: 0, width: '100%', height: 68 }}
+                src={`https://bandcamp.com/EmbeddedPlayer/album=672398703/size=small/bgcol=f7f0e4/linkcol=2aa7b5/transparent=true/`}
+                seamless
+              >
+                <a href="https://eshaansood.bandcamp.com/album/the-sonic-alchemists-i-dream-river">The Sonic Alchemists I: Dream River by Eshaan Sood</a>
+              </iframe>
+            </div>
+          </section>
           {/* Header now contains buttons and slim player; no title shown */}
 
           {/* Globe dominant section */}
           <section aria-label="Global participation">
             <div className="relative rounded-[24px] shadow-md overflow-hidden" style={{ background: '#0b0d1a' }}>
               <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(6px)' }} />
-              {/* Globe container uses viewport height to dominate; add bottom padding to allow heading peek */}
-              <div className="relative w-full" style={{ height: "min(85vh, calc(100svh - 180px))" }}>
+              {/* Square globe container */}
+              <div className="relative w-full" style={{ aspectRatio: '1 / 1' }}>
                 <div className="absolute inset-0">
                   <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
                 </div>
@@ -322,9 +368,16 @@ export default function BelowMap() {
             </div>
           </section>
 
-          {/* Intro: Where The River Flows (always visible on mobile, not in accordion) */}
+          {/* How to play (YouTube) comes before text block on mobile */}
+          <section aria-label="How to Play (mobile)">
+            <div className="rounded-[24px] shadow-md p-3" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+              <HowToPlayVideo />
+            </div>
+          </section>
+
+          {/* Intro text block */}
           <section aria-label="Project intro (mobile)">
-            <div className="rounded-[24px] shadow-md p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div id="mobile-intro" className="rounded-[24px] shadow-md p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <Hero />
             </div>
           </section>
@@ -383,15 +436,15 @@ export default function BelowMap() {
         <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-start" style={{ gridTemplateColumns: '3fr 6fr 3fr', maxWidth: 'min(2048px, 92vw)', marginInline: 'auto' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
           <section aria-label="Bandcamp and YouTube" className="h-full min-h-0 min-w-0 overflow-hidden">
-            <div className="h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}>
+            <div className="h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
               <LeftPanelEmbeds />
             </div>
           </section>
 
           {/* Globe (center) */}
           <section aria-label="Global participation" className="min-w-0 h-full overflow-hidden">
-            <div className="relative h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden" style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}>
-              <div className="absolute inset-3 md:inset-4 min-h-0">
+            <div className="relative h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden" style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
+              <div className="absolute inset-4 min-h-0">
                 <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
               </div>
             </div>
@@ -400,16 +453,17 @@ export default function BelowMap() {
           {/* Text block (right) */}
           <section aria-label="Project intro" className="min-w-0 h-full">
             <div
-              className="h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] p-4 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] relative leading-normal text-[color:var(--ink)]"
+              className="h-full rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.25)] p-4 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] relative leading-relaxed text-[color:var(--ink)]"
               tabIndex={0}
               role="region"
               aria-label="About Dream River"
-              style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)' }}
+              style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.35)', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}
               ref={rightPanelRef}
+              id="right-panel-content"
             >
               <Hero />
               {showBottomFade && (
-                <div aria-hidden="true" className="pointer-events-none bottom-0 -mx-4 z-50 lg:sticky">
+                <div aria-hidden="true" className="pointer-events-none bottom-0 z-50 lg:sticky">
                   <div className="h-10" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 100%)' }} />
                   <div className="text-center text-[color:var(--ink-2)] pb-1">…</div>
                 </div>
@@ -445,14 +499,14 @@ export default function BelowMap() {
           }}
         >
           {dashboardMode === "guest" ? (
-            <div className="relative p-6">
+            <div className="relative px-4 py-5" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
               <button
                 aria-label="Close dashboard"
                 onClick={() => setDashboardOpen(false)}
-                className="absolute top-2 right-2"
-                style={{ color: "var(--ink-2)" }}
+                className="absolute top-2 right-2 inline-flex items-center justify-center rounded-[24px] border px-2.5 py-1.5 text-sm"
+                style={{ color: "var(--ink-2)", borderColor: 'var(--mist)', background: 'rgba(255,255,255,0.7)' }}
               >
-                ✕
+                Close
               </button>
               {guestStep === 'menu' && (
                 <div className="flex flex-col items-center justify-center gap-3 py-4">
@@ -466,7 +520,7 @@ export default function BelowMap() {
                   <button
                     className="font-seasons rounded-md px-4 py-3 w-3/4"
                     style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
-                    onClick={() => setGuestStep('login_email')}
+                    onClick={() => { setGuestStep('login_email'); setTimeout(() => { const el = document.getElementById('loginEmailField'); if (el) (el as HTMLInputElement).focus(); }, 0); }}
                   >
                     Resume Your River
                   </button>
@@ -479,7 +533,7 @@ export default function BelowMap() {
                     <input id="firstNameField" className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
                     <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
                   </div>
-                  <input className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  <input id="signupEmailField" className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <select className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} value={country} onChange={(e) => setCountry(e.target.value)} required>
                       <option value="" disabled>Select your country</option>
@@ -512,7 +566,7 @@ export default function BelowMap() {
                     <button
                       className="rounded-md px-4 py-3 btn font-seasons flex-1"
                       disabled={uiLoading || !firstName || !lastName || !email || !country || !favoriteSong || (Date.now() - lastOtpAt) < 60000}
-                      onClick={async () => {
+                    onClick={async () => {
                         setUiLoading(true);
                         setAlert(null);
                         try {
@@ -534,20 +588,25 @@ export default function BelowMap() {
                             setAlert('We emailed you a 6-digit code. Enter it below.');
                           } else {
                             // New user → send signup OTP with metadata and go to Screen C
+                          const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+                          const referralId8 = String(Math.floor(10000000 + Math.random() * 90000000));
                             const { error: signUpErr } = await supabase.auth.signInWithOtp({
                               email: emailNorm,
                               options: {
                                 shouldCreateUser: true,
                                 data: {
+                                name: fullName,
                                   first_name: firstName.trim(),
                                   last_name: lastName.trim(),
                                   country_code: country,
                                   boat_color: boatColor,
                                   message: favoriteSong,
+                                referral_id: referralId8,
                                 },
                               },
                             });
                             if (signUpErr) throw signUpErr;
+                          setSignupReferralId(referralId8);
                             setLastOtpAt(Date.now());
                             setGuestStep('signup_code');
                             setAlert('We emailed you a 6-digit code. Enter it below.');
@@ -589,7 +648,59 @@ export default function BelowMap() {
                 <div className="space-y-3">
                   <h2 className="font-seasons text-xl" style={{ color: 'var(--teal)' }}>Let’s Start Sailing.</h2>
                   <div className="text-sm" style={{ color: 'var(--ink-2)' }}>Enter the code we sent to start your journey.</div>
-                  <input className="border rounded-md px-3 py-2 bg-background tracking-widest text-center" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="••••••" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+                  <input
+                    className="border rounded-md px-3 py-2 bg-background tracking-widest text-center"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    placeholder="••••••"
+                    id="signupCodeField"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter' && code.length === 6 && !uiLoading) {
+                        e.preventDefault();
+                        setUiLoading(true);
+                        setAlert(null);
+                        try {
+                          const supabase = getSupabase();
+                          const { data, error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code, type: 'email' });
+                          if (error) throw error;
+                          if (data?.user) {
+                            const name = `${firstName} ${lastName}`.trim();
+                            const referral_id = Math.random().toString(36).slice(2, 10);
+                            await fetch('/api/users/upsert', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                name,
+                                email,
+                                country_code: country,
+                                message: favoriteSong,
+                                photo_url: null,
+                                referral_id,
+                                referred_by: null,
+                                boat_color: boatColor,
+                              }),
+                            });
+                            try { await refreshMe(); } catch {}
+                            setDashboardMode('user');
+                            setShareOpen(false);
+                            setRewardsOpen(false);
+                            setGuestStep('menu');
+                            setAlert(null);
+                            setDashboardOpen(true);
+                            return;
+                          }
+                          setAlert('Please check the code you entered and try again.');
+                        } catch (err: unknown) {
+                          setAlert('Please check the code you entered and try again.');
+                        } finally {
+                          setUiLoading(false);
+                        }
+                      }
+                    }}
+                  />
                   <div className="flex items-center gap-3">
                     <button
                       className="rounded-md px-4 py-3 btn flex-1"
@@ -618,16 +729,18 @@ export default function BelowMap() {
                                 boat_color: boatColor,
                               }),
                             });
-                            // Immediately fetch dashboard data post-verification
-                            // Data-binding removed; will rebuild
-                            setAlert('Verified! You are in.');
-                            setTimeout(() => setDashboardOpen(false), 900);
+                            try { await refreshMe(); } catch {}
+                            setDashboardMode('user');
+                            setShareOpen(false);
+                            setRewardsOpen(false);
+                            setGuestStep('menu');
+                            setAlert(null);
+                            setDashboardOpen(true);
                             return;
                           }
-                          setAlert('Invalid code. Please try again.');
+                          setAlert('Please check the code you entered and try again.');
                         } catch (err: unknown) {
-                          const msg = err instanceof Error ? err.message : 'Something went wrong';
-                          setAlert(msg);
+                          setAlert('Please check the code you entered and try again.');
                         } finally {
                           setUiLoading(false);
                         }
@@ -637,6 +750,48 @@ export default function BelowMap() {
                     </button>
                     <button className="text-sm underline" onClick={() => setGuestStep('signup_email')}>Back</button>
                   </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="text-sm underline"
+                      disabled={(Date.now() - lastOtpAt) < 120000 || uiLoading}
+                      onClick={async () => {
+                        setUiLoading(true);
+                        setAlert(null);
+                        try {
+                          const supabase = getSupabase();
+                          const emailNorm = email.trim().toLowerCase();
+                          const { error: signUpErr } = await supabase.auth.signInWithOtp({
+                            email: emailNorm,
+                            options: {
+                              shouldCreateUser: true,
+                              data: {
+                                name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+                                first_name: firstName.trim(),
+                                last_name: lastName.trim(),
+                                country_code: country,
+                                boat_color: boatColor,
+                                message: favoriteSong,
+                                referral_id: signupReferralId || String(Math.floor(10000000 + Math.random() * 90000000)),
+                              },
+                            },
+                          });
+                          if (signUpErr) throw signUpErr;
+                          setLastOtpAt(Date.now());
+                          setAlert('We sent you a new code. Please check your email.');
+                        } catch {
+                          setAlert('Unable to resend code. Please try again.');
+                        } finally {
+                          setUiLoading(false);
+                        }
+                      }}
+                    >
+                      Resend Code
+                    </button>
+                    {(Date.now() - lastOtpAt) < 120000 && (
+                      <span className="text-xs opacity-80">Available in {Math.ceil((120000 - (Date.now() - lastOtpAt)) / 1000)}s</span>
+                    )}
+                  </div>
                   {alert && <p className="text-sm">{alert}</p>}
                 </div>
               )}
@@ -644,7 +799,7 @@ export default function BelowMap() {
               {guestStep === 'login_email' && (
                 <div className="space-y-3">
                   <h2 className="font-seasons text-xl">Resume your River</h2>
-                  <input className="border rounded-md px-3 py-2 bg-background" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <input id="loginEmailField" className="border rounded-md px-3 py-2 bg-background" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
                   <div className="flex items-center gap-3">
                     <button
                       className="rounded-md px-4 py-3 btn flex-1"
@@ -684,7 +839,43 @@ export default function BelowMap() {
                 <div className="space-y-3">
                   <h2 className="font-seasons text-xl" style={{ color: 'var(--teal)' }}>Welcome Back.</h2>
                   <div className="text-sm" style={{ color: 'var(--ink-2)' }}>Enter the code we sent to resume your river.</div>
-                  <input className="border rounded-md px-3 py-2 bg-background tracking-widest text-center" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="••••••" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+                  <input
+                    className="border rounded-md px-3 py-2 bg-background tracking-widest text-center"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    placeholder="••••••"
+                    id="loginCodeField"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter' && code.length === 6 && !uiLoading) {
+                        e.preventDefault();
+                        setUiLoading(true);
+                        setAlert(null);
+                        try {
+                          const supabase = getSupabase();
+                          const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
+                          if (error) throw error;
+                          if (data?.user) {
+                            try { await refreshMe(); } catch {}
+                            setDashboardMode('user');
+                            setShareOpen(false);
+                            setRewardsOpen(false);
+                            setGuestStep('menu');
+                            setAlert(null);
+                            setDashboardOpen(true);
+                            return;
+                          }
+                          setAlert('Please check the code you entered and try again.');
+                        } catch (err: unknown) {
+                          setAlert('Please check the code you entered and try again.');
+                        } finally {
+                          setUiLoading(false);
+                        }
+                      }
+                    }}
+                  />
                   <div className="flex items-center gap-3">
                     <button
                       className="rounded-md px-4 py-3 btn flex-1"
@@ -697,15 +888,18 @@ export default function BelowMap() {
                           const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
                           if (error) throw error;
                           if (data?.user) {
-                            setAlert('Welcome back!');
-                            // Data-binding removed; will rebuild
-                            setTimeout(() => setDashboardOpen(false), 900);
+                            try { await refreshMe(); } catch {}
+                            setDashboardMode('user');
+                            setShareOpen(false);
+                            setRewardsOpen(false);
+                            setGuestStep('menu');
+                            setAlert(null);
+                            setDashboardOpen(true);
                             return;
                           }
-                          setAlert('Invalid code. Please try again.');
+                          setAlert('Please check the code you entered and try again.');
                         } catch (err: unknown) {
-                          const msg = err instanceof Error ? err.message : 'Something went wrong';
-                          setAlert(msg);
+                          setAlert('Please check the code you entered and try again.');
                         } finally {
                           setUiLoading(false);
                         }
@@ -715,6 +909,34 @@ export default function BelowMap() {
                     </button>
                     <button className="text-sm underline" onClick={() => setGuestStep('login_email')}>Back</button>
                   </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="text-sm underline"
+                      disabled={(Date.now() - lastOtpAt) < 120000 || uiLoading}
+                      onClick={async () => {
+                        setUiLoading(true);
+                        setAlert(null);
+                        try {
+                          const supabase = getSupabase();
+                          const emailNorm = email.trim().toLowerCase();
+                          const { error } = await supabase.auth.signInWithOtp({ email: emailNorm, options: { shouldCreateUser: false } });
+                          if (error) throw error;
+                          setLastOtpAt(Date.now());
+                          setAlert('We sent you a new code. Please check your email.');
+                        } catch {
+                          setAlert('Unable to resend code. Please try again.');
+                        } finally {
+                          setUiLoading(false);
+                        }
+                      }}
+                    >
+                      Resend Code
+                    </button>
+                    {(Date.now() - lastOtpAt) < 120000 && (
+                      <span className="text-xs opacity-80">Available in {Math.ceil((120000 - (Date.now() - lastOtpAt)) / 1000)}s</span>
+                    )}
+                  </div>
                   {alert && <p className="text-sm">{alert}</p>}
                 </div>
               )}
@@ -723,130 +945,174 @@ export default function BelowMap() {
             <>
               <div className="flex items-center justify-between px-4 py-3 border-b border-purple-100">
                 <h3 ref={dashboardHeadingRef} id="dashboard-heading" tabIndex={-1} className="text-purple-900 font-semibold">Dashboard</h3>
-                <button aria-label="Close dashboard" onClick={() => setDashboardOpen(false)} className="text-purple-800">✕</button>
+                <button
+                  aria-label="Close dashboard"
+                  onClick={() => setDashboardOpen(false)}
+                  className="inline-flex items-center justify-center rounded-[24px] border px-3 py-1.5 text-sm"
+                  style={{ color: 'var(--teal)', borderColor: 'var(--mist)', background: 'rgba(255,255,255,0.7)' }}
+                >
+                  Close
+                </button>
               </div>
-              <div className="p-4">
+              <div className="px-4 py-5" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
                 {rewardsOpen ? (
                   <RewardsView boatsTotal={me?.boats_total ?? 0} onBack={() => { setRewardsOpen(false); setTimeout(() => dashboardHeadingRef.current?.focus(), 0); }} />
                 ) : (
-                <div className="space-y-4 md:space-y-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="w-14 h-14 rounded-full overflow-hidden border" style={{ borderColor: 'var(--mist)' }} aria-label="Boat badge">
-                      <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--white-soft)' }}>
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path d="M3 15l9-9 9 9-9 3-9-3z" fill={me?.boat_color || '#135E66'} />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="flex flex-col leading-tight">
-                      <div className="font-seasons text-lg md:text-xl">{me?.name || ''}</div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-sans font-extrabold text-base md:text-lg">{me?.boats_total ?? 0}</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[color:var(--ink-2)]">
-                          <path d="M3 15l9-9 9 9-9 3-9-3z" fill="currentColor" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="font-sans text-sm md:text-base">Country : {me?.country_name || 'Country not set'}</div>
-
-                  <div className="font-seasons text-base md:text-lg">{me?.message || '—'}</div>
-
-                  <div className="space-y-2">
-                          {!shareOpen && (
-                      <button
-                        ref={shareButtonRef}
-                        className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons transition-all duration-300 ease-out"
-                        aria-label="Share Your Boat"
-                              onClick={() => setShareOpen(true)}
-                        disabled={!me?.referral_url}
-                      >
-                        Share Your Boat
-                      </button>
-                    )}
-                    {shareOpen && (
-                          <div className="transition-all duration-300 ease-out" role="region" aria-labelledby="share-title">
-                        <div className="flex items-center justify-between mb-2">
-                          <button
-                            className="text-sm underline"
-                            onClick={() => { setShareOpen(false); setTimeout(() => shareButtonRef.current?.focus(), 0); }}
-                            aria-label="Back"
-                          >Back</button>
-                          <div aria-live="polite" className="sr-only">{announce}</div>
-                        </div>
-                            <h4
-                              id="share-title"
-                              ref={shareHeadingRef}
-                              tabIndex={-1}
-                              className="font-seasons text-lg mb-2"
-                              aria-label="Share"
-                            >Share</h4>
-                              <div className="grid grid-cols-2 gap-4">
-                                <ShareTiles referralUrl={me?.referral_url || ''} message={shareMessage} userFullName={me?.name || ''} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
-                              </div>
-                        <div className="mt-3 space-y-2">
-                          <label className="font-sans text-sm" htmlFor="shareMessage">Message</label>
-                          <textarea id="shareMessage" className="w-full border rounded-md px-3 py-2" rows={4} value={shareMessage} onChange={(e) => setShareMessage(e.target.value)} />
-                          <div className="flex items-center gap-2">
-                            <input className="flex-1 border rounded-md px-3 py-2 bg-background" value={me?.referral_url || ''} readOnly aria-label="Referral link" />
-                            <button
-                              type="button"
-                              className="rounded-md px-3 py-2 btn"
-                              onClick={async () => { try { await navigator.clipboard.writeText(`${shareMessage} ${me?.referral_url || ''}`); setAnnounce('Copied invite to clipboard'); } catch {} }}
-                            >Copy</button>
+                <>
+                  {/* Mobile layout (single-screen order) */}
+                  <div className="md:hidden space-y-3">
+                    {/* Top row: left badge, right counter + boat icon below */}
+                    <div className="grid grid-cols-2 gap-3 items-start">
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 h-14 rounded-full overflow-hidden border" style={{ borderColor: 'var(--mist)' }} aria-label="Boat badge">
+                          <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--white-soft)' }}>
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M3 15l9-9 9 9-9 3-9-3z" fill={me?.boat_color || '#135E66'} />
+                            </svg>
                           </div>
                         </div>
                       </div>
-                    )}
-                    <div className="font-sans text-xs md:text-sm opacity-80">
-                      Share your boat using this button to extend your river.
+                      <div className="text-right">
+                        <div className="font-sans font-extrabold text-base" style={{ color: 'var(--teal)', textShadow: '0 0 6px rgba(42,167,181,0.35)' }}>{me?.boats_total ?? 0}</div>
+                        <div className="mt-1 inline-flex items-center justify-center">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[color:var(--ink-2)]">
+                            <path d="M3 15l9-9 9 9-9 3-9-3z" fill="currentColor" />
+                          </svg>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div>
-                  <div className="font-seasons text-base md:text-lg">Stream The Album</div>
-                    <div className="mt-2 flex items-center gap-4 md:gap-6 flex-wrap">
-                      <a href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify">
-                        <img src="/Streaming/Spotify.png" alt="Spotify" className="h-6 md:h-7 w-auto" />
-                      </a>
-                      <a href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" target="_blank" rel="noopener noreferrer" aria-label="Listen on Apple Music">
-                        <img src="/Streaming/Applemusic.png" alt="Apple Music" className="h-6 md:h-7 w-auto" />
-                      </a>
-                      <a href="https://www.youtube.com/playlist?list=OLAK5uy_kDt671HE3YUlBusqp-KMypwqupSNT0bJw" target="_blank" rel="noopener noreferrer" aria-label="Listen on YouTube Music">
-                        <img src="/Streaming/Youtube.png" alt="YouTube Music" className="h-6 md:h-7 w-auto" />
-                      </a>
-                      <a href="https://eshaansood.bandcamp.com/" target="_blank" rel="noopener noreferrer" aria-label="Listen on Bandcamp">
-                        <img src="/Streaming/Bandcamp.png" alt="Bandcamp" className="h-6 md:h-7 w-auto" />
-                      </a>
+                    {/* Name tile */}
+                    <div className="rounded-[12px] px-3 py-2 font-seasons text-white" style={{ background: 'rgba(11,13,26,0.80)', border: '1px solid rgba(255,255,255,0.25)' }}>
+                      <div className="text-lg">{me?.name || ''}</div>
                     </div>
-                  </div>
-
-                  <div>
-                    <button className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons" aria-label="Redeem Rewards" onClick={() => { setRewardsOpen(true); setShareOpen(false); }}>
+                    {/* Share button */}
+                    <button
+                      ref={shareButtonRef}
+                      className="w-full min-h-12 rounded-[24px] font-seasons text-white"
+                      aria-label="Share Your Boat"
+                      onClick={() => setShareOpen(true)}
+                      disabled={!me?.referral_url}
+                      style={{ background: 'var(--teal)' }}
+                    >
+                      Share Your Boat
+                    </button>
+                    <div className="font-sans text-xs opacity-80">Use this to grow your river.</div>
+                    {/* Streaming logos row (no heading) */}
+                    <div id="dashboard-streaming" className="flex items-center justify-between gap-3 flex-wrap">
+                      <a className="stream-btn" href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify"><span className="stream-icon spotify" aria-hidden="true" /></a>
+                      <a className="stream-btn" href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" target="_blank" rel="noopener noreferrer" aria-label="Listen on Apple Music"><span className="stream-icon applemusic" aria-hidden="true" /></a>
+                      <a className="stream-btn" href="https://www.youtube.com/playlist?list=OLAK5uy_kDt671HE3YUlBusqp-KMypwqupSNT0bJw" target="_blank" rel="noopener noreferrer" aria-label="Listen on YouTube Music"><span className="stream-icon youtube" aria-hidden="true" /></a>
+                      <a className="stream-btn" href="https://eshaansood.bandcamp.com/" target="_blank" rel="noopener noreferrer" aria-label="Listen on Bandcamp"><span className="stream-icon bandcamp" aria-hidden="true" /></a>
+                    </div>
+                    {/* Rewards and Logout */}
+                    <button className="w-full min-h-12 rounded-[24px] font-seasons text-white" aria-label="Redeem Rewards" onClick={() => { setRewardsOpen(true); setShareOpen(false); }} style={{ background: 'var(--teal)' }}>
                       Redeem Rewards
                     </button>
-                  </div>
-                  <div className="mt-2">
                     <button
                       type="button"
                       aria-label="Log out"
-                      className="w-full min-h-12 md:min-h-14 rounded-md btn font-seasons text-white"
+                      className="w-full min-h-12 rounded-[24px] text-white font-sans font-bold"
                       onClick={async () => {
                         try {
                           const supabase = getSupabase();
                           await supabase.auth.signOut();
                         } catch {}
-                        // Clear panel UI state only; user data is read via useMe
                         setShareOpen(false);
-                        setDashboardMode("guest");
+                        setDashboardMode('guest');
                         setGuestStep('menu');
                       }}
+                      style={{ background: 'var(--teal)' }}
                     >
                       Log out
                     </button>
                   </div>
-                </div>
+
+                  {/* Desktop layout remains unchanged */}
+                  <div className="hidden md:block">
+                    <div className="space-y-4 md:space-y-5">
+                      <div className="px-2 sm:px-3">
+                        <div className="flex items-center justify-between gap-5">
+                          <div className="w-14 h-14 rounded-full overflow-hidden border" style={{ borderColor: 'var(--mist)' }} aria-label="Boat badge">
+                            <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--white-soft)' }}>
+                              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M3 15l9-9 9 9-9 3-9-3z" fill={me?.boat_color || '#135E66'} />
+                              </svg>
+                            </div>
+                          </div>
+                          <div className="flex flex-col leading-snug">
+                            <div className="font-seasons text-2xl mt-1 mb-1">{me?.name || ''}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-sans font-extrabold text-base" style={{ color: 'var(--teal)', textShadow: '0 0 6px rgba(42,167,181,0.35)' }}>{me?.boats_total ?? 0}</span>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-[color:var(--ink-2)]">
+                                <path d="M3 15l9-9 9 9-9 3-9-3z" fill="currentColor" />
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="font-sans text-base">Country : {me?.country_name || 'Country not set'}</div>
+                      <div className="font-seasons text-lg">{me?.message || '—'}</div>
+
+                      <div className="space-y-2">
+                        {!shareOpen && (
+                          <button
+                            ref={shareButtonRef}
+                            className="w-full min-h-14 rounded-[24px] font-seasons text-white transition-all duration-300 ease-out"
+                            aria-label="Share Your Boat"
+                            onClick={() => setShareOpen(true)}
+                            disabled={!me?.referral_url}
+                            style={{ background: 'var(--teal)' }}
+                          >
+                            Share Your Boat
+                          </button>
+                        )}
+                        {shareOpen && (
+                          <div className="transition-all duration-300 ease-out" role="region" aria-labelledby="share-title">
+                            <div className="flex items-center justify-between mb-2">
+                              <button className="text-sm underline" onClick={() => { setShareOpen(false); setTimeout(() => shareButtonRef.current?.focus(), 0); }} aria-label="Back">Back</button>
+                              <div aria-live="polite" className="sr-only">{announce}</div>
+                            </div>
+                            <h4 id="share-title" ref={shareHeadingRef} tabIndex={-1} className="font-seasons text-lg mb-2" aria-label="Share">Share</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <ShareTiles referralUrl={me?.referral_url || ''} message={shareMessage} userFullName={me?.name || ''} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
+                            </div>
+                            <div className="mt-3 space-y-2">
+                              <label className="font-sans text-sm" htmlFor="shareMessage">Message</label>
+                              <textarea id="shareMessage" className="w-full border rounded-md px-3 py-2" rows={4} value={shareMessage} onChange={(e) => setShareMessage(e.target.value)} />
+                              <div className="flex items-center gap-2">
+                                <input className="flex-1 border rounded-md px-3 py-2 bg-background" value={me?.referral_url || ''} readOnly aria-label="Referral link" />
+                                <button type="button" className="rounded-md px-3 py-2 btn" onClick={async () => { try { await navigator.clipboard.writeText(`${shareMessage} ${me?.referral_url || ''}`); setAnnounce('Copied invite to clipboard'); } catch {} }}>Copy</button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <div className="font-sans text-sm opacity-80">Share your boat using this button to extend your river.</div>
+                      </div>
+
+                      <div>
+                        <div className="font-seasons text-lg">Stream The Album</div>
+                        <div id="dashboard-streaming-desktop" className="mt-2 flex items-center gap-4 flex-wrap">
+                          <a className="stream-btn" href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify"><span className="stream-icon spotify" aria-hidden="true" /></a>
+                          <a className="stream-btn" href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" target="_blank" rel="noopener noreferrer" aria-label="Listen on Apple Music"><span className="stream-icon applemusic" aria-hidden="true" /></a>
+                          <a className="stream-btn" href="https://www.youtube.com/playlist?list=OLAK5uy_kDt671HE3YUlBusqp-KMypwqupSNT0bJw" target="_blank" rel="noopener noreferrer" aria-label="Listen on YouTube Music"><span className="stream-icon youtube" aria-hidden="true" /></a>
+                          <a className="stream-btn" href="https://eshaansood.bandcamp.com/" target="_blank" rel="noopener noreferrer" aria-label="Listen on Bandcamp"><span className="stream-icon bandcamp" aria-hidden="true" /></a>
+                        </div>
+                      </div>
+
+                      <div>
+                        <button className="w-full min-h-14 rounded-[24px] font-seasons text-white" aria-label="Redeem Rewards" onClick={() => { setRewardsOpen(true); setShareOpen(false); }} style={{ background: 'var(--teal)' }}>
+                          Redeem Rewards
+                        </button>
+                      </div>
+                      <div className="mt-2">
+                        <button type="button" aria-label="Log out" className="w-full min-h-14 rounded-[24px] text-white font-sans font-bold" onClick={async () => { try { const supabase = getSupabase(); await supabase.auth.signOut(); } catch {} setShareOpen(false); setDashboardMode('guest'); setGuestStep('menu'); }} style={{ background: 'var(--teal)' }}>
+                          Log out
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
                 )}
               </div>
             </>
@@ -870,7 +1136,14 @@ export default function BelowMap() {
         >
           <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--mist)" }}>
             <h3 className="font-semibold" style={{ color: "var(--ink)" }}>Leaderboard</h3>
-            <button aria-label="Close leaderboard" onClick={() => setLeaderboardOpen(false)} style={{ color: "var(--ink-2)" }}>✕</button>
+            <button
+              aria-label="Close leaderboard"
+              onClick={() => setLeaderboardOpen(false)}
+              className="inline-flex items-center justify-center rounded-[24px] border px-3 py-1.5 text-sm"
+              style={{ color: 'var(--teal)', borderColor: 'var(--mist)', background: 'rgba(255,255,255,0.7)' }}
+            >
+              Close
+            </button>
           </div>
           <div className="p-6" style={{ color: "var(--ink)" }}>
             <div className="text-center mb-4">
@@ -915,6 +1188,38 @@ export default function BelowMap() {
         @media (prefers-reduced-motion: reduce) {
           [role="dialog"] { transition: none !important; }
         }
+        /* Right column typography: clearer subheads and comfortable line height */
+        #right-panel-content p { line-height: 1.6; margin: 0 0 0.9rem 0; }
+        #right-panel-content h2, #right-panel-content h3 {
+          line-height: 1.35;
+          margin: 1.2rem 0 0.6rem 0;
+          font-weight: 600;
+          letter-spacing: 0.01em;
+        }
+        #right-panel-content ul, #right-panel-content ol { margin: 0.8rem 0 0.9rem 1.25rem; line-height: 1.6; }
+        /* Mobile intro: make headings obvious and avoid wall of text */
+        @media (max-width: 1023px) {
+          #mobile-intro p { line-height: 1.65; margin: 0 0 0.95rem 0; }
+          #mobile-intro h2, #mobile-intro h3 {
+            font-weight: 700;
+            line-height: 1.3;
+            margin: 1rem 0 0.5rem 0;
+            letter-spacing: 0.01em;
+          }
+          #mobile-intro h2 { font-size: 1.125rem; }
+          #mobile-intro h3 { font-size: 1rem; }
+          #mobile-intro ul, #mobile-intro ol { margin: 0.75rem 0 0.9rem 1.1rem; line-height: 1.65; }
+        }
+        /* Overlay buttons: consistent 24px rounded corners */
+        #panel-dashboard button { border-radius: 24px; }
+        #panel-leaderboard button { border-radius: 24px; }
+        /* Streaming icons: uniform size, teal tint @ 80% */
+        .stream-btn { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; border-radius: 12px; background: rgba(42,167,181,0.08); }
+        .stream-icon { display: inline-block; width: 28px; height: 28px; background-color: rgba(42,167,181,0.8); -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
+        .stream-icon.spotify { -webkit-mask-image: url('/Streaming/spotify.eps'); mask-image: url('/Streaming/spotify.eps'); }
+        .stream-icon.applemusic { -webkit-mask-image: url('/Streaming/applemusic.eps'); mask-image: url('/Streaming/applemusic.eps'); }
+        .stream-icon.youtube { -webkit-mask-image: url('/Streaming/youtube.eps'); mask-image: url('/Streaming/youtube.eps'); }
+        .stream-icon.bandcamp { -webkit-mask-image: url('/Streaming/bandcamp.eps'); mask-image: url('/Streaming/bandcamp.eps'); }
       `}</style>
       {/* Privacy Policy Modal */}
       {privacyOpen && (

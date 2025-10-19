@@ -519,14 +519,21 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     // Enable and configure zoom for LOD
     controls.enableZoom = true;
 
-    // Fit globe at zoom = 1 (no clipping) and center — matches GlobeRG
+    // Fit globe at zoom = 1 (no clipping) and center — consider both vertical and horizontal FOV
     const getFitDistance = () => {
       try {
-        const fov = (camera.fov || 75) * Math.PI / 180;
-        const R = 100;
-        const margin = 1.02; // slight padding to avoid edge clipping
-        const d = (R * margin) / Math.tan(fov / 2);
-        return Math.max(d, R * 1.3);
+        const vFov = (camera.fov || 75) * Math.PI / 180; // vertical FOV in radians
+        const canvas = renderer?.domElement as HTMLCanvasElement | undefined;
+        const rect = canvas?.getBoundingClientRect?.();
+        const aspect = rect && rect.height > 0 ? (rect.width / rect.height) : (camera.aspect || 1);
+        // Account for maximum rendered altitude (points ~0.201, arcs ~0.2, polygons ~0.06)
+        const R = 100 * (1 + 0.21);
+        const margin = 1.08; // padding to avoid top/side cropping
+        const dV = (R * margin) / Math.tan(vFov / 2);
+        const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+        const dH = (R * margin) / Math.tan(hFov / 2);
+        const d = Math.max(dV, dH);
+        return Math.max(d, (100 * 1.3));
       } catch { return camera.position.length(); }
     };
     const fitD = getFitDistance();

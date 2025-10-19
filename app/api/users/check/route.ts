@@ -14,22 +14,19 @@ export async function POST(req: Request) {
       country_code?: string | null;
       boat_color?: string | null;
     };
-    type AuthUserRow = { id: string; email: string; raw_user_meta_data: AuthMeta | null };
 
-    const { data: authUser, error } = await supabaseServer
-      .from('auth.users')
-      .select('id,email,raw_user_meta_data')
-      .eq('email', email)
-      .maybeSingle();
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    if (!authUser) return NextResponse.json({ exists: false });
+    const { data: list, error: listErr } = await supabaseServer.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (listErr) return NextResponse.json({ error: listErr.message }, { status: 400 });
+    type AdminUser = { id: string; email: string | null; user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null };
+    const users = (list?.users || []) as AdminUser[];
+    const target = users.find((u) => (u.email || "").toLowerCase() === String(email).toLowerCase());
+    if (!target) return NextResponse.json({ exists: false });
 
-    const row = authUser as unknown as AuthUserRow;
-    const meta: AuthMeta = (row.raw_user_meta_data || {}) as AuthMeta;
+    const meta: AuthMeta = ((target.user_metadata || target.raw_user_meta_data) || {}) as AuthMeta;
 
     const user = {
-      id: row.id,
-      email: row.email,
+      id: target.id as string,
+      email: target.email as string,
       name: meta.name ?? null,
       city: null as string | null,
       message: meta.message ?? null,

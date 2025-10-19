@@ -61,6 +61,19 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
   - Added `react-globe.gl`, bumped `three` to `^0.169.0` to satisfy subpath imports.
 
 ## Recent Changes — Today
+- Dashboard/globe reliability and performance refactor
+  - Consolidated user data to Supabase Auth `auth.users` metadata across APIs (`/api/me`, `/api/users/check`, `/api/users/upsert`, `/api/leaderboard`, `/api/globe`, `/api/referral`).
+  - Removed legacy public tables: `public.users`, `public.profiles`, `public.edges`, `public.listens`, `public.node_positions`, `public.referral_awards`.
+  - Seeded test data: 3 referral chains via Auth Admin (JP→IN→US→DE→GB→CA→CN; US×6; AR→BR→US→IT→FR→IN→JP).
+  - Implemented SR summary for globe; `/api/globe` now reads via Auth Admin listUsers; screen reader live region announces users/countries/connections.
+  - Globe external refactor merged in:
+    - Viewport clamping: initial fit, min/max distance, responsive refit until user interaction; DPR cap.
+    - Deterministic node placement: per‑node seeded jitter around country centroid; removed clustering; node size scales with quantized zoom only.
+    - Logged‑in user priority: aqua glow and first name (Seasons), friends dark teal initials; kept overlays but capped to 6 nodes and moved to RAF positioning.
+    - Accessibility: back‑face culling for overlays; aria live summary.
+    - Performance: throttled tooltip (RAF), memoized globe prop callbacks, reduced arc circular resolution to 24, static arcs (no motion) with face/priority‑aware color, low‑power mode gates; cap animated boats to 1.
+  - Styling: Globe wrapper fills parent (100%/100%); land colors aligned to GlobeRG (main `#DCA87E`, hover `#B56B45`, back `#7C4A33`).
+  - Deployment: multiple successful prod deploys; stable alias updated; commits pushed to main.
 - Layout container & footer
   - Unified site container with clamp gutters (max 32px) wrapping header, 3‑column grid, and thin footer; page uses flex column with min‑vh.
   - Desktop grid locked to 1:2:1; right column is independently scrollable (internal overflow); center globe scales without transforms; left embeds consolidated into one frosted panel.
@@ -149,7 +162,7 @@ Stored example: `web/.env.example`. Copy to `web/.env.local` for dev.
 ## Deployment
 - Vercel project linked: `riverflows` (org: eshaans-projects-d91d58e1)
 - Stable domain: `https://riverflowseshaan.vercel.app` (alias)
-- Latest Production: `https://riverflows-5umcyvw4i-eshaans-projects-d91d58e1.vercel.app` (current)
+- Latest Production: `https://riverflows-1iqo8bbcb-eshaans-projects-d91d58e1.vercel.app` (current)
 - CLI flow: `vercel --prod --yes` then `vercel alias set <prod_url> riverflowseshaan.vercel.app`
 
 ## Useful Commands
