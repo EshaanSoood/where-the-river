@@ -3,35 +3,46 @@ import { supabaseServer } from "@/lib/supabaseServer";
 
 export async function GET() {
   try {
-    // Aggregate from Auth Admin user metadata to avoid direct table read
-    type AuthMeta = {
-      name?: string | null;
-      country_code?: string | null;
-      boat_color?: string | null;
-      otp_verified?: boolean | null;
-      boats_total?: number | null;
-    };
+    // Read boats totals from the server-authoritative view and join with auth metadata
+    type AdminUser = { id: string; email: string | null; user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null };
+    type AuthMeta = { name?: string | null; country_code?: string | null; boat_color?: string | null; otp_verified?: boolean | null };
 
     const { data: list, error: listErr } = await supabaseServer.auth.admin.listUsers({ page: 1, perPage: 10000 });
     if (listErr) return NextResponse.json({ error: listErr.message }, { status: 400 });
-    type AdminUser = { user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null };
     const users = (list?.users || []) as AdminUser[];
-    const metas: AuthMeta[] = users.map((u) => ((u.user_metadata || u.raw_user_meta_data) || {}) as AuthMeta);
 
-    const isCountable = (m: AuthMeta) => Boolean(m && m.otp_verified && m.boat_color);
-    const getBoats = (m: AuthMeta) => (typeof m.boats_total === 'number' ? m.boats_total : 0);
+    const { data: totalsRows, error: totalsErr } = await supabaseServer
+      .from('boats_totals')
+      .select('user_id, boats_total');
+    if (totalsErr) return NextResponse.json({ error: totalsErr.message }, { status: 400 });
 
-    const filtered = metas.filter(isCountable);
-    const totalBoats = filtered.reduce((acc, m) => acc + getBoats(m), 0);
+    const totalsById = new Map<string, number>();
+    (totalsRows || []).forEach((r) => {
+      const id = (r as { user_id: string }).user_id;
+      const total = (r as { boats_total: number }).boats_total || 0;
+      totalsById.set(id, total);
+    });
+
+    const entries = users.map((u) => {
+      const meta = ((u.user_metadata || u.raw_user_meta_data) || {}) as AuthMeta;
+      const boats = totalsById.get(u.id) || 0;
+      return {
+        id: u.id,
+        first_name: String(meta.name || '').split(' ')[0] || '',
+        country_code: meta.country_code || null,
+        boat_color: meta.boat_color || null,
+        otp_verified: Boolean(meta.otp_verified),
+        boats_total: boats,
+      };
+    });
+
+    const filtered = entries.filter((e) => e.otp_verified && !!e.boat_color);
+    const totalBoats = filtered.reduce((acc, e) => acc + (e.boats_total || 0), 0);
     const top = filtered
       .slice()
-      .sort((a, b) => getBoats(b) - getBoats(a))
+      .sort((a, b) => (b.boats_total || 0) - (a.boats_total || 0))
       .slice(0, 5)
-      .map((m) => ({
-        first_name: String(m.name || '').split(' ')[0] || '',
-        country_code: m.country_code || null,
-        boats_total: getBoats(m),
-      }));
+      .map((e) => ({ first_name: e.first_name, country_code: e.country_code, boats_total: e.boats_total || 0 }));
 
     return NextResponse.json({ totalBoats, top });
   } catch (e: unknown) {

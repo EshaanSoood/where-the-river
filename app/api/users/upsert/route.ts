@@ -87,7 +87,8 @@ export async function POST(req: Request) {
       country_code: sanitized.country_code,
       message: sanitized.message,
       boat_color: sanitized.boat_color,
-      referred_by: sanitized.referred_by,
+      // Only set referred_by if not already present (first click wins, no overwrite)
+      referred_by: (prevMeta as { referred_by?: unknown }).referred_by ?? sanitized.referred_by,
       referral_id: (prevMeta as { referral_id?: unknown }).referral_id ?? referral,
       otp_verified: true,
     };
@@ -104,6 +105,19 @@ export async function POST(req: Request) {
       "Updated auth.users user_metadata contains expected fields → " + ((nextMeta as { name?: unknown; country_code?: unknown }).name && (nextMeta as { name?: unknown; country_code?: unknown }).country_code ? "PASS" : "FAIL"),
       JSON.stringify({ id: row.id, user_metadata: nextMeta }, null, 2)
     ]);
+
+    // 04 — minimal credit logic (first verify only)
+    try {
+      const wasVerified = !!(prevMeta as { otp_verified?: unknown }).otp_verified;
+      if (!wasVerified) {
+        const { error: rpcErr } = await supabaseServer.rpc('award_referral_signup', { p_invitee_id: row.id });
+        await writeDiag("04-credit-logic.txt", [
+          `rpc_award_referral_signup_error=${rpcErr ? rpcErr.message : ''}`
+        ]);
+      }
+    } catch {
+      // Non-blocking: credit logic should not break signup
+    }
 
     return NextResponse.json({ user: { email: row.email, name: sanitized.name, country_code: sanitized.country_code, message: sanitized.message, referral_id: (nextMeta as { referral_id?: string | null }).referral_id ?? null, boat_color: sanitized.boat_color } });
   } catch (e: unknown) {

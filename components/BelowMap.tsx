@@ -15,6 +15,7 @@ import ColorChips from "@/components/ColorChips";
 import LeftPanelEmbeds from "@/components/LeftPanelEmbeds";
 import HowToPlayVideo from "@/components/HowToPlayVideo";
 // DashboardSheet is not used directly; inline overlay below owns the layout
+import { getReferralSnapshot, onReferralUpdate } from "@/lib/referral";
 
   const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
   const RewardsView = dynamic(() => import("@/components/RewardsView"), { ssr: false });
@@ -47,6 +48,8 @@ export default function BelowMap() {
   // Points modal state lives inside RewardsView now
   const [shareMessage, setShareMessage] = useState("Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I’ve been listening to Dream River by them lately and I think you’ll enjoy it too.");
   const [signupReferralId, setSignupReferralId] = useState<string | null>(null);
+  const [refInviterFirst, setRefInviterFirst] = useState<string | null>(null);
+  const [refInviterId, setRefInviterId] = useState<string | null>(null);
   
   const [announce, setAnnounce] = useState("");
   const dashboardRef = useRef<HTMLDivElement | null>(null);
@@ -111,6 +114,22 @@ export default function BelowMap() {
         navigator.serviceWorker.getRegistrations().then((regs) => { regs.forEach((r) => r.unregister().catch(() => {})); }).catch(() => {});
       }
     } catch {}
+  }, []);
+
+  // Referral hint state: initialize from snapshot and subscribe for background resolve
+  useEffect(() => {
+    try {
+      const snap = getReferralSnapshot();
+      setRefInviterFirst(snap.firstName || null);
+      setRefInviterId(snap.userId || null);
+    } catch {}
+    const off = onReferralUpdate((d) => {
+      try {
+        if (typeof d?.firstName === 'string') setRefInviterFirst(d.firstName || null);
+        if (typeof d?.userId === 'string') setRefInviterId(d.userId || null);
+      } catch {}
+    });
+    return () => { try { off(); } catch {} };
   }, []);
   useEffect(() => {
     try {
@@ -297,12 +316,12 @@ export default function BelowMap() {
                       type="button"
                       className="inline-flex items-center h-11 px-5 min-w-[176px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] text-sm whitespace-nowrap overflow-hidden self-center shadow-sm"
                       style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
-                      aria-label="Participate / Log in"
+                      aria-label="Participate"
                       aria-controls="panel-dashboard"
                       aria-expanded={dashboardOpen}
                       onClick={() => { setDashboardMode('guest'); setGuestStep('menu'); setDashboardOpen(true); }}
                     >
-                      Participate / Log in
+                      Participate
                     </button>
                   )
                 )}
@@ -402,9 +421,7 @@ export default function BelowMap() {
                 How it works
               </button>
               {accOpen.how && (
-                <div id="acc-how" role="region" aria-labelledby="acc-how-btn" className="px-3 pb-3 text-sm">
-                  When you sign up, you’ll get a unique link to share with your friends. Each time someone joins through your link, your river grows. When they listen to the album and invite their own friends, their river connects to yours. Together, we can trace where the music flows — and as your chain grows, you collect paper boats that unlock exclusive perks.
-                </div>
+                <div id="acc-how" role="region" aria-labelledby="acc-how-btn" className="px-3 pb-3 text-sm" />
               )}
             </div>
             <div className="rounded-[24px] border" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
@@ -417,9 +434,7 @@ export default function BelowMap() {
                 Why
               </button>
               {accOpen.why && (
-                <div id="acc-why" role="region" aria-labelledby="acc-why-btn" className="px-3 pb-3 text-sm">
-                  I might be old school, but most of the music I treasure came from friends who shared it with me. While the internet keeps getting louder, I want to bring back that simple joy: discovering music from someone you know and trust.
-                </div>
+                <div id="acc-why" role="region" aria-labelledby="acc-why-btn" className="px-3 pb-3 text-sm" />
               )}
             </div>
             <div className="rounded-[24px] border" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
@@ -432,9 +447,7 @@ export default function BelowMap() {
                 Who I am
               </button>
               {accOpen.who && (
-                <div id="acc-who" role="region" aria-labelledby="acc-who-btn" className="px-3 pb-3 text-sm">
-                  I’m Eshaan Sood, a storyteller from New Delhi now in New York. My debut album Dream River is out everywhere — and this is my way of sending the boat sailing to every corner of the world.
-                </div>
+                <div id="acc-who" role="region" aria-labelledby="acc-who-btn" className="px-3 pb-3 text-sm" />
               )}
             </div>
           </div>
@@ -456,7 +469,7 @@ export default function BelowMap() {
             <div className="relative h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden p-4 frosted-panel">
               {/* Frame centers canvas and provides equal inset */}
               <div className="absolute inset-0 min-h-0 grid place-items-center">
-                <div className="relative w-full h-full" style={{ maxWidth: '100%', maxHeight: '100%', padding: 8 }}>
+                <div className="relative w-full" style={{ maxWidth: '100%', padding: 8, aspectRatio: '1 / 1', overflow: 'visible', height: 'auto' }}>
                   <div className="absolute inset-0">
                     <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
                   </div>
@@ -529,6 +542,12 @@ export default function BelowMap() {
               </button>
               {guestStep === 'menu' && (
                 <div className="flex flex-col items-center justify-center gap-3 py-4">
+                  {/* Invite hint (non-blocking), reserved space to avoid layout shift */}
+                  <div aria-live="polite" className="min-h-5 leading-5 text-center font-sans" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
+                    {!!refInviterFirst && (!user || (refInviterId && user && (user as { id?: string | null }).id !== refInviterId)) && (
+                      <span><strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{refInviterFirst}</strong> sent their boat to your shore.</span>
+                    )}
+                  </div>
                   <button
                     className="font-seasons rounded-md px-4 py-3 w-3/4"
                     style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
@@ -547,6 +566,12 @@ export default function BelowMap() {
               )}
               {guestStep === 'signup_email' && (
                 <div className="space-y-3">
+                  {/* Invite hint (non-blocking) above form */}
+                  <div aria-live="polite" className="min-h-5 leading-5 font-sans" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
+                    {!!refInviterFirst && (!user || (refInviterId && user && (user as { id?: string | null }).id !== refInviterId)) && (
+                      <span>Join <strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{refInviterFirst}</strong>&apos;s river and start your own.</span>
+                    )}
+                  </div>
                   <h2 className="font-seasons text-xl" style={{ color: "var(--teal)" }}>Start Your River</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <input id="firstNameField" className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
@@ -575,7 +600,7 @@ export default function BelowMap() {
                   <section aria-label="Choose your boat" className="mt-2">
                     <h3 className="font-seasons text-lg mb-2" style={{ color: "var(--teal)" }}>Choose your boat</h3>
                     <div className="rounded-full size-16 mb-3 flex items-center justify-center border" style={{ background: "var(--white-soft)", borderColor: "var(--mist)" }} aria-label="Boat preview">
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '70%', height: '70%' }}>
                         <path d="M3 15l9-9 9 9-9 3-9-3z" fill={boatColor} />
                       </svg>
                     </div>
@@ -688,6 +713,7 @@ export default function BelowMap() {
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
                             const referral_id = Math.random().toString(36).slice(2, 10);
+                            const referredByCode = (getReferralSnapshot().code || null);
                             await fetch('/api/users/upsert', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
@@ -698,7 +724,7 @@ export default function BelowMap() {
                                 message: favoriteSong,
                                 photo_url: null,
                                 referral_id,
-                                referred_by: null,
+                                referred_by: referredByCode,
                                 boat_color: boatColor,
                               }),
                             });
@@ -734,6 +760,7 @@ export default function BelowMap() {
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
                             const referral_id = Math.random().toString(36).slice(2, 10);
+                            const referredByCode = (getReferralSnapshot().code || null);
                             await fetch('/api/users/upsert', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
@@ -744,7 +771,7 @@ export default function BelowMap() {
                                 message: favoriteSong,
                                 photo_url: null,
                                 referral_id,
-                                referred_by: null,
+                                referred_by: referredByCode,
                                 boat_color: boatColor,
                               }),
                             });
@@ -983,9 +1010,9 @@ export default function BelowMap() {
                     {/* Top row: left badge, right counter + boat icon below */}
                     <div className="grid grid-cols-2 gap-3 items-start">
                       <div className="flex items-center gap-3">
-                        <div className="w-14 h-14 rounded-full overflow-hidden border" style={{ borderColor: 'var(--mist)' }} aria-label="Boat badge">
-                          <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--white-soft)' }}>
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <div className="w-14 h-14 rounded-full overflow-hidden border" style={{ borderColor: 'var(--mist)' }} aria-label="Boat badge">
+                        <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--white-soft)' }}>
+                          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '70%', height: '70%' }}>
                               <path d="M3 15l9-9 9 9-9 3-9-3z" fill={me?.boat_color || '#135E66'} />
                             </svg>
                           </div>
@@ -1015,7 +1042,7 @@ export default function BelowMap() {
                     >
                       Share Your Boat
                     </button>
-                    <div className="font-sans text-xs opacity-80">Use this to grow your river.</div>
+                    {/* Removed duplicate helper copy on mobile per request */}
                     {/* Streaming logos row (no heading) */}
                     <div id="dashboard-streaming" className="flex items-center justify-between gap-3 flex-wrap">
                       <a className="stream-btn" href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify"><span className="stream-icon spotify" aria-hidden="true" /></a>
@@ -1052,8 +1079,8 @@ export default function BelowMap() {
                       <div className="px-2 sm:px-3">
                         <div className="flex items-center justify-between gap-5">
                           <div className="w-14 h-14 rounded-full overflow-hidden border" style={{ borderColor: 'var(--mist)' }} aria-label="Boat badge">
-                            <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--white-soft)' }}>
-                              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--white-soft)' }}>
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ width: '70%', height: '70%' }}>
                                 <path d="M3 15l9-9 9 9-9 3-9-3z" fill={me?.boat_color || '#135E66'} />
                               </svg>
                             </div>

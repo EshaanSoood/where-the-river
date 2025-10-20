@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import ReactGlobe from 'react-globe.gl';
 import * as THREE from 'three';
 import * as topojson from 'topojson-client';
-import { geoCentroid } from 'd3-geo';
+import { geoCentroid, geoBounds } from 'd3-geo';
 
 interface ArcData {
   startLat: number;
@@ -14,6 +14,7 @@ interface ArcData {
   endLng: number;
   startId: string;
   endId: string;
+  primary?: boolean;
 }
 
 // Node = concrete lat/lng point; arcs connect node→node (not country→country)
@@ -95,6 +96,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const myIdRef = useRef<string | null>(null);
   const myFirstNameRef = useRef<string>("");
   const myConnectionsRef = useRef<Set<string>>(new Set());
+  const myChainRef = useRef<Set<string>>(new Set());
   const reservedPosRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
   const [zoomScale, setZoomScale] = useState<number>(1);
   const [overlayNodes, setOverlayNodes] = useState<NodeData[]>([]);
@@ -116,10 +118,22 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const lowPowerRef = useRef<boolean>(false);
   const boatsRef = useRef<Boat[]>([]);
+  const boatArcKeyRef = useRef<string | null>(null);
   const countryCentroidsRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
+  const countryBBoxDiagRef = useRef<Map<string, number>>(new Map());
   // Precomputed name->centroid map; use as fallback when ISO-2 missing in static table
   const containerRef = useRef<HTMLDivElement | null>(null);
   const refitCameraRef = useRef<() => void>(() => {});
+  // Auto-rotate state machine
+  type AutoState = 'autorotate_burst' | 'focused_on_user' | 'autorotate_idle' | 'idle';
+  const autoStateRef = useRef<AutoState>('idle');
+  const burstTimerRef = useRef<number | null>(null);
+  const idleTimerRef = useRef<number | null>(null);
+  const rotateIntervalRef = useRef<number | null>(null);
+  const isLoggedInRef = useRef<boolean>(false);
+  const controlsRef = useRef<any>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
   // Load Country Polygons with LOD
   useEffect(() => {
@@ -169,19 +183,30 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     return [...topLayer, ...bottomLayer];
   }, [countriesLOD, currentLOD]);
 
-  // Build centroids table from low LOD once available
+  // Build centroids and bbox-diagonal tables from low LOD once available
   useEffect(() => {
     try {
       const low = countriesLOD.low;
       if (!low || !low.features || !low.features.length) return;
       const map = new Map<string, { lat: number; lng: number }>();
+      const bbox = new Map<string, number>();
       for (const f of low.features) {
         const name = f?.properties?.name as string | undefined;
         if (!name) continue;
         const [lng, lat] = geoCentroid(f);
         map.set(name, { lat, lng });
+        try {
+          const b = geoBounds(f as any);
+          const min = b[0];
+          const max = b[1];
+          const dLat = Math.abs((max[1] ?? 0) - (min[1] ?? 0));
+          const dLng = Math.abs((max[0] ?? 0) - (min[0] ?? 0));
+          const diagDeg = Math.hypot(dLat, dLng);
+          bbox.set(name, diagDeg);
+        } catch {}
       }
       countryCentroidsRef.current = map;
+      countryBBoxDiagRef.current = bbox;
     } catch {}
   }, [countriesLOD.low]);
 
@@ -247,16 +272,43 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   };
-  const seededJitterAround = (lat: number, lng: number, id: string): [number, number] => {
+  const seededJitterAround = (lat: number, lng: number, id: string, spreadDeg?: number, overrideAngleRad?: number, radiusScale?: number): [number, number] => {
     const seed = hashString(id);
     const rnd = mulberry32(seed);
-    const angle = rnd() * Math.PI * 2;
-    const r = 0.18 + rnd() * 0.12; // 0.18°..0.30°
+    const angle = typeof overrideAngleRad === 'number' ? overrideAngleRad : (rnd() * Math.PI * 2);
+    const base = typeof spreadDeg === 'number' ? Math.max(0.08, Math.min(1.5, spreadDeg)) : 0.24; // default ~0.24°
+    const rUnscaled = (0.6 * base) + rnd() * (0.4 * base); // 60%..100% of base
+    const r = (radiusScale && radiusScale > 0 ? rUnscaled * radiusScale : rUnscaled);
     const dLat = r * Math.sin(angle);
     const dLng = r * Math.cos(angle) / Math.max(0.5, Math.cos(lat * Math.PI / 180));
     const jLat = Math.max(-85, Math.min(85, lat + dLat));
     const jLng = ((lng + dLng + 540) % 360) - 180;
     return [jLat, jLng];
+  };
+
+  const getCountrySpreadDeg = (name: string | null | undefined, fallbackLat: number): number | undefined => {
+    try {
+      if (!name) return undefined;
+      // Exact match
+      let diag = countryBBoxDiagRef.current.get(name);
+      if (typeof diag !== 'number') {
+        // Loose match
+        const target = name.toUpperCase();
+        for (const [k, v] of countryBBoxDiagRef.current.entries()) {
+          const ku = k.toUpperCase();
+          if (ku.includes(target) || target.includes(ku)) { diag = v; break; }
+        }
+      }
+      if (typeof diag !== 'number' || !(diag > 0)) return undefined;
+      // Convert bbox diagonal (deg) to a jitter base (deg). Scale down factor to keep within view.
+      // Use cosine compensation to avoid huge east-west at high latitudes
+      const latRad = (fallbackLat || 0) * Math.PI / 180;
+      const latScale = Math.max(0.5, Math.cos(latRad));
+      const effDiag = Math.hypot(diag * latScale, diag); // rough compensation
+      // Scale factor and clamp
+      const base = Math.max(0.12, Math.min(1.2, effDiag * 0.1)); // 10% of diagonal, clamped
+      return base;
+    } catch { return undefined; }
   };
 
   const createPaperBoatGeometry = () => {
@@ -281,6 +333,48 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.computeVertexNormals();
     return geometry;
+  };
+
+  const spawnBoatAlongArc = (startLat: number, startLng: number, endLat: number, endLng: number) => {
+    try {
+      if (lowPowerRef.current) return;
+      const globe = globeEl.current;
+      const scene = sceneRef.current || (globe ? globe.scene() : null);
+      if (!globe || !scene) return;
+
+      const ARC_ALTITUDE = 0.2;
+      const BOAT_PATH_ALTITUDE = 0.07;
+      const GLOBE_RADIUS = 100;
+
+      const startCoords = globe.getCoords(startLat, startLng);
+      const endCoords = globe.getCoords(endLat, endLng);
+      if (!startCoords || !endCoords) return;
+
+      const startVec = new THREE.Vector3(startCoords.x, startCoords.y, startCoords.z);
+      const endVec = new THREE.Vector3(endCoords.x, endCoords.y, endCoords.z);
+
+      startVec.normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
+      endVec.normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
+
+      const midPoint = new THREE.Vector3().addVectors(startVec, endVec).multiplyScalar(0.5);
+      const midAltitude = GLOBE_RADIUS * (1 + ARC_ALTITUDE);
+      midPoint.normalize().multiplyScalar(midAltitude);
+
+      const curve = new THREE.CatmullRomCurve3([startVec, midPoint, endVec]);
+      const boatMaterial = new THREE.MeshPhongMaterial({ map: paperTexture || undefined, color: 0xffffff, shininess: 5, specular: 0x111111 });
+      const boatMesh = new THREE.Mesh(paperBoatGeometry, boatMaterial);
+      boatMesh.scale.set(6, 6, 6);
+
+      // Cap to 1 active boat
+      if (boatsRef.current.length >= 1) {
+        try {
+          const old = boatsRef.current.shift();
+          if (old && scene) scene.remove(old.mesh);
+        } catch {}
+      }
+      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: boatMesh, curve, startTime: performance.now(), duration: 15000 });
+      scene.add(boatMesh);
+    } catch {}
   };
 
   // --- DB mapping: auto-generate nodes/links from API ---
@@ -325,18 +419,112 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         const [{ nodes, links }, me] = await Promise.all([fetchGlobeData('all'), fetchMeSafe()]);
         if (cancelled) return;
         myIdRef.current = me?.id || null;
+        isLoggedInRef.current = !!myIdRef.current;
         try { myFirstNameRef.current = ((me?.name || '').trim().split(/\s+/)[0] || ''); } catch { myFirstNameRef.current = ''; }
         const conn = new Set<string>();
         if (myIdRef.current) {
           links.forEach(l => { if (l.source === myIdRef.current) conn.add(l.target); if (l.target === myIdRef.current) conn.add(l.source); });
         }
         myConnectionsRef.current = conn;
+
+        // Build chain set (ancestors + descendants) via undirected traversal over links
+        const chain = new Set<string>();
+        const adj = new Map<string, Set<string>>();
+        links.forEach(l => {
+          if (!adj.has(l.source)) adj.set(l.source, new Set());
+          if (!adj.has(l.target)) adj.set(l.target, new Set());
+          adj.get(l.source)!.add(l.target);
+          adj.get(l.target)!.add(l.source);
+        });
+        const startId = myIdRef.current;
+        if (startId) {
+          const q: string[] = [startId];
+          chain.add(startId);
+          while (q.length) {
+            const cur = q.shift()!;
+            const neigh = adj.get(cur);
+            if (!neigh) continue;
+            neigh.forEach(n => {
+              if (!chain.has(n)) { chain.add(n); q.push(n); }
+            });
+          }
+        }
+        myChainRef.current = chain;
         const nodeMap = new Map<string, NodeData>();
         nodes.forEach(n => {
           const cc = (n.countryCode || '').toUpperCase();
           const base = resolveLatLngForCode(cc);
-          const [lat, lng] = seededJitterAround(base[0], base[1], n.id);
+          // Determine country name via ISO-2; fallback to nearest centroid match for spread estimation
+          const name = getCountryNameFromIso2(cc);
+          const spread = getCountrySpreadDeg(name, base[0]);
+          // Prepare placement; angle may be overridden by moat rules below
+          const [lat, lng] = seededJitterAround(base[0], base[1], n.id, spread);
           nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: 'rgba(255,255,255,0.95)', countryCode: cc, name: n.name || null });
+        });
+        // Moat around the logged-in user: sector reservation + bubble + user radius scale
+        const N = 8; const sectorSize = (2 * Math.PI) / N;
+        const userId = myIdRef.current;
+        let userSector: number | null = null;
+        let userAngle: number | null = null;
+        let userCountry: string | null = null;
+        if (userId && nodeMap.has(userId)) {
+          const me = nodeMap.get(userId)!;
+          userCountry = me.countryCode || null;
+          const seed = hashString(userId);
+          const rnd = mulberry32(seed);
+          const baseAngle = rnd() * Math.PI * 2;
+          userSector = Math.floor(baseAngle / sectorSize) % N;
+          userAngle = (userSector * sectorSize) + (sectorSize / 2);
+        }
+        // Recompute positions with angle overrides where applicable
+        if (userSector !== null && userAngle !== null && userCountry) {
+          const bubbleDeg = 0.35; const bubbleRad = bubbleDeg * Math.PI / 180;
+          const entries = Array.from(nodeMap.values());
+          for (const val of entries) {
+            const cc = (val.countryCode || '').toUpperCase();
+            const base = resolveLatLngForCode(cc);
+            const name = getCountryNameFromIso2(cc);
+            const spread = getCountrySpreadDeg(name, base[0]);
+            // Compute hashed base angle for this node
+            const seed = hashString(val.id);
+            const rnd = mulberry32(seed);
+            const baseAngle = rnd() * Math.PI * 2;
+            let angle = baseAngle;
+            if (cc === userCountry) {
+              let sector = Math.floor(baseAngle / sectorSize) % N;
+              if (sector === userSector) sector = (sector + 1) % N; // shift off user sector
+              angle = (sector * sectorSize) + (sectorSize / 2);
+              // Bubble: if too close to user angle, snap to nearest sector boundary
+              const diff = Math.atan2(Math.sin(angle - userAngle), Math.cos(angle - userAngle));
+              if (Math.abs(diff) < bubbleRad) {
+                const leftBoundary = userSector * sectorSize;
+                const rightBoundary = ((userSector + 1) % N) * sectorSize;
+                // Choose nearest boundary
+                const distLeft = Math.abs(Math.atan2(Math.sin(angle - leftBoundary), Math.cos(angle - leftBoundary)));
+                const distRight = Math.abs(Math.atan2(Math.sin(angle - rightBoundary), Math.cos(angle - rightBoundary)));
+                angle = distLeft <= distRight ? leftBoundary : rightBoundary;
+              }
+            }
+            const radiusScale = (userId && val.id === userId) ? 1.6 : undefined;
+            const [lat, lng] = seededJitterAround(base[0], base[1], val.id, spread, angle, radiusScale);
+            val.lat = lat; val.lng = lng;
+          }
+        }
+        // Apply coloring: me = dark teal, friends = aqua, others = near-white
+        const darkTeal = '#135E66';
+        const aqua = 'rgba(42,167,181,0.95)';
+        const nearWhite = 'rgba(255,255,255,0.95)';
+        nodeMap.forEach((val, key) => {
+          if (myIdRef.current && key === myIdRef.current) {
+            val.color = darkTeal;
+            val.size = 0.35;
+          } else if (myConnectionsRef.current.has(key)) {
+            val.color = aqua;
+            val.size = 0.28;
+          } else {
+            val.color = nearWhite;
+            val.size = 0.20;
+          }
         });
         setNodesData(Array.from(nodeMap.values()));
         const arcs: ArcData[] = [];
@@ -344,9 +532,32 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
           const a = nodeMap.get(l.source);
           const b = nodeMap.get(l.target);
           if (!a || !b) return;
-          arcs.push({ startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng, startId: a.id, endId: b.id });
+          const isPrimary = myChainRef.current.has(a.id) && myChainRef.current.has(b.id);
+          arcs.push({ startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng, startId: a.id, endId: b.id, primary: isPrimary });
         });
+        // Render order: Secondary first, Primary after (on top)
+        arcs.sort((x, y) => Number(Boolean(x.primary)) - Number(Boolean(y.primary)));
         setArcsData(arcs);
+
+        // Spawn a boat along the first primary arc (always-on)
+        const pri = arcs.find(a => a.primary);
+        if (pri) {
+          const key = `${pri.startId}->${pri.endId}`;
+          if (boatArcKeyRef.current !== key) {
+            boatArcKeyRef.current = key;
+            spawnBoatAlongArc(pri.startLat, pri.startLng, pri.endLat, pri.endLng);
+          }
+        }
+
+        // Autorotate state machine entry
+        if (isLoggedInRef.current) {
+          focusCameraOnUser();
+          autoStateRef.current = 'focused_on_user';
+          startIdleTimer();
+        } else {
+          autoStateRef.current = 'autorotate_burst';
+          startBurstRotate();
+        }
       } catch {
         if (!cancelled) { setNodesData([]); setArcsData([]); }
       }
@@ -489,6 +700,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     const controls = globeEl.current.controls();
     const camera = globeEl.current.camera();
     const renderer = globeEl.current.renderer?.();
+    controlsRef.current = controls;
+    cameraRef.current = camera;
+    rendererRef.current = renderer as unknown as THREE.WebGLRenderer | null;
 
     // LOD switching based on zoom
     const ZOOM_LOD_THRESHOLD = 220;
@@ -514,8 +728,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
 
     controls.addEventListener('change', handleZoom);
 
-    // Configure controls
-    controls.autoRotate = true;
+    // Configure controls — disable built-in autoRotate; we'll drive with intervals
+    controls.autoRotate = false;
     controls.autoRotateSpeed = 0.25;
 
     // Enable and configure zoom for LOD
@@ -567,7 +781,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     const starVertices = [] as number[];
     const starRadius = 1500; // Large radius for the star sphere
 
-    for (let i = 0; i < 10000; i++) {
+    for (let i = 0; i < 4000; i++) {
         const u = Math.random();
         const v = Math.random();
         
@@ -639,6 +853,34 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     };
     try { window.addEventListener('resize', onResize); } catch {}
     try { controls.addEventListener('change', () => scheduleOverlayUpdate()); } catch {}
+
+    // Activity tracking & visibility
+    const onActivity = () => {
+      stopRotateInterval();
+      if (isLoggedInRef.current) {
+        autoStateRef.current = 'focused_on_user';
+        startIdleTimer();
+      } else {
+        autoStateRef.current = 'idle';
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        stopRotateInterval();
+      } else if (autoStateRef.current === 'autorotate_idle') {
+        startIdleRotate();
+      }
+    };
+    const activityEvents: (keyof DocumentEventMap)[] = ['pointerdown','wheel','keydown','touchstart'];
+    activityEvents.forEach((ev) => { try { window.addEventListener(ev, onActivity, { passive: true } as AddEventListenerOptions); } catch {} });
+    try { document.addEventListener('visibilitychange', onVisibility); } catch {}
+    try { window.addEventListener('resize', onResize); } catch {}
+    try { controls.addEventListener('change', () => scheduleOverlayUpdate()); } catch {}
+    activityEvents.forEach((ev) => { try { window.removeEventListener(ev, onActivity); } catch {} });
+    try { document.removeEventListener('visibilitychange', onVisibility); } catch {}
+    stopRotateInterval();
+    if (burstTimerRef.current) { window.clearTimeout(burstTimerRef.current); burstTimerRef.current = null; }
+    if (idleTimerRef.current) { window.clearTimeout(idleTimerRef.current); idleTimerRef.current = null; }
   };
 
   // Observe container/renderer size changes to keep fit accurate beyond window resizes
@@ -697,6 +939,59 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       boatsRef.current = [];
     };
   }, []);
+
+  // --- Autorotate helpers ---
+  const stopRotateInterval = () => {
+    if (rotateIntervalRef.current) { window.clearInterval(rotateIntervalRef.current); rotateIntervalRef.current = null; }
+    try { if (controlsRef.current) controlsRef.current.autoRotate = false; } catch {}
+  };
+  const startBurstRotate = () => {
+    stopRotateInterval();
+    const controls = controlsRef.current; const camera = cameraRef.current as THREE.PerspectiveCamera | null;
+    if (!controls || !camera) return;
+    const step = 0.01; // ~30fps
+    rotateIntervalRef.current = window.setInterval(() => {
+      try { controls.rotateLeft(step); controls.update(); } catch {}
+    }, 33) as unknown as number;
+    burstTimerRef.current = window.setTimeout(() => {
+      stopRotateInterval();
+      autoStateRef.current = 'idle';
+    }, 120000) as unknown as number; // 120s
+  };
+  const startIdleTimer = () => {
+    if (idleTimerRef.current) { window.clearTimeout(idleTimerRef.current); idleTimerRef.current = null; }
+    idleTimerRef.current = window.setTimeout(() => {
+      autoStateRef.current = 'autorotate_idle';
+      startIdleRotate();
+    }, 120000) as unknown as number; // 2 minutes
+  };
+  const startIdleRotate = () => {
+    stopRotateInterval();
+    const controls = controlsRef.current; const camera = cameraRef.current as THREE.PerspectiveCamera | null;
+    if (!controls || !camera) return;
+    const step = 0.006; // ~15fps
+    rotateIntervalRef.current = window.setInterval(() => {
+      try { controls.rotateLeft(step); controls.update(); } catch {}
+    }, 66) as unknown as number;
+  };
+  const focusCameraOnUser = () => {
+    try {
+      const id = myIdRef.current; if (!id) return;
+      const node = nodesData.find(n => n.id === id); if (!node) return;
+      const globe = globeEl.current; if (!globe) return;
+      const cam = cameraRef.current as THREE.PerspectiveCamera | null; if (!cam) return;
+      const controls = controlsRef.current;
+      const c = globe.getCoords(node.lat, node.lng); if (!c) return;
+      const target = new THREE.Vector3(c.x, c.y, c.z);
+      controls.target.copy(target);
+      const dist = cam.position.length();
+      const dir = target.clone().normalize().multiplyScalar(dist);
+      cam.position.copy(dir);
+      cam.lookAt(target);
+      cam.updateProjectionMatrix();
+      controls.update();
+    } catch {}
+  };
 
   const handlePolygonHover = (feature: any | null) => {
     setHoveredCountry(feature);
@@ -832,13 +1127,15 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
             const cam = globe.camera();
             const world = new THREE.Vector3(c.x, c.y, c.z);
             const dot = world.clone().normalize().dot(cam.position.clone().normalize());
-            const isPri = !!(d.startId && (d.startId === myIdRef.current || myConnectionsRef.current.has(d.startId))) || !!(d.endId && (d.endId === myIdRef.current || myConnectionsRef.current.has(d.endId)));
-            const base = '102, 194, 255';
-            const alpha = dot >= 0 ? (isPri ? 0.95 : 0.8) : (isPri ? 0.35 : 0.12);
+            const isPri = !!d.primary;
+            const basePrimary = '140, 220, 255';
+            const baseSecondary = '102, 194, 255';
+            const alpha = dot >= 0 ? (isPri ? 0.98 : 0.64) : (isPri ? 0.42 : 0.10);
+            const base = isPri ? basePrimary : baseSecondary;
             return `rgba(${base}, ${alpha})`;
           } catch { return 'rgba(102, 194, 255, 0.8)'; }
         }, [])}
-        arcStroke={2}
+        arcStroke={useCallback((d: any) => (d?.primary ? 2.2 : 2), [])}
         arcAltitude={0.2}
         arcDashLength={1}
         arcDashGap={0}
@@ -888,9 +1185,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
             style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 60, opacity: 0 }}
             aria-hidden="true"
           >
-            {isMe && (
-              <div style={{ width: 32, height: 32, borderRadius: '50%', boxShadow: '0 0 18px 8px rgba(42,167,181,0.35)' }} />
-            )}
+            {/* No glow for me; color already applied to node fill */}
             <div className="font-seasons" style={{ position: 'absolute', left: '50%', top: 18, transform: 'translate(-50%, 0)', color: 'var(--ink, #e6e6e6)', fontSize: 12, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}>
               {isMe ? (myFirstNameRef.current || '') : (p.name ? String(p.name).split(/\s+/)[0]?.[0]?.toUpperCase() : '')}
             </div>

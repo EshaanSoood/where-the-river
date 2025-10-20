@@ -28,7 +28,22 @@ export async function POST(req: Request) {
     const country_name = country_code ? getCountryNameFromCode(country_code) : null;
     const message = (meta.message ?? null) as string | null;
     const boat_color = (meta.boat_color ?? null) as string | null;
-    const boats_total = typeof meta.boats_total === 'number' ? meta.boats_total : 0;
+    // Prefer server-authoritative total from boats_totals view; fallback to metadata if unavailable
+    let boats_total = 0;
+    try {
+      const { data: totalRow, error: totalErr } = await supabaseServer
+        .from('boats_totals')
+        .select('boats_total')
+        .eq('user_id', target.id)
+        .maybeSingle();
+      if (!totalErr && totalRow && typeof (totalRow as { boats_total?: unknown }).boats_total === 'number') {
+        boats_total = (totalRow as { boats_total: number }).boats_total;
+      } else {
+        boats_total = typeof meta.boats_total === 'number' ? meta.boats_total : 0;
+      }
+    } catch {
+      boats_total = typeof meta.boats_total === 'number' ? meta.boats_total : 0;
+    }
     const referral_code = (meta.referral_id ?? null) as string | null;
 
     return NextResponse.json({

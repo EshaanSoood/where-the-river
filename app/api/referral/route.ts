@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { inviterId } = body as { inviterId?: string };
     const token = Math.random().toString(36).slice(2, 10);
+    const baseUrl = ((process.env.NEXT_PUBLIC_SITE_URL as string) || (process.env.PUBLIC_APP_BASE_URL as string) || req.nextUrl.origin || '').replace(/\/$/, '');
 
     if (!inviterId) {
       return NextResponse.json({ error: "inviterId required" }, { status: 400 });
@@ -35,7 +36,8 @@ export async function POST(req: NextRequest) {
     const nextMeta: AuthMeta = { ...meta, referral_id };
     const { error: updErr } = await supabase.auth.admin.updateUserById(inviterId, { user_metadata: nextMeta });
     if (updErr) throw updErr;
-    return NextResponse.json({ referral: `/r/${referral_id}` });
+    // Return a canonical share URL using ?ref=<code> for consistency with the UI
+    return NextResponse.json({ referral: `${baseUrl}/?ref=${referral_id}` });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unexpected error";
     return NextResponse.json({ error: message }, { status: 500 });

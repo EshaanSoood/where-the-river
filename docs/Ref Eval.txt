@@ -1,0 +1,103 @@
+I scanned the referral flows (share UI, hooks, and APIs). Here’s what it currently does, end-to-end.
+
+- Share link generation (client)
+  - useMe computes referral_url as <base>/?ref=<code> from Auth metadata:
+```55:71:/Users/eshaansood/Where-the-river/web/hooks/useMe.ts
+const m = json?.me as Partial<MeData> | undefined;
+// ...
+const code = (m.ref_code_8 || m.referral_code || null) as string | null;
+const referral_url = code ? `${baseUrl}/?ref=${code}` : null;
+setMe({ /* ... */ referral_url });
+```
+  - Share UI uses that URL; also honors window.RIVER_REFERRAL_URL override:
+```14:21:/Users/eshaansood/Where-the-river/web/components/ShareTiles.tsx
+export default function ShareTiles({ referralUrl, message, userFullName, onCopy }: Props) {
+  // Fallbacks per spec
+  let ru = referralUrl;
+  if (typeof window !== 'undefined' && window.RIVER_REFERRAL_URL) ru = window.RIVER_REFERRAL_URL;
+```
+  - Share button is disabled until me.referral_url exists:
+```80:89:/Users/eshaansood/Where-the-river/web/components/DashboardBadge.tsx
+<motion.button
+  // ...
+  onClick={() => setMode("share")}
+  disabled={loading || !!error || !me?.referral_url}
+>
+  Share your Boat
+</motion.button>
+```
+
+- What populates the code
+  - /api/me returns referral_code from Auth metadata (referral_id):
+```32:46:/Users/eshaansood/Where-the-river/web/app/api/me/route.ts
+const boats_total = typeof meta.boats_total === 'number' ? meta.boats_total : 0;
+const referral_code = (meta.referral_id ?? null) as string | null;
+return NextResponse.json({
+  exists: true,
+  me: { /* ... */ boats_total, referral_code, ref_code_8: referral_code },
+});
+```
+  - /api/users/upsert ensures the user has a referral_id in Auth metadata (keeps existing, else generates):
+```84:93:/Users/eshaansood/Where-the-river/web/app/api/users/upsert/route.ts
+const nextMeta: AuthMeta = {
+  ...prevMeta,
+  // ...
+  referred_by: sanitized.referred_by,
+  referral_id: (prevMeta as { referral_id?: unknown }).referral_id ?? referral,
+  otp_verified: true,
+};
+```
+
+- Auth-only shortcut (scaffold)
+  - /api/my-referral-link is not wired yet; it returns 401:
+```4:12:/Users/eshaansood/Where-the-river/web/app/api/my-referral-link/route.ts
+export async function GET() {
+  try {
+    // ...
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (e: unknown) {
+```
+
+- “/r/<code>” vs “?ref=<code>”
+  - There’s an API that returns a path like /r/<code>:
+```35:39:/Users/eshaansood/Where-the-river/web/app/api/referral/route.ts
+const { error: updErr } = await supabase.auth.admin.updateUserById(inviterId, { user_metadata: nextMeta });
+if (updErr) throw updErr;
+return NextResponse.json({ referral: `/r/${referral_id}` });
+```
+  - However, no /app/r/[referral] route exists, and no code reads the ref query to attribute. Grep found no reader for ?ref. The signup UI currently passes referred_by: null:
+```691:705:/Users/eshaansood/Where-the-river/web/components/BelowMap.tsx
+await fetch('/api/users/upsert', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name, email, country_code: country, message: favoriteSong, photo_url: null,
+    referral_id, referred_by: null, boat_color: boatColor,
+  }),
+});
+```
+
+What this means today
+- Sharing: Works for signed-in users. The link format used by the UI is ?ref=<code>, not /r/<code>.
+- Attribution: Not persisted. There’s no reader for ?ref, and the signup path does not set referred_by.
+- “/r/<code>” landing: Likely 404 (no page route), despite the API returning that shape.
+- /api/profiles/by-email: Present but deprecated (returns 410); not used by the current Share UI.
+
+Optional manual check (no code)
+- As a logged-in user, open the dashboard and confirm “Share your Boat” is enabled and copies/shares a ?ref=... link.
+- Open that link in a fresh/incognito window: no “invited by” hint appears.
+- Sign up from that window: referral isn’t credited (no referred_by is set).
+
+Impact
+- Share UI is functional for generating links.
+- Referral crediting and deep-link landing are not implemented yet.
+
+Open questions for implementation
+- Link format: Should we canonicalize to `/r/<code>`, still accept `?ref=<code>`, or support both?
+- Landing flow: Is it OK to add a server-only redirect that sets a referral cookie (via middleware or `app/r/[code]` route) and then redirects to `/`? No UI changes.
+- Attribution source of truth: Set `referred_by` in Auth metadata. Should it store the inviter’s `referral_id` (8-digit code) or the inviter’s user id?
+- Cookie details: Name, TTL (e.g., 30/60/90 days), domain/scope, and overwrite rules (first click wins vs latest click wins).
+- Guards: Block self-referrals and ignore duplicates if `referred_by` is already set—correct?
+- Apply timing: Only on first successful signup/upsert; do nothing for already-verified accounts—correct?
+- `/api/my-referral-link`: Return full URL and ensure code exists if missing—anything else in the payload?
+- Back-compat: Keep `/api/profiles/by-email` as-is (410) and leave all other routes untouched—correct?
