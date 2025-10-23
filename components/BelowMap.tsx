@@ -15,7 +15,7 @@ import ColorChips from "@/components/ColorChips";
 import LeftPanelEmbeds from "@/components/LeftPanelEmbeds";
 import HowToPlayVideo from "@/components/HowToPlayVideo";
 // DashboardSheet is not used directly; inline overlay below owns the layout
-import { getReferralSnapshot, onReferralUpdate } from "@/lib/referral";
+import { getReferralSnapshot, onReferralUpdate, hasCookieRef, trySetCookieRef } from "@/lib/referral";
 
   const Globe = dynamic(() => import("@/components/GlobeNew"), { ssr: false });
   const RewardsView = dynamic(() => import("@/components/RewardsView"), { ssr: false });
@@ -421,7 +421,11 @@ export default function BelowMap() {
                 How it works
               </button>
               {accOpen.how && (
-                <div id="acc-how" role="region" aria-labelledby="acc-how-btn" className="px-3 pb-3 text-sm" />
+                <div id="acc-how" role="region" aria-labelledby="acc-how-btn" className="px-3 pb-3 text-sm">
+                  <p>
+                    When you sign up, you&apos;ll get a unique link to share with your friends. Each time someone joins through your link, your river grows. When they listen to the album and invite their own friends, their river connects to yours. Together, we can trace where the music flows — and as your chain grows, you collect paper boats that unlock exclusive perks.
+                  </p>
+                </div>
               )}
             </div>
             <div className="rounded-[24px] border" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
@@ -434,7 +438,11 @@ export default function BelowMap() {
                 Why
               </button>
               {accOpen.why && (
-                <div id="acc-why" role="region" aria-labelledby="acc-why-btn" className="px-3 pb-3 text-sm" />
+                <div id="acc-why" role="region" aria-labelledby="acc-why-btn" className="px-3 pb-3 text-sm">
+                  <p>
+                    I might be old school, but most of the music I treasure came from friends who shared it with me. While the internet keeps getting louder, I want to bring back that simple joy: discovering music from someone you know and trust.
+                  </p>
+                </div>
               )}
             </div>
             <div className="rounded-[24px] border" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
@@ -447,7 +455,11 @@ export default function BelowMap() {
                 Who I am
               </button>
               {accOpen.who && (
-                <div id="acc-who" role="region" aria-labelledby="acc-who-btn" className="px-3 pb-3 text-sm" />
+                <div id="acc-who" role="region" aria-labelledby="acc-who-btn" className="px-3 pb-3 text-sm">
+                  <p>
+                    I&apos;m Eshaan Sood, a storyteller from New Delhi now in New York. My debut album &lsquo;Dream River&rsquo; is out everywhere — and this is my way of sending the boat sailing to every corner of the world.
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -548,6 +560,22 @@ export default function BelowMap() {
                       <span><strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{refInviterFirst}</strong> sent their boat to your shore.</span>
                     )}
                   </div>
+                  {/* Optional consent if cookie not set but we have a ref context */}
+                  {(!hasCookieRef() && !!refInviterFirst) && (
+                    <div className="flex items-center justify-center gap-2 text-sm" aria-live="polite">
+                      <span>
+                        <strong>{refInviterFirst}</strong> invited you.
+                      </span>
+                      <button
+                        type="button"
+                        className="underline"
+                        aria-label="Accept referral cookie"
+                        onClick={() => { const snap = getReferralSnapshot(); if (snap.code) trySetCookieRef(snap.code); }}
+                      >
+                        Accept
+                      </button>
+                    </div>
+                  )}
                   <button
                     className="font-seasons rounded-md px-4 py-3 w-3/4"
                     style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
@@ -572,6 +600,22 @@ export default function BelowMap() {
                       <span>Join <strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{refInviterFirst}</strong>&apos;s river and start your own.</span>
                     )}
                   </div>
+                  {/* Consent (if needed) */}
+                  {(!hasCookieRef() && !!refInviterFirst) && (
+                    <div className="flex items-center gap-2 text-sm" aria-live="polite">
+                      <span>
+                        <strong>{refInviterFirst}</strong> invited you.
+                      </span>
+                      <button
+                        type="button"
+                        className="underline"
+                        aria-label="Accept referral cookie"
+                        onClick={() => { const snap = getReferralSnapshot(); if (snap.code) trySetCookieRef(snap.code); }}
+                      >
+                        Accept
+                      </button>
+                    </div>
+                  )}
                   <h2 className="font-seasons text-xl" style={{ color: "var(--teal)" }}>Start Your River</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <input id="firstNameField" className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />

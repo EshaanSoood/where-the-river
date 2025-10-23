@@ -177,7 +177,18 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
       {/* Sticky header bar */}
       <div className="sticky top-0 z-10" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)' }}>
         <div className="flex items-center justify-between px-2 py-2.5">
-          <button type="button" className="text-sm underline" aria-label="Back" onClick={onBack}>Back</button>
+          <button
+            type="button"
+            aria-label="Back"
+            onClick={onBack}
+            className="inline-flex items-center gap-2 h-11 px-4 rounded-[24px] font-sans text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]"
+            style={{ background: 'rgba(210, 245, 250, 0.85)', border: '1.5px solid rgba(19,94,102,0.35)', color: 'var(--ink)' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Back</span>
+          </button>
           <h4 id="rewards-title" ref={rewardsHeadingRef} tabIndex={-1} className="font-seasons text-lg" style={{ color: 'var(--ink)' }}>Rewards</h4>
           <button ref={pointsButtonRef} type="button" className="text-sm underline" aria-haspopup="dialog" aria-expanded={pointsOpen} onClick={() => setPointsOpen(true)}>How Points Work</button>
         </div>
@@ -218,9 +229,13 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
       <section aria-label="Mystery hint">
         <div className="rounded-[24px] border px-4 py-3" style={{ background: 'rgba(210, 245, 250, 0.25)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: '0 6px 16px rgba(0,0,0,0.04)' }}>
           <div className="text-base opacity-80 italic" style={{ color: 'var(--ink)' }}>
-            A rare island lies beyond…
+            When your river widens, something rare appears.
             <br />
-            Something special unlocks when your river flows further.
+            Keep sending boats—new shores rise from the mist.
+            <br />
+            The next island shows when the current grows.
+            <br />
+            Your boats are carving a path to something special.
           </div>
         </div>
       </section>

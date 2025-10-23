@@ -68,12 +68,23 @@ export function captureRefFromURL(): string | null {
   try {
     if (typeof window === "undefined") return null;
     const url = new URL(window.location.href);
-    const ref = (url.searchParams.get("ref") || "").trim();
+    // Normalize: first ref in query wins, decode once, restrict to A-Z0-9
+    const raw = (url.searchParams.getAll("ref")[0] || "").trim();
+    const once = (() => { try { return decodeURIComponent(raw); } catch { return raw; } })();
+    const upper = once.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const ref = upper;
     if (!ref) return null;
     // Persist new ref; update if changed
     const prev = getWithTTL<string>(REF_CODE_KEY);
     if (!prev || prev !== ref) {
       setWithTTL(REF_CODE_KEY, ref, REF_CODE_TTL_MS);
+      // Also write cookie contract (best-effort)
+      try {
+        const attrs = ["Path=/", "Max-Age=" + Math.floor(REF_CODE_TTL_MS / 1000), "SameSite=Lax"];
+        // Add Secure when served over https
+        if (window.location.protocol === "https:") attrs.push("Secure");
+        document.cookie = `river_ref=${ref}; ${attrs.join("; ")}`;
+      } catch {}
       dispatchRefUpdate({ code: ref });
     }
     return ref;
@@ -99,7 +110,19 @@ export async function resolveReferrer(code: string): Promise<{ firstName: string
 
 export async function ensureRefCapturedAndResolved(): Promise<void> {
   try {
-    const ref = captureRefFromURL() || getWithTTL<string>(REF_CODE_KEY) || null;
+    // Precedence: URL > cookie > localStorage
+    const fromUrl = captureRefFromURL();
+    const fromCookie = (() => {
+      try {
+        if (typeof document === "undefined") return null;
+        const m = document.cookie.match(/(?:^|; )river_ref=([^;]+)/);
+        const v = m ? decodeURIComponent(m[1]) : "";
+        const norm = (v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+        return norm || null;
+      } catch { return null; }
+    })();
+    const fromLocal = getWithTTL<string>(REF_CODE_KEY) || null;
+    const ref = fromUrl || fromCookie || fromLocal;
     if (!ref) return;
 
     const existingFirst = getWithTTL<string>(REF_FIRST_KEY);
@@ -114,6 +137,22 @@ export async function ensureRefCapturedAndResolved(): Promise<void> {
     if (userId) setWithTTL(REF_UID_KEY, userId, REF_FIRST_TTL_MS);
     dispatchRefUpdate({ code: ref, firstName: firstName || null, userId: userId || null });
   } catch {}
+}
+
+export function hasCookieRef(): boolean {
+  try { if (typeof document === "undefined") return false; return /(?:^|; )river_ref=/.test(document.cookie); } catch { return false; }
+}
+
+export function trySetCookieRef(code: string): boolean {
+  try {
+    if (typeof document === "undefined") return false;
+    const norm = (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const attrs = ["Path=/", "Max-Age=" + Math.floor(REF_CODE_TTL_MS / 1000), "SameSite=Lax"];
+    if (typeof window !== "undefined" && window.location.protocol === "https:") attrs.push("Secure");
+    document.cookie = `river_ref=${norm}; ${attrs.join("; ")}`;
+    // read-back
+    return /(?:^|; )river_ref=/.test(document.cookie);
+  } catch { return false; }
 }
 
 

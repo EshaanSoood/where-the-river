@@ -10,18 +10,6 @@ export default function Hero() {
         <p className="text-sm text-foreground">
           Thank you for making your way to this little mini-game. Recently, I came across the idea of <em>six degrees of separation</em> — the notion that everyone on Earth is linked through just six steps of connection. I wanted to test this theory in the real world, through music.
         </p>
-        <h2 className="font-semibold text-lg">How it works</h2>
-        <p className="text-sm text-foreground">
-          When you sign up, you’ll get a unique link to share with your friends. Each time someone joins through your link, your river grows. When they listen to the album and invite their own friends, their river connects to yours. Together, we can trace where the music flows — and as your chain grows, you collect paper boats that unlock exclusive perks.
-        </p>
-        <h2 className="font-semibold text-lg">Why</h2>
-        <p className="text-sm text-foreground">
-          I might be old school, but most of the music I treasure came from friends who shared it with me. While the internet keeps getting louder, I want to bring back that simple joy: discovering music from someone you know and trust.
-        </p>
-        <h2 className="font-semibold text-lg">Who I am</h2>
-        <p className="text-sm text-foreground">
-          I’m <strong>Eshaan Sood</strong>, a storyteller from New Delhi now in New York. My debut album <em>Dream River</em> is out everywhere — and this is my way of sending the boat sailing to every corner of the world.
-        </p>
       </div>
     </section>
   );

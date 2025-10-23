@@ -1,0 +1,212 @@
+Broken referral attribution – Kota / Orzen (no code changes)
+
+Summary
+- Users Aadhithya Kota and Annie Orzen do not have referred_by set even though they reportedly used `?ref=37215765` (`Eshaan Sood`).
+- Current prod data shows: Sood → Isra Safawi only; Kota/Orzen have no inbound links (no referred_by).
+
+How referral capture works (today)
+1) Client capture: `ensureRefCapturedAndResolved()` runs on app mount (providers.tsx), reads `?ref` and stores to localStorage (`river.ref`).
+2) OTP verify: component reads `getReferralSnapshot().code` and passes it as `referred_by` to `/api/users/upsert`.
+3) Upsert writes `referred_by` only if it’s not already present in metadata (first-click wins; no overwrite).
+
+Likely reasons for missing referred_by
+- Param/window mismatch: Users opened the link with `?ref=...` but completed OTP in a new tab/window without the param, so localStorage didn’t contain the code in that context.
+- Timing: Capture didn’t run before OTP verify (e.g., page didn’t mount providers yet, or very fast flow).
+- Storage blocked/cleared: LocalStorage disabled, cleared, or blocked by privacy settings; no `river.ref` persisted.
+- Prior metadata: `referred_by` was already set (from earlier flow) so upsert respected “first-click wins” and did not update.
+
+Evidence in code
+- providers.tsx triggers capture on initial mount only; OTP route reads from snapshot at verify time.
+- `/api/users/upsert` uses `referred_by: prevMeta.referred_by ?? sanitized.referred_by` so any existing value blocks update.
+
+Suggested validation steps (no code changes)
+1) Inspect `docs/_diagnostics/*/02-upsert-input.txt` for the affected emails; confirm `referred_by` was null at POST time.
+2) Ask users if they switched tabs or reloaded without `?ref` visible before entering OTP.
+3) Manually verify `localStorage['river.ref']` presence during a fresh run on the same origin.
+
+Remediation options (for later implementation)
+- Ensure-on-upsert fallback: if `referred_by` missing at verify time and a valid `river.ref` is present, set it (still first-click only at user level).
+- Session propagation: store `?ref` into a cookie/session on first hit so subsequent tabs can read it.
+- Deep link guard: preserve `?ref` across navigation to the Participate/OTP page, or capture immediately on landing.
+
+Planned fix – make ref capture persistent end‑to‑end (no code changes yet)
+Goal
+- Guarantee the inviter ref travels with the user from first click to post‑signup, with clear visual cues at each step.
+
+Intended UX cues
+- Landing → “referred by <Name> sent their boat your way.”
+- Participate → “You’re joining <Name>’s river.”
+- Send OTP → prior to submit and on success toast: “Inviter: <Name>”.
+
+Action steps (implementation plan)
+1) Capture on every entry
+   - On any page mount, read `?ref=` and write both localStorage and a first‑party cookie (e.g., `river_ref=<code>; Path=/; Max-Age=604800; SameSite=Lax`).
+   - If param missing, read cookie/localStorage and hydrate app state.
+   - Normalize and immediately resolve inviter (name + uid) for UI cues; cache both in storage with TTL and mirror in a lightweight React context for instant access.
+
+2) Propagate through navigation
+   - On client navigations (including Participate button) ensure the ref context is present. Do not mutate the URL on internal pages; rely on cookie/context so modals and SSR/CSR paths see the same value.
+   - For direct routes (e.g., /participate loaded directly), hydrate ref from cookie/localStorage before rendering forms.
+
+3) Visual indicators at each step
+   - Header/landing: non-blocking banner “<Name> sent their boat your way.” (hide if unresolved).
+   - Participate panel: static line under title “You’re joining <Name>’s river.” (fallback to code if name unresolved).
+   - Signup screen: same line above inputs; disable Send OTP if ref is present but unresolved and show a brief resolving state (<250ms timeout).
+   - OTP entry: show “Inviter: <Name> (<code>)” near the Send button.
+
+4) Form submission guarantees
+   - On “Send OTP” and on “Verify OTP”, include the ref redundantly:
+     - In request body as `referred_by`.
+     - In a header (e.g., `x-ref-code`) for server diagnostics.
+   - Server upsert: continue first‑click semantics but add ensure‑on‑upsert fallback: if `prev.referred_by` empty and header/body ref present and valid, set it.
+
+5) Resilience and drift protection
+   - If localStorage unavailable, cookie remains the SoT for ref capture.
+   - If both missing but URL has `?ref`, immediately repopulate both stores.
+   - Add a one‑shot reconcile after OTP verification: server responds with the inviter name/code it applied; client compares with local state and logs a metric if they differ.
+
+6) Observability
+   - Client logs (debug level): capture event, source (URL/cookie/local), resolved name/uid, timestamps; disabled in prod unless `?debug=1`.
+   - Server diagnostics: persist run folder lines for upsert including ref from header/body, chosen `referred_by`, and reason if skipped (already set).
+   - Metrics: count of signups with ref present at OTP vs ref applied at upsert; alert if gap > threshold.
+
+7) QA test matrix
+   - Same-tab flow with/without reload; mobile Safari private mode (no persistent storage); cookie‑only path; resolved/unresolved inviter; slow network; user toggles Participate multiple times; OTP resend; retry after 401.
+
+8) Rollout
+   - Stage behind a feature flag; verify diag logs and UI cues; then enable globally.
+
+Pitfall map validation (for our project) and plan adjustments
+1) Entry & redirects – VALID
+   - Vercel/Next can introduce http→https, apex↔www, slash↔noslash redirects depending on config. Marketing→app domains also possible. We must explicitly verify query passthrough per redirect path. Plan: add redirect audit to QA and block deploy if any drop `?ref`.
+   - Canonical redirects – MOSTLY NOT APPLICABLE today (we don’t auto-redirect based on canonical meta), but keep a check: ensure no middleware causes canonicalizing redirects that strip queries.
+
+2) Capture timing (SPA race) – VALID
+   - Fast clicks can beat provider init. Plan already updated: capture on any page mount; hydrate context before rendering forms; add pre-submit capture on Send/Verify OTP.
+
+3) Storage fragility – VALID
+   - Incognito/blocked storage and origin scope can drop localStorage. Plan already uses cookie fallback on same origin; add QA case for private mode and document expectations. If marketing→app is cross-origin, require `?ref` carryover.
+
+4) Internal navigation/overlays – VALID
+   - Our Participate overlay doesn’t route, but we have multiple CTAs. Plan: hydrate ref on overlay open; display inviter banner for all CTAs uniformly.
+
+5) OTP & email client realities – PARTLY VALID
+   - We use typed OTP (not magic-link), reducing cross-context risk; however, some clients may still open links in app browsers. Plan: add copy in OTP email advising to finish in the same tab/device when applicable.
+
+6) Server-side upsert semantics – VALID
+   - First-click wins can hide misses. Plan: support playbook + 7-day manual correction window; include reason code in diagnostics. Race between requests is unlikely but add timestamps in diag to compare near-simultaneous upserts.
+   - Referential integrity via FK – NOT APPLICABLE: we store `referred_by` as a code in metadata (not FK). Our SoT attribution uses codes/aliases, so deletes don’t break historical codes; still document policy.
+
+7) Data quality & abuse – VALID
+   - Keep self-ref rejection and monitoring. Our server credit RPC already guards basic cases; continue to monitor anomalies.
+
+8) Name resolution drift – VALID
+   - Plan updated to display code + name where we show inviter to reduce ambiguity.
+
+9) Multi-device journeys – VALID
+   - Without short links, attribution can be lost when switching devices. Plan: add FAQ/email note to finish on the same device; longer-term, carry ref in verify link if we move to link-based OTP.
+
+10) Observability gaps – VALID
+   - We have diagnostics in upsert; plan adds client-side breadcrumbs (debug) and structured ops checklist (time of miss, first URL, banner visibility) for support triage.
+
+Non-applicable items (now) and why
+- Canonical redirect enforcement: We are not performing canonical meta-driven redirects; only static meta tags are used. Risk low but kept in audit checklist.
+- DB FK ON DELETE impact: Not applicable because attribution uses codes (not FK) and SoT preserves alias continuity; chain visuals won’t break on deletes by FK cascade.
+
+Additional pitfall review (validated) and plan updates
+What’s strong already — confirmed
+- Dual storage (localStorage + first‑party cookie) with hydration at entry; redundant pass at Send/Verify OTP; UI cues; diagnostics/QA/flagged rollout.
+
+Gaps to close (folded into plan)
+1) Cookie contract — VALID
+   - Set explicit attributes: `Path=/; Secure; SameSite=Lax; Max‑Age=604800` (7d). Document ITP note (Safari may cap lifetimes ≈7d) — acceptable.
+   - Cross‑subdomain: commit to a single origin for capture/overlay. If we ever split apex/www, add explicit redirect audit with query passthrough.
+
+2) Ref format & normalization — VALID
+   - Normalize to `[A‑Z0‑9]` (uppercased), trim, single decode, ignore invalid. If multiple `ref` present, first wins. Add these rules to resolver and client capture spec (no code yet).
+
+3) Redirect audit (blocker) — VALID
+   - Add to release gate: http→https, apex↔www, slash↔noslash, locale/middleware rewrites must preserve query. Build/ops checklist blocks release until passed.
+
+4) Precedence & immutability — VALID
+   - Precedence: URL > cookie > localStorage. Server remains SoT; first‑click immutable. If client/server disagree, server wins; log `ref_mismatch` metric.
+
+5) Race & idempotency — VALID
+   - Introduce a correlation ID for Send/Verify in diagnostics; policy: prefer non‑empty ref if two near‑simultaneous writes occur for same user within 5s.
+
+6) Edge‑case UX states — VALID
+   - Show code while resolving name (<250ms). Invalid pattern → gentle nudge. Self‑ref → neutral copy and no apply.
+
+7) Abuse & drift — VALID
+   - Keep self‑ref/mutual loops out by policy; always show code+name to reduce confusion.
+
+8) Observability (minimal, actionable) — VALID
+   - Client (only with `?debug=1`): `ref_source`, `ref_value`, `inviter_resolved`, `stage`, ts.
+   - Server diag on upsert: `received_ref_body`, `received_ref_header`, `applied_ref`, `reason_skipped`, `corr_id`, ts.
+
+9) Multi‑device journeys — VALID
+   - Since we use typed OTP (not magic link), still document “finish on same device” in email copy/FAQ to set expectations.
+
+Acceptance criteria (added to plan)
+- Redirect integrity: 100% of audited redirects keep `?ref`.
+- Capture robustness: ≥98% of signups with `?ref` at entry end with non‑null `referred_by`.
+- Mismatch rate: <0.5% `ref_mismatch` over 7d.
+- Support load: ≤2% credited signups require manual fixes within 7d.
+- Support median time‑to‑resolve: <3 minutes.
+
+QA matrix (appended)
+- Redirects: http→https; apex↔www; slash↔noslash; locale/A‑B routes.
+- Entry timing: immediate tap vs 10‑minute dwell.
+- Storage modes: normal; private/incognito; cookies disabled (document behavior).
+- Email clients: Gmail/Outlook mobile (typed OTP still involves opening an app page).
+- Edge values: mixed case, trailing spaces, double‑encoded; invalid pattern.
+- Multi‑device: start phone → finish desktop (document expected non‑credit without carryover).
+- Resend OTP / retry after 401: ref present at Verify.
+- Two quick submits: race policy holds (prefer non‑empty).
+
+Support playbook (tightened)
+- 7‑day grace; acceptable evidence (first URL or consistent timestamp story); manual fix steps; macros.
+
+Rollout checklist (final)
+- ✅ Redirect audit signed off.
+- ✅ Cookie contract documented (attrs + scope) and QA’d.
+- ✅ Copy finalized for banners/unresolved states.
+- ✅ Diagnostics include `corr_id` fields in staging.
+- ✅ QA matrix run on iOS Safari, Android Chrome, Desktop Chrome.
+- ✅ Feature flag on; monitor metrics 48h; promote to 100% after thresholds met.
+
+Non‑applicable (now)
+- Shared eTLD+1 cookie across different eTLDs: not possible; we operate on a single origin for capture/overlay.
+
+Cookie hardening and consent flow (evaluation and actions)
+Validity for our setup
+- First‑party, essential cookie for referral attribution is appropriate and unlikely to be targeted by generic “tracking” blockers if scoped correctly (short value, non‑PII, first‑party, essential purpose). Safari ITP may still cap lifetime (~7 days), which is acceptable for our short signup flow.
+
+Actions to fold into plan (no code yet)
+1) Tight cookie contract
+   - Name: `river_ref` (purpose‑named, non‑PII, short token only)
+   - Value: normalized `[A‑Z0‑9]` code (no user identifiers)
+   - Attributes: `Path=/; Secure; SameSite=Lax; Max‑Age=604800` (7d)
+   - Scope: single origin (no cross‑site). Document classification as “strictly necessary for referral attribution.”
+
+2) Required‑by‑flow, consented set (optional UX gate)
+   - If auto‑set at landing fails or is blocked, present a small consent inline when Participate opens:
+     - Copy: “<Name> invited you. Accept” with an Accept button.
+     - On Accept: set `river_ref` cookie; proceed with panel.
+     - If user declines: keep proceeding but pass ref via form body/header redundantly; server can still apply first‑click without cookie.
+
+3) Detection and fallback
+   - Detect cookie write success after setting (read‑back check). If failed, attempt localStorage; if both fail, carry `?ref` through internal navigation until OTP submit.
+   - Always include ref redundantly on Send/Verify OTP (body + header) regardless of cookie status.
+
+4) Privacy and compliance notes
+   - Update privacy/cookie notice: “We use a strictly necessary cookie to credit your inviter; it stores an 8‑character code for up to 7 days.”
+   - No tracking/analytics tied to this cookie; no PII in value.
+
+Acceptance updates
+- Cookie write success rate (after Participate Accept if shown): ≥99% on major browsers.
+- Consent prompt display rate: <10% of sessions (only when auto‑set failed or policy blocks silent writes).
+
+Non‑applicable notes
+- Cross‑eTLD cookie sharing: not possible; if we ever split marketing/app to different eTLDs, we must carry `?ref` across the handoff instead of relying on cookies.
+
