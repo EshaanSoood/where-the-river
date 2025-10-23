@@ -44,7 +44,20 @@ export async function POST(req: Request) {
     } catch {
       boats_total = typeof meta.boats_total === 'number' ? meta.boats_total : 0;
     }
-    const referral_code = (meta.referral_id ?? null) as string | null;
+    // Prefer SoT for referral code; fall back to metadata if absent
+    let referral_code = (meta.referral_id ?? null) as string | null;
+    try {
+      const { data: codeRow } = await supabaseServer
+        .from('referral_codes')
+        .select('code')
+        .eq('user_id', target.id)
+        .maybeSingle();
+      if (codeRow && (codeRow as { code?: string | null }).code) {
+        referral_code = (codeRow as { code: string }).code;
+      }
+    } catch {}
+    const baseUrl = ((process.env.NEXT_PUBLIC_SITE_URL as string) || (process.env.PUBLIC_APP_BASE_URL as string) || '').replace(/\/$/, '');
+    const referral_url = referral_code ? `${baseUrl}/?ref=${referral_code}` : null;
 
     return NextResponse.json({
       exists: true,
@@ -58,11 +71,12 @@ export async function POST(req: Request) {
         boats_total,
         referral_code,
         ref_code_8: referral_code,
+        referral_url,
       },
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }
 

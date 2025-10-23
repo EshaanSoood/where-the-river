@@ -44,10 +44,10 @@ export async function GET() {
       .slice(0, 5)
       .map((e) => ({ first_name: e.first_name, country_code: e.country_code, boats_total: e.boats_total || 0 }));
 
-    return NextResponse.json({ totalBoats, top });
+    return NextResponse.json({ totalBoats, top }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }
 

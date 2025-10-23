@@ -1,0 +1,345 @@
+Referral Migration — Actionable Plan (No Code in This Doc)
+
+Goal
+- Assign referral ID at signup; OTP verification is monotonic true; share works immediately without refresh; zero code collisions; immutable referral attribution even after code changes.
+
+Severity‑Mapped Risk Register (Consolidated)
+Critical (breaks core flows)
+- Double-mint race (webhook vs ensure-on-read) → two candidates/conflicts.
+  - Mitigation: unique(code) + upsert by user_id; monitor `double_mint_attempts` (Phase M2.3).
+- Auth/session race on first load → 401 and no retry.
+  - Mitigation: client auth-ready + 401 retry (Phase M7.5).
+- Param spoofing on `/api/my-referral-link` → mint/read for others.
+  - Mitigation: derive `user_id` from session only; ignore params (Phase M3.1).
+- API caching of dynamic endpoints → stale/foreign codes.
+  - Mitigation: Cache-Control no-store for `/api/my-referral-link` and `/api/referral/resolve` (Phase M3.1/M3.4, M9.6).
+- Resolver auth model mis-set → links break or enumeration.
+  - Mitigation: public but rate-limited; constant-shape (Phase M6.6, M3.4).
+- Attribution not idempotent → double credits on retries/races.
+  - Mitigation: unique keys on points/referral edges; idempotent RPC (Phase M0.6, M1.7).
+- DB concurrency/DDL hazards → timeouts/500s.
+  - Mitigation: handle SERIALIZATION_FAILURE/deadlocks + UNIQUE conflicts with bounded retry; build UNIQUE `CONCURRENTLY` (Phase M1.5, M4.5).
+- Hidden metadata readers → blank/old codes.
+  - Mitigation: repo-wide grep + flip plan; remove metadata reads (Pre-flight.5, Phase M10.6).
+
+High (continuity/security)
+- Alias atomicity gap in backfill → 404 on old links.
+  - Mitigation: atomic remint+alias unit with retry (Phase M5.6).
+- Deletion semantics undefined → dangling/ambiguous results.
+  - Mitigation: defined deletion handling; not-found for deleted users; alias logging (Phase M6.4).
+- Enumeration via response shape → probing valid codes.
+  - Mitigation: constant-shape responses + probes (Phase M3.4, M8.4).
+- RLS/permissions gaps → client/SSR mutations.
+  - Mitigation: strict RLS; CI tests; ensure server-role used only on server (Phase M0.2, M1.1, M3.6).
+- PII in logs/metrics → privacy risk.
+  - Mitigation: hashed tokens only; PII hygiene tests (Phase M1.6, M8.7).
+- Environment drift at runtime → silent failures.
+  - Mitigation: env sanity checks + canary health; alert on failures (Pre-flight.1, Phase M8.8).
+- Normalization drift → “code not found.”
+  - Mitigation: single normalization routine; tests (Phase M3.5, M1.4).
+
+Medium (UX/ops)
+- First-click vs points race → missed attribution.
+  - Mitigation: persist `referred_by` before points; test ordering (Phase M2.5).
+- Webhook replay/out-of-order → noisy conflicts.
+  - Mitigation: idempotent by user_id; replay counters/metrics (Phase M2.6).
+- Missing CDN purge for `/r/[referral]` → stale 404s.
+  - Mitigation: purge hooks + low TTL (Phase M4.4, M9.5).
+- Globe seeding on code → map jitter.
+  - Mitigation: seed on `user_id`; comms (Phase M6.5, M10.5).
+- RNG quality assumptions → skew/collisions.
+  - Mitigation: CSPRNG; no modulo bias; audit (Phase M4.3).
+- No constant-shape errors → brittle UI.
+  - Mitigation: constant-shape contract + tests (Phase M1.4, M3.4).
+- Insufficient rate limits → abuse/noise.
+  - Mitigation: unified rate limits on resolver/mint endpoints (Phase M3.7).
+
+Low (paper cuts)
+- Feature flags mis-set across envs → wrong paths live.
+  - Mitigation: flag matrix checklist at deploy (Phase M9.7).
+- Indexing omissions → slow resolves.
+  - Mitigation: btree on aliases.code; verify (Phase M0.5).
+- No 401 retry path → Share stuck off.
+  - Mitigation: client 401 retry (Phase M7.5).
+- No runbook constants → slow response.
+  - Mitigation: thresholds/contacts defined (Phase M8.9, Runbooks).
+
+Pre-flight (Do First)
+1) Environment alignment
+   - Confirm `NEXT_PUBLIC_SUPABASE_URL`, anon key, and service role key point to the same project across local, preview, and prod.
+   - Verify `PUBLIC_APP_BASE_URL` set and correct per environment.
+2) Feature flags (define toggles; default=off)
+   - `table_as_sot` (read new tables first)
+   - `webhook_enabled` (Auth user.created path live)
+   - `mint_in_referral_api` (must be off)
+   - `ensure_on_read_enabled` (fallback mint in /api/my-referral-link)
+3) Data freeze window (optional)
+   - Choose a low-traffic window for backfill; announce read-only window if needed.
+4) Cross-cutting impact assessment (inventory now)
+   - List all endpoints and jobs reading/writing referral data from `auth.users` metadata: `/api/globe`, `/api/me`, `/api/leaderboard`, `/api/profiles/by-email`, `/api/referral*`, admin exports.
+   - Note any UI assumptions on code format/length (e.g., 8-digit numeric in Share, globe seeding).
+   - Identify SSR/edge contexts that currently rely on direct Supabase client access; ensure server-role access will go through API routes.
+5) Repo-wide audit
+   - Grep for `referral_id` across repo (UI, SSR, cron, exports) and list all readers; plan flips to SoT-backed reads to eliminate hidden metadata readers.
+6) Environment sanity/canary
+   - Add a lightweight health check/canary that verifies service key and project URL match expected environment at startup/deploy; alert on mismatch.
+
+Phase M0 — Schema & RPCs (Dev)
+1) Create tables (SoT)
+   - `public.referral_codes(user_id PK, code UNIQUE NOT NULL, created_at)`
+   - `public.referral_code_aliases(code PK, user_id, created_at)`
+   - `public.user_verifications(user_id PK, otp_verified boolean default false, verified_at)`
+2) RLS policies
+   - RLS ON for all 3 tables; disallow client writes; server-only via RPC.
+   - Verify foreign keys on historical tables (e.g., `points_ledger`) do NOT cascade-delete historical data when an `auth.users` row is deleted; prefer RESTRICT or soft-delete policy. Document deletion behavior.
+3) RPCs (spec-level)
+   - `assign_referral_code(user_id) → code` (idempotent, bounded retry on UNIQUE)
+   - `mark_otp_verified(user_id)` (monotonic true)
+4) Atomicity rule
+   - Keep mint + insert + (optional) metadata mirror in a single transaction; on mirror failure, log and proceed.
+5) Indexing & resolver performance
+   - Ensure btree index on `referral_codes.code` (UNIQUE) and `referral_code_aliases.code` (PK) for fast resolves; add covering indexes if needed for resolver filters.
+6) Attribution idempotency
+   - Verify `points_ledger` (or equivalent) has a uniqueness guard (e.g., unique(user_id, event_type, event_key)) to prevent double-credit on retries. Ensure referral edge writes are idempotent.
+
+Phase M1 — CI & Tests (Dev)
+1) RLS tests
+   - Prove clients cannot `INSERT/UPDATE/DELETE` in SoT tables; only server-role RPCs can mutate.
+2) Idempotency tests
+   - Re-deliver webhook; ensure no duplicate rows, same code returned, stable outputs.
+3) Concurrency tests
+   - Parallel `assign_referral_code` calls (N≥1000) show zero collisions; retry histogram captured.
+4) Resolver shape & normalization tests
+   - Verify constant-shape responses for found vs not-found; normalization routine (uppercase/trim/hyphen strip) applied consistently; add probe tests.
+5) Concurrency & transaction tests
+   - Simulate `SERIALIZATION_FAILURE`/deadlocks and unique-constraint conflicts on both `(code)` and `(user_id)`; ensure short bounded retry succeeds.
+6) PII hygiene tests
+   - Assert logs/metrics do not contain raw emails or referral codes; use hashed/anon tokens.
+7) Points idempotency tests
+   - Exercise referral award/reward RPCs under retries/out-of-order to confirm no double-credit (unique constraints enforced).
+8) RLS negative tests
+   - Prove clients (anon/auth) cannot write to SoT tables; add regression tests to prevent future policy slips.
+9) Normalization fuzz tests
+   - Fuzz resolver with spaces, hyphens, mixed case; assert constant-shape and correct resolution.
+
+Phase M2 — Webhook Path (Dev)
+1) Register Auth `user.created` webhook → handler
+   - Handler calls `assign_referral_code(user_id)` and ensures `user_verifications` row exists.
+   - Idempotent by `user_id` (no-op if row exists); safe on retries/out-of-order.
+2) Metrics
+   - Emit `webhook_lag_ms` (user_created → code available); alert if p95 > 1000ms.
+3) Double-mint race guard
+   - Ensure `assign_referral_code` uses single-row upsert by `user_id` and a unique index on `code`; concurrent ensure-on-read/webhook attempts result in one winner and one reader of the canonical code.
+   - Track `double_mint_attempts` (e.g., conflict retries > 0) to monitor frequency and tune backoff if needed.
+4) First-click referral capture
+   - Ensure the flow that persists `referred_by` (inviter_user_id) runs once and early; if multiple candidates arrive, enforce first-write-wins; add metrics for overwrite attempts.
+5) Points ordering
+   - Ensure `referred_by` persistence occurs before any points/ledger writes (e.g., `award_referral_signup`) to avoid missed attribution on fast first loads.
+6) Replay/out-of-order metrics
+   - Count webhook replays and out-of-order deliveries; ensure handler is idempotent by `user_id` and logs deduped events.
+
+Phase M3 — API Contracts (Plan; code later)
+1) `/api/my-referral-link`
+   - Ensure-on-read: if missing code, call `assign_referral_code`; respond `{ referral_url, referral_code, otp_verified, pending:false }`.
+   - Rate-limit (IP+user). Constant-shape responses.
+   - AuthN/CSRF: require authenticated session; protect against CSRF (no cross-site minting). Disallow unauthenticated mint attempts.
+   - Param spoofing guard: derive `user_id` only from the authenticated session; ignore any user-identifying query/body params.
+   - Caching: set API layer to no-store for this endpoint to avoid accidental CDN caching.
+2) `/api/users/upsert`
+   - Stop minting; call `mark_otp_verified` when appropriate; preserve `referred_by` (first-click wins).
+3) `/api/referral` (share)
+   - Read-only URL generation from SoT; feature-flag any write OFF; log if attempted.
+4) `/api/referral/resolve`
+   - Resolve by `referral_codes` then `referral_code_aliases`; temporary legacy metadata fallback with drift log.
+   - Constant-shape responses: found vs not-found share identical structure/status to prevent enumeration.
+   - Caching: set to no-store to avoid accidental CDN caching of resolver responses.
+5) Normalization routine
+   - Single shared normalization (uppercase, trim, optional hyphen strip) used by generator, resolver, and admin tools.
+6) Metadata consumers migration plan
+   - Replace direct reads of referral fields from `auth.users` in: `/api/globe`, `/api/me`, `/api/leaderboard`, `/api/profiles/by-email` with SoT-backed reads (or mirrored values) behind server APIs.
+   - Until migrated, keep metadata mirrors accurate and monitor `metadata_mirror_write_failures`.
+7) Unified rate limits
+   - Apply consistent per-user/IP rate limits to resolver and `/api/my-referral-link`; instrument and alert on spikes.
+8) Enumeration flood probe (staging)
+   - Run synthetic probe to assert constant-shape responses under load and that limits throttle abuse; verify no data leakage.
+
+Phase M4 — Backfill Dry-Run (Dev/Staging)
+1) Inventory report
+   - Count: non-empty codes, missing codes, empty-string codes.
+   - Duplicate scan across users (exact code matches).
+2) Abort guard
+   - If any unresolved duplicates remain, abort migration; fix data and rerun dry-run.
+3) RNG audit
+   - Verify generator is CSPRNG-based and avoids modulo bias over the code space; document chosen method.
+4) SEO/cache assessment
+   - Identify any CDN caching for `/r/[referral]` responses; ensure low TTL or purge hooks so alias changes/remints do not serve stale 404s.
+5) Index build strategy
+   - Plan UNIQUE index creation with `CONCURRENTLY` in production to avoid table locks; confirm prerequisites (no active transaction) in deployment runbook.
+6) Duplicate live-link behavior test
+   - For users reminted during backfill, verify previously shared links via aliases still resolve (no 404); document any exceptions.
+
+Phase M5 — Backfill Write (Dev/Staging)
+1) Unique inserts
+   - For users with non-empty unique codes: insert into `referral_codes`.
+2) Duplicates
+   - For later users in a duplicate set: remint via `assign_referral_code`.
+   - Insert previous code(s) into `referral_code_aliases` for the correct `user_id` BEFORE switching canonical display.
+3) Missing codes
+   - Call `assign_referral_code` and mirror to metadata (optional).
+4) Attribution immutability
+   - Do NOT recompute historical referral edges; points/referral edges stay anchored to inviter/invitee `user_id`.
+5) Post-check
+   - Re-run duplicate scan: expect zero; if non-zero, rollback backfill set and retry after fix.
+6) Atomic remint + alias insert
+   - Treat (remint canonical code + insert old code into aliases) as one unit: if alias insert fails, do not switch canonical display. Record `backfill_alias_atomicity_failures` and auto-retry.
+7) Admin/export compatibility
+   - Update admin exports and downstream tools to source codes from SoT and accept both numeric/base-36; remove assumptions about fixed 8-digit length.
+8) Execute backfill function (staging)
+   - Run `run_referral_backfill()`; confirm zero duplicate codes and presence of referral_codes rows.
+   - Validate that points/referrals attribution did not change; verify alias table growth only for explicit remints.
+
+Phase M6 — Flip Reads to SoT (Staging)
+1) Enable `table_as_sot`
+   - Make all reads prefer `referral_codes`/`aliases`; keep metadata as fallback temporarily.
+2) Enable `ensure_on_read_enabled`
+   - Keep fallback mint on `/api/my-referral-link` in case webhook lags; plan to disable later.
+3) Resolver hardening
+   - Rate limits + constant-shape responses; normalization routine enforced.
+4) Deletion handling
+   - Define behavior for deleted inviter accounts: remove canonical code and retain aliases bound to the same `user_id` for link continuity logging; resolver returns not-found for deleted users. Optionally block deletion until a retention window passes.
+5) Globe seeding stability
+   - If globe node placement uses `referral_id` as seed, plan a switch to `user_id` seeding to avoid visual jumps when codes are reminted; coordinate a one-time migration window to minimize perceived jitter.
+6) Public resolver auth model
+   - Confirm `/api/referral/resolve` remains public but rate-limited; avoid putting behind auth (breaks shared links) or leaving unlimited (enumeration risk). Validate limits in staging.
+7) Hidden metadata readers sweep
+   - Validate all known readers have flipped to SoT; run repo grep and manual spot checks to catch stragglers.
+
+Phase M7 — Client Behavior (Staging)
+1) Immediate availability
+   - After OTP success, client calls `/api/my-referral-link`; if `pending`, retry with jitter for ~3–5s.
+2) Share hydration
+   - Hydrate Share UI with returned URL/code; no refresh required.
+3) First-click race
+   - Persist `referred_by` by `inviter_user_id` at first safe server touch (first-write wins). If background attribution races with first page load, add a bounded server-side read/verify to honor earliest arrival and ignore subsequent overwrites.
+4) UI format assumptions
+   - Audit UI for hard-coded “8-digit” assumptions (validation, typography, truncation). Update to accept current canonical format while keeping backward compatibility in display.
+5) Auth/session race
+   - Ensure the client waits for “auth-ready” before calling `/api/my-referral-link`; if a 401 occurs, retry after session establishment with bounded backoff.
+6) UI format/assumptions audit
+   - Search UI for 8-digit-only assumptions; validate share overlay and inputs work for current code format without truncation or bad validation.
+
+Phase M8 — Observability & Alerts (Staging)
+1) Metrics dashboards
+   - `time_to_code_ms`, `webhook_lag_ms`, `collision_retry_count`, `missing_code_count`, `alias_hit_count`, resolver error-rate.
+2) Alerts
+   - p95 `time_to_code_ms` > 1000ms; `missing_code_count` > 0; retry p99 ≥ 2; resolver error-rate spikes; mirror-on-write failure spikes.
+3) Drift visibility
+   - Increment `metadata_mirror_write_failures` on mirror failure; nightly reconcile continues as backstop.
+4) Enumeration risk checks
+   - Confirm resolver found vs not-found responses are indistinguishable (shape/status); add synthetic probes.
+5) Double-mint monitoring
+   - Track `double_mint_attempts`; if non-trivial, tune webhook/ensure-on-read sequencing or short backoff.
+6) Alias health & growth
+   - Track `alias_hit_count` and alias table growth; investigate abnormal spikes (possible abuse or mass remints).
+7) PII hygiene
+   - Ensure dashboards and logs store only hashed/ref-token aggregates; sample raw data only in secure, redacted environments.
+8) Environment drift monitor
+   - Dashboard a lightweight canary call against expected project; alert on mismatch or failures after deploy.
+9) On-call thresholds/contacts
+   - Document thresholds for alerts above and assign on-call rotation/contacts to ensure timely response.
+10) SLO dashboards
+    - Add charts for time-to-code, webhook lag, missing-code count, resolver error-rate, and limit hit rates.
+
+Phase M9 — Production Rollout
+1) Repeat M4–M8 in prod
+   - Dry-run → write backfill with safety switches; enable `table_as_sot`.
+2) Webhook
+   - Enable `webhook_enabled`; verify p95 `webhook_lag_ms` ≤ 1s.
+3) Monitor 24–48h
+   - Confirm zero duplicates; zero missing codes; acceptable latencies.
+4) CSRF/auth checks in prod
+   - Verify `/api/my-referral-link` requires AuthN and cannot be CSRF’d to mint codes; probe from external origins.
+5) CDN/caching checks
+   - Validate `/r/[referral]` alias resolves under CDN; purge caches if remints occurred; confirm no stale 404s.
+6) API caching posture
+   - Verify `/api/my-referral-link` and `/api/referral/resolve` are `Cache-Control: no-store` through CDN/proxy layers; add synthetic checks.
+7) Feature flag matrix
+   - Confirm prod flags match intended state (table_as_sot=on, webhook_enabled=on, ensure_on_read_enabled=on/then off per plan, mint_in_referral_api=off).
+8) CDN header verification
+   - Confirm no-store headers propagate through CDN/proxy for dynamic APIs; validate `/r/[referral]` purge behaves as expected after remints.
+
+Phase M10 — Decommission Legacy Paths
+1) Permanently disable `mint_in_referral_api`
+   - Keep read-only referral URL builder.
+2) Disable metadata fallback reads
+   - Resolver/table are sole SoT; keep aliases.
+3) Keep ensure-on-read for a short tail
+   - After stability (e.g., 7 days), consider disabling `ensure_on_read_enabled`.
+4) Metadata mirror reads cleanup
+   - Remove any remaining reads from metadata to avoid stale UI from silent mirror failures; rely solely on SoT tables.
+5) Globe seeding switch
+   - If adopted, finalize switch to `user_id`-based seeding for stable visuals; communicate expected one-time repositioning.
+6) Hidden metadata readers
+   - Close out the repo-wide `referral_id` readers list; confirm all paths are flipped to SoT and no metadata reads remain.
+
+Phase M11 — Cleanup & Docs
+1) Remove dead write paths related to referral minting in `/api/referral`.
+2) Update `CONTEXT.md` and API docs with new SoT tables, RPCs, and flows.
+3) Document runbooks: missing code, webhook lag, resolver errors, drift reconcile.
+
+Runbooks (High-Level)
+1) Missing code alert
+   - Check webhook health and `webhook_lag_ms`.
+   - Call `/api/my-referral-link` (ensure-on-read should mint if truly missing).
+   - Fallback: invoke RPC manually; capture retries and timings.
+2) Resolver error spike
+   - Inspect rate limits and normalization; validate alias table and canonical table availability.
+3) Drift spike
+   - Inspect `metadata_mirror_write_failures`; run reconcile now; verify service key permissions.
+4) Enumeration concern
+   - Verify constant-shape responses; audit resolver logs; throttle/ban abusive IPs.
+5) Double-mint incident
+   - Inspect concurrent logs around signup; validate unique constraints held; consider adding brief backoff to ensure-on-read after webhook fires.
+6) Deletion ambiguity
+   - If inviter deleted, confirm resolver behavior (not-found) while preserving alias hit logs; ensure past attributions remain anchored to inviter `user_id`.
+7) Globe jitter complaints
+   - If users report node movement, confirm whether a seeding switch occurred or codes reminted; verify `user_id` seeding rollout; reassure stability going forward.
+
+Acceptance Checks (Per Environment)
+1) Immediate assignment
+   - New user gets `referral_codes` row ≤ 1s; `/api/my-referral-link` returns code first call.
+2) OTP durability
+   - Once `otp_verified` = true, never regresses; login flows do not write it.
+3) No-refresh share
+   - Share UI is enabled immediately post-verify; URL works.
+4) Zero collisions
+   - Unique index ensures no duplicates; parallel test shows 100% unique; retry histogram captured.
+5) Referral immutability & alias continuity
+   - Historical attributions remain by `user_id`; old links resolve via `referral_code_aliases`.
+6) SLOs
+   - p95 time-to-code ≤ 1s; resolver error-rate stable; retry p99 < 2; missing-code=0.
+7) Security & abuse
+    - `/api/my-referral-link` requires AuthN and resists CSRF; resolver responses are constant-shape; rate limits active.
+8) Normalization & RNG
+    - A single normalization routine is used system-wide; RNG verified as CSPRNG and unbiased.
+9) RLS/permissions
+    - Clients cannot write to SoT tables; only server-role RPCs mutate; CI RLS tests pass.
+10) Caching & session
+     - APIs return no-store; `/api/my-referral-link` recovers from initial 401 due to auth-not-ready via bounded retry.
+
+Ownership & Coordination
+- Data/DB: schema, RPCs, backfill, policies.
+- Backend/API: webhook, endpoints, feature flags, metrics.
+- Frontend: `/api/my-referral-link` integration, retry/backoff, share hydration.
+- SRE/DevOps: dashboards, alerts, runbooks, deployments.
+
+Rollback Plan
+- If webhook path regresses SLOs: disable `webhook_enabled`, keep `ensure_on_read_enabled`.
+- If backfill introduces inconsistencies: revert writes from backfill batch; keep alias table; re-run after fixes.
+- Never drop UNIQUE; pause minting if absolutely needed while investigating.
+
+Notes
+- Keep generator CSPRNG-based; format can be numeric or base-36; resolver normalization makes both safe.
+- Keep edges/points immutable and anchored to `user_id`.
+
+

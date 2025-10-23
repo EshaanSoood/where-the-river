@@ -65,19 +65,10 @@ export async function POST(req: Request) {
     if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 });
     if (!authUser) return NextResponse.json({ error: 'auth_user_not_found' }, { status: 404 });
 
-    // Generate 8-digit numeric referral_id server-side with retry on metadata uniqueness
-    const gen = () => String(Math.floor(10_000_000 + Math.random() * 89_999_999));
-    let referral = gen();
-
-    for (let attempt = 1; attempt <= 8; attempt++) {
-      const { data: exists } = await supabaseServer
-        .from('auth.users')
-        .select('id')
-        .filter('raw_user_meta_data->>referral_id', 'eq', referral)
-        .maybeSingle();
-      if (!exists) break;
-      referral = gen();
-    }
+    // Ensure referral code via SoT (idempotent). Do not mint in this route.
+    try {
+      await supabaseServer.rpc('assign_referral_code', { p_user_id: (authUser as { id: string }).id });
+    } catch {}
 
     const row = authUser as unknown as AuthUserRow;
     const prevMeta: AuthMeta = (row.raw_user_meta_data || {}) as AuthMeta;
@@ -89,7 +80,6 @@ export async function POST(req: Request) {
       boat_color: sanitized.boat_color,
       // Only set referred_by if not already present (first click wins, no overwrite)
       referred_by: (prevMeta as { referred_by?: unknown }).referred_by ?? sanitized.referred_by,
-      referral_id: (prevMeta as { referral_id?: unknown }).referral_id ?? referral,
       otp_verified: true,
     };
 
@@ -106,8 +96,11 @@ export async function POST(req: Request) {
       JSON.stringify({ id: row.id, user_metadata: nextMeta }, null, 2)
     ]);
 
-    // 04 — minimal credit logic (first verify only)
+    // 04 — mark OTP verified (monotonic true) and minimal credit logic (first verify only)
     try {
+      try {
+        await supabaseServer.rpc('mark_otp_verified', { p_user_id: row.id });
+      } catch {}
       const wasVerified = !!(prevMeta as { otp_verified?: unknown }).otp_verified;
       if (!wasVerified) {
         const { error: rpcErr } = await supabaseServer.rpc('award_referral_signup', { p_invitee_id: row.id });

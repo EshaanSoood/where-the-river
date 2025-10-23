@@ -1,0 +1,359 @@
+Referral IDs, OTP Verification, and Zero-Collision Plan
+
+Scope
+- Ensure referral ID is assigned at signup time.
+- Prevent login magic-link flows from overwriting OTP verification.
+- Make share button and referral link usable immediately, without refresh.
+- Guarantee zero collisions (no two users share a ref ID), with DB enforcement.
+
+Executive Summary
+- Move the single source of truth (SoT) for referral codes and OTP verification out of `auth.users` metadata into server-only tables with RLS: `public.referral_codes` and `public.user_verifications`.
+- Assign referral ID at the moment of user creation via an Auth “user_created” webhook → server RPC. Add a bounded client retry/backoff for the first seconds post-signup to mask webhook latency.
+- Treat `otp_verified` as write-once true (monotonic). Store it in `public.user_verifications`. Never downgrade or reinitialize in login flows; mirror to metadata only as a convenience.
+- Enforce DB-level uniqueness on referral codes; generate via CSPRNG; add bounded retry on conflict to guarantee zero collisions.
+- Disable any secondary path that mints codes on share; make `/api/referral` read-only (returns URL only). Add an alert if that path ever tries to write.
+
+Design: Source of Truth and Mirroring
+- Referral ID SoT: `public.referral_codes (user_id uuid PK/FK → auth.users.id, code text UNIQUE NOT NULL, created_at timestamptz)`
+  - RLS: enabled; only server-side RPC can `INSERT/UPDATE`.
+  - Index: `UNIQUE (code)` to guarantee zero collisions.
+- OTP SoT: `public.user_verifications (user_id uuid PRIMARY KEY, otp_verified boolean NOT NULL DEFAULT false, verified_at timestamptz)`
+  - RLS: enabled; only server-side RPC can write.
+- Mirror-on-read: API responses keep returning `referral_id` and `otp_verified` in a constant shape from the SoT tables; optionally mirror them back into `auth.users.user_metadata` to aid client caching.
+- Nightly reconcile: task reads from the SoT tables and rewrites metadata if missing/mismatched; logs drift and exposes a metric (see Ops).
+
+Assignment Timing (Signup Moment)
+- Primary: Auth webhook `user_created` → call RPC `assign_referral_code(user_id uuid)`.
+  - RPC does: generate code via CSPRNG; `INSERT ... ON CONFLICT DO NOTHING` into `public.referral_codes`; loop up to N tries (e.g., 8) on unique conflict; return final code.
+  - Also `INSERT ... ON CONFLICT DO NOTHING` into `public.user_verifications(user_id)` so a row exists with `otp_verified=false`.
+- Backup: If webhook is delayed or fails, the first authenticated call to `/api/my-referral-link` or `/api/users/upsert` invokes the same idempotent RPC.
+
+Webhook idempotency & ordering
+- Handler is idempotent by `user_id`: if a row exists in `public.referral_codes`, it does nothing and returns the existing code. Safe on retries/out-of-order delivery.
+- Emit a `webhook_lag_ms` metric (user_created → code_insert latency). Alert if p95 > 1000ms.
+
+OTP Semantics (Write-Once True)
+- On successful OTP verification (first verified session), server calls `mark_otp_verified(user_id)`:
+  - `UPDATE public.user_verifications SET otp_verified=true, verified_at=now() WHERE user_id=:id AND otp_verified=false`.
+  - Subsequent logins DO NOT write to this table (reinforce-only semantics). If a later flow tries to set false or reinitialize, it’s rejected by the RPC.
+- API responses read `otp_verified` from SoT. Optionally mirror `otp_verified:true` to metadata if missing or false, but metadata is not authoritative.
+
+Zero-Refresh First-Run UX
+- After the user completes OTP, client calls `/api/my-referral-link` immediately.
+  - Server returns `{ referral_url, referral_code, otp_verified }` sourced from SoT.
+  - If the webhook hasn’t completed yet, the API triggers the idempotent assign RPC and returns once it has a code.
+- Client retry/backoff: If call returns `pending=true` (rare), retry with jittered backoff for up to ~3–5s; stop at first success. This handles the race where first paint beats the webhook.
+- Set `window.RIVER_REFERRAL_URL` and hydrate the Share overlay instantly once present; no page reload.
+
+Collision Guarantees
+- DB-level `UNIQUE (code)` on `public.referral_codes` guarantees zero duplicates.
+- Generator uses CSPRNG (server-side), not `Math.random`. Numeric 8-digit by default (10,000,000–99,999,999), or base‑36 if switching formats; both supported by resolver.
+- RPC retry loop is bounded (e.g., 8 attempts). Emit histogram metrics on number of retries; alert if p99 ≥ 2.
+
+Referral edge immutability & backfill safeguards
+- Attribution is anchored to stable `user_id`, never to the mutable `code` string.
+  - When a signup happens with `?ref=<code>`, the server resolves `<code>` → `inviter_user_id` and persists the relationship by `inviter_user_id`, not by code.
+  - Points and rewards are written into `public.points_ledger` (and/or `public.referrals` if present) using inviter/invitee `user_id`s. These records are immutable and are NEVER recomputed from current codes.
+- Code reminting must not change past attributions:
+  - If a user’s code changes (e.g., de-duplication backfill or format change), all existing referral relationships and ledger entries remain attributed to the same inviter `user_id`.
+  - No attempt is made to "re-point" historical referrals based on codes.
+- Historical code aliasing for link continuity:
+  - Add `public.referral_code_aliases(code text PRIMARY KEY, user_id uuid NOT NULL REFERENCES auth.users(id), created_at timestamptz DEFAULT now())` with RLS.
+  - Whenever a user’s code is changed, insert the previous code as an alias for that same `user_id`.
+  - Resolver reads: first `public.referral_codes`, then `public.referral_code_aliases`, then (temporarily) legacy metadata during migration.
+  - This preserves already-shared links and avoids breaking existing referrals while ensuring attribution still maps to the correct inviter `user_id`.
+
+API and Client Changes (No code edits here—plan only)
+- `/api/my-referral-link` (authoritative read):
+  - Inputs: authenticated user.
+  - Flow: ensure code (call assign RPC if missing) → read SoT → return constant shape `{ referral_url, referral_code, otp_verified, pending:false }`.
+  - Rate-limit (IP + user) and return the same constant shape under limits.
+- `/api/users/upsert`:
+  - Remove minting logic; rely on SoT. Still call `mark_otp_verified` when OTP is confirmed in this flow.
+  - Preserve `referred_by` semantics (first-click wins) as before.
+- `/api/referral` (share):
+  - Read-only. Build URL from SoT; DO NOT mint.
+  - Feature-flag any legacy write path OFF; log an error if write attempted.
+- `/api/referral/resolve`:
+  - Resolve `{ first_name, user_id }` by `public.referral_codes.code` (primary). For legacy users not yet migrated, fall back to `auth.users` metadata; log drift.
+  - Rate-limit and return constant-shape responses to prevent enumeration.
+  - Normalization: use a single shared normalization routine for codes (uppercase, trim, optional hyphen strip) across generator, resolver, and admin tools to avoid subtle mismatches.
+- Client (Share overlay):
+  - On mount post-OTP, call `/api/my-referral-link`; if `pending`, retry with backoff up to ~3–5s.
+  - Hydrate share URL into the four share actions and copy fallback; no refresh needed.
+
+RLS and Permissions
+- Enable RLS on `public.referral_codes` and `public.user_verifications`.
+- Allow reads via a server role (e.g., service key) and controlled RPCs; block client direct writes.
+- All mutations (assign/mint, mark_otp_verified) occur only inside vetted RPCs.
+
+Guard Rails — Validation and Incorporation
+1) Race on immediate availability: VALID. Implement bounded client retry/backoff (3–5s) on `/api/my-referral-link`. The API should itself trigger assignment if missing.
+2) SoT ↔ metadata drift: VALID. Nightly reconcile + mirror-on-read; log/metric for drift events.
+3) Resolver hardening: VALID. Add per-user/IP rate limits and constant-shape responses; keep after migration.
+4) Generator quality: VALID. Use CSPRNG (crypto.randomInt or Postgres pgcrypto) even with DB uniqueness.
+5) RLS/permissions on new tables: VALID. RLS ON; only RPCs write; clients read via server endpoints.
+6) Secondary path cleanup: VALID. Feature-flag OFF any write in `/api/referral`; alert if a write is attempted.
+7) Multi-session/multi-tab: VALID. Idempotent RPC with bounded retry; client resilient to duplicate first-runs.
+8) Recovery/resend flows: VALID. Ensure they never call assign or write `otp_verified`. Only reinforce reads.
+9) Backfill before UNIQUE: VALID. Dry-run duplicate scan; guard migration to abort if dupes remain.
+10) Operational SLOs: VALID. Define p95 time-to-code ≤ 1s post-signup; alert on breach. Track collision retry histogram and missing-code=0.
+ 11) Referral immutability & aliasing: VALID. Store edges by `user_id`; add alias table; never reattribute past referrals.
+  12) Webhook idempotency & ordering: VALID. Idempotent on `user_id`, safe on retries; track `webhook_lag_ms` and alert at p95 > 1s.
+  13) Immediate drift visibility: VALID. Add a mirror-on-write failure counter/metric in addition to nightly reconcile.
+  14) Resolver normalization: VALID. Use one normalization routine (uppercase, trim, hyphen strip) shared across generator/resolver/admin.
+  15) Alias lifecycle & display: VALID. Always return canonical code in `/api/my-referral-link`; track alias-hit metrics; expire aliases only after a quiet period.
+  16) RLS tests in CI: VALID. Add automated tests to prove clients cannot write to SoT tables; only server role via RPC can.
+  17) Backfill safety switches: VALID. Abort migration if duplicates remain; when reminting, insert old code into aliases first, then switch canonical display.
+  18) Transactional atomicity: VALID. Keep mint + insert + (optional) metadata mirror atomic; on mirror failure, log/metric and rely on reconcile.
+  19) Expanded SLOs: VALID. Alert on resolver error-rate spikes and retry p99 ≥ 2 in addition to time-to-code and missing-code.
+
+Migration Plan (Phased)
+M0 – Prep (dev)
+- Create tables with RLS enabled:
+  - `public.referral_codes(user_id uuid PK/FK, code text UNIQUE NOT NULL, created_at timestamptz DEFAULT now())`.
+  - `public.user_verifications(user_id uuid PK, otp_verified boolean NOT NULL DEFAULT false, verified_at timestamptz)`.
+- Create RPCs:
+  - `assign_referral_code(user_id uuid) returns text` (idempotent, bounded retry on unique conflict, CSPRNG).
+  - `mark_otp_verified(user_id uuid) returns void` (monotonic true).
+- Add policies: only server role can execute writes; reads via server endpoints only.
+
+M1 – Backfill and Dry-Run Checks (dev)
+- Backfill existing users from `auth.users` metadata into `public.referral_codes` (skip empty-string).
+- Duplicate scan: detect conflicting codes; if found, auto-remint for the later user and record a mapping log.
+- Add a deploy guard: migration aborts if duplicates remain before adding UNIQUE (should be none post-backfill).
+
+Backfill safeguards for attribution
+- Do NOT modify historical referral relationships or points. They are already recorded by `user_id` and must remain immutable.
+- When reminting a user’s code during de-duplication, insert the previous code into `public.referral_code_aliases` pointing to the same `user_id` to preserve existing links.
+- If legacy data used codes to infer relationships, materialize a `public.referrals(invitee_id, inviter_id, created_at)` table from historical events once, then freeze it. Future reads must never recompute from codes.
+ - Safety switch: If any duplicate remains after the sanitizer pass, abort the migration; fix data, re-run dry-run, then proceed.
+
+M2 – Enable Webhook and Fallback (dev)
+- Add Auth `user_created` webhook to call `assign_referral_code`.
+- Verify end-to-end: create user → code minted ≤ 1s; client receives referral_url with no refresh.
+
+M3 – API Layer Updates (dev)
+- `/api/my-referral-link`: switch to SoT + ensure-on-read; return constant shape; add rate limits.
+- `/api/users/upsert`: remove minting; call `mark_otp_verified`. Preserve first-click-wins for `referred_by`.
+- `/api/referral`: feature-flag OFF writes; log if invoked.
+- `/api/referral/resolve`: read from SoT; fallback to legacy metadata; log drift.
+
+M4 – Client Behavior (dev)
+- After OTP success, call `/api/my-referral-link`; if `pending`, retry 200–500ms jittered, up to ~3–5s.
+- Hydrate Share overlay without reload; set `window.RIVER_REFERRAL_URL`.
+
+M5 – Observability and SLOs (dev)
+- Metrics: time-to-code distribution, collision retry counts, drift reconciles, “missing-code after OTP” count.
+- Alerts: p95 time-to-code > 1s; missing-code > 0; retry p99 ≥ 2.
+
+M6 – Prod Rollout
+- Run backfill + duplicate sanitizer in prod (read-only dry-run first, then write phase). Abort if duplicates remain.
+- Deploy webhook + API changes. Keep fallback assignment path active initially.
+- Monitor metrics for 24–48h. If stable, keep feature-flagged legacy write path OFF permanently.
+
+M7 – Cleanup
+- Remove any dead code that mints in `/api/referral`.
+- Document SoT tables and RPC contracts in `CONTEXT.md` and API docs.
+
+Data Model Details (reference only; do not execute here)
+```sql
+-- referral_codes
+CREATE TABLE public.referral_codes (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  code text NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- user_verifications
+CREATE TABLE public.user_verifications (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  otp_verified boolean NOT NULL DEFAULT false,
+  verified_at timestamptz
+);
+
+-- referral_code_aliases (historical codes kept as aliases to preserve links)
+CREATE TABLE public.referral_code_aliases (
+  code text PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Optional: immutable referral edges (if not already fully captured by points_ledger)
+-- CREATE TABLE public.referrals (
+--   invitee_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+--   inviter_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+--   created_at timestamptz NOT NULL DEFAULT now()
+-- );
+```
+
+Security and RLS (reference only)
+- RLS ON for both tables.
+- Policies: allow only a server role (service key) via RPC to write. No direct client writes.
+
+Operational Runbooks
+- Nightly reconcile job:
+  - For each user: compare SoT vs metadata; if metadata missing/mismatched, rewrite metadata from SoT; log a drift event counter.
+- Incident checklist if “missing code” alert fires:
+  1) Check webhook health and logs.
+  2) Call `/api/my-referral-link` manually (should mint via fallback).
+  3) If both fail, run RPC directly; capture retries and timing.
+ - Real-time drift visibility: increment a `metadata_mirror_write_failures` counter when mirrors fail; page on spike.
+ - Webhook lag: track `webhook_lag_ms` (user_created → code available) with p50/p95/p99; page if p95 > 1s.
+ - Resolver health: track error-rate and alias-hit rates; page on sudden error-rate spikes.
+
+Risks and Mitigations
+- Webhook latency or failure: mitigated by API ensure-on-read + client backoff.
+- Multi-tab concurrent assignment: DB UNIQUE + idempotent RPC.
+- Metadata drift: mirror-on-read + nightly reconcile.
+- Duplicate codes in legacy metadata: caught and fixed during backfill before UNIQUE is enforced.
+ - Out-of-order/retry webhooks: idempotent by `user_id` and safe to reprocess; metrics highlight lag.
+
+Rollback Plan
+- If issues arise, temporarily revert API to read legacy metadata only and keep fallback assignment path; leave SoT tables populated for a later reattempt. Do not drop UNIQUE; instead, pause minting to SoT if absolutely necessary.
+
+Acceptance Criteria
+- New users have a DB-enforced unique `referral_code` within ≤ 1s of signup.
+- `otp_verified` once true remains true; login magic-link never flips or reinitializes it.
+- Share overlay shows a working referral URL immediately post-OTP without any manual refresh.
+- Zero collisions (enforced by UNIQUE); collision retries are observed but bounded and rare.
+- Historical referrals and bonuses remain attributed to the original inviter `user_id` even if inviter codes are reminted; previously shared links continue to resolve via aliases.
+ - Webhook handler is idempotent and safe on retries/out-of-order; p95 webhook_lag_ms ≤ 1s.
+ - Mirror-on-write failures are visible immediately (metric), and nightly reconcile keeps metadata in sync.
+ - Resolver uses a shared normalization routine; error-rate spikes are alerted; retry p99 < 2.
+
+Referral & OTP Reliability Plan — Zero-Collision and Immediate Availability
+
+Scope
+- Read-only plan that outlines design, migration, and rollout to achieve:
+  1) Assign a referral id at the exact moment of signup.
+  2) Login magic link must not overwrite the otp-verified flag; once true, never unset.
+  3) Share button and referral id are available immediately after signup, no refresh.
+  4) No collisions: no two users ever get the same referral id.
+- No code edits in this document. Concrete steps, sequencing, and acceptance criteria only.
+
+Current state (from CONTEXT.md + ref diagnosis)
+- Primary path: referral id assigned in POST /api/users/upsert after OTP verification; stored in auth.users metadata; best-effort uniqueness via in-memory retries; response returns the code.
+- Secondary path: POST /api/referral may backfill a base-36 code if none exists.
+- Resolver searches both raw_user_meta_data and user_metadata.
+- Observed issues:
+  - No DB-level uniqueness for referral codes in metadata → theoretical collision risk.
+  - Stale client state can hide a freshly generated code until re-fetch.
+  - Multiple metadata writes near signup can clobber otp_verified back to null.
+
+Design overview (target end state)
+A) Single source of truth (SoT) for referral codes
+- Create table public.referral_codes(user_id uuid primary key, code text unique not null, created_at timestamptz default now()).
+- Enforce uniqueness with a DB-level unique index on code and on user_id.
+- Code format: base36 uppercase (8–10 chars) OR keep 8-digit numeric if required. Either way, uniqueness is enforced at DB level, not by scanning metadata.
+- Provide RPC assign_referral_code(user_id uuid) that, in a single transaction:
+  - Generates a candidate code.
+  - INSERTs (user_id, code) into public.referral_codes.
+  - On conflict(code) or conflict(user_id), retries until success.
+  - Returns the final code.
+- Mirror the code to auth.users metadata for convenience, but treat the table as SoT. Resolver/reads should prefer the table.
+
+B) Assignment moment (exactly at signup)
+- Preferred: Supabase Auth webhook for user.created → Edge Function onUserCreated.
+  - Input: user.id (and email if needed).
+  - Steps: call assign_referral_code(user.id); then mirror to auth metadata (referral_id) if desired.
+  - Result: by the time the user session is established post-signup, the code already exists server-side.
+- Alternate (if webhooks cannot be enabled immediately): Pre-provision on first authenticated session.
+  - After signUp/signInWithOtp returns a session, a server-only API (/api/referral/preassign) calls assign_referral_code(session.user.id) synchronously and returns the URL.
+  - This ensures availability without a page refresh while webhooks are pending.
+
+C) OTP verification durability (never overwritten by login)
+- Create table public.user_verifications(user_id uuid primary key, otp_verified boolean not null default false, verified_at timestamptz).
+- Provide RPC mark_otp_verified(user_id uuid) that is idempotent and monotonic:
+  - UPDATE sets otp_verified=true and verified_at=now() only if currently false.
+  - Never writes false; never clears verified_at.
+- Policy: Only the OTP verification completion path calls mark_otp_verified. All login-related flows MUST NOT write to otp_verified anywhere (metadata or table).
+- Metadata mirroring rule: if mirroring otp_verified into auth metadata, write true once and never update it again. Avoid full metadata replacements that could reintroduce null.
+
+D) Immediate share readiness (no refresh)
+- After signup/verification completes (or immediately if webhooks pre-provisioned), the client calls a single endpoint (/api/my-referral-link) that:
+  - Reads from public.referral_codes (SoT), not from metadata.
+  - Returns the canonical share URL (?ref=<code>), plus the code for UI.
+- UI contract: share button enables when this endpoint returns 200; store result in state (and window.RIVER_REFERRAL_URL for existing integration). No hard refresh required.
+- If using the alternate pre-provision path, the same endpoint can synchronously create+return the code if absent (temporarily), then we disable creation once webhooks are live.
+
+E) Zero-collision guarantee
+- Guaranteed by DB unique index on public.referral_codes.code and transaction retry logic in assign_referral_code.
+- Remove code-minting in POST /api/referral; it should only read SoT.
+- Keep resolver backward-compatible during migration (read table first, then metadata as fallback) and later flip to table-only.
+
+Migration plan (sequenced, safe, reversible)
+1) Schema
+- Add table public.referral_codes and unique indexes (code, user_id).
+- Add table public.user_verifications (user_id PK, otp_verified, verified_at).
+- Add RPCs: assign_referral_code(user_id), mark_otp_verified(user_id).
+
+2) Backfill (read-only dry run → write)
+- Snapshot counts: users with non-empty referral_id, missing, and empty-string.
+- Dry-run plan:
+  - For each user with non-empty referral_id in metadata, attempt INSERT into public.referral_codes.
+  - On conflict(code), mark as duplicate; do not write yet (collect report).
+- Write phase:
+  - For unique codes: INSERT (user_id, code) → success.
+  - For duplicates: generate a new code via assign_referral_code for the subsequent user(s); update their metadata.referral_id to the new code; log a mapping (old→new).
+  - For missing codes: call assign_referral_code; update metadata for convenience.
+- Post backfill: switch resolver/read paths to prefer public.referral_codes; keep metadata read as fallback temporarily.
+
+3) Webhook/Pre-provision rollout
+- If available, enable Auth webhook user.created → onUserCreated Edge Function calling assign_referral_code.
+- If not immediately available, deploy /api/referral/preassign and wire the client to call it once post-session establishment; remove later when webhook is live.
+
+4) API hardening
+- Update POST /api/users/upsert to stop generating codes; only read SoT. If necessary during transition, it may mirror existing table code into metadata, but never mint.
+- Update POST /api/referral to only read and construct URLs; do not mint.
+- Make /api/referral/resolve read public.referral_codes (table), fallback to metadata only during migration window.
+- OTP handling: only the OTP verification completion path calls mark_otp_verified(user_id). All login flows treat otp_verified as read-only.
+
+5) Client behavior
+- After a successful auth session is available (post-verify or post-signup), call /api/my-referral-link. On success:
+  - Enable Share UI immediately with returned URL and code.
+  - Store in state and window.RIVER_REFERRAL_URL.
+- Remove any dependency on a hard refresh to see the code.
+
+6) Monitoring & Observability
+- Log assign_referral_code attempts and conflicts (without PII) to detect generation pressure.
+- Emit metrics: time-to-code (signup → code assigned), success/failure counts, retry histogram.
+- Add simple admin audit endpoint (server-only) to list users with missing code (should be zero) and duplicates (should be impossible after cutover).
+
+7) Cutover & rollback
+- Feature flag the following:
+  - table_as_sot (read table first vs metadata).
+  - webhook_enabled (vs pre-provision endpoint).
+  - mint_in_referral_api (off by default; can re-enable only for emergency).
+- Rollback plan: if webhook fails, toggle pre-provision endpoint; SoT remains the table, so reads are safe.
+
+Acceptance criteria (maps to the 4 goals)
+1) Immediate assignment: New user has a row in public.referral_codes within ≤1s of user.created; /api/my-referral-link returns a code on the first post-signup call.
+2) OTP durability: Once otp_verified is true for a user, it never becomes false/null again (table is monotonic; metadata mirror never regresses).
+3) No-refresh share: On successful signup/verify, Share UI becomes enabled immediately, displaying a working referral URL.
+4) Zero collisions: Unique index on public.referral_codes.code ensures no duplicates; 10k parallel assignment test (synthetic) shows 100% unique.
+
+Testing plan
+- Unit tests (database): assign_referral_code concurrency (N=1000), conflict retries, format checks.
+- Integration: webhook path (user.created → code exists), pre-provision fallback path, resolver reads.
+- E2E: full signup flow validates share button enabled without refresh; re-login does not alter otp_verified.
+- Regression: ensure POST /api/referral never mints; ensure /api/users/upsert does not mint.
+ - RLS tests: clients cannot write to `public.referral_codes`, `public.referral_code_aliases`, or `public.user_verifications`; only server-role RPCs can mutate.
+ - Idempotency tests: re-deliver webhook and ensure no duplicate work and stable outputs.
+
+Operational steps checklist
+- [ ] Apply schema migrations (tables, indexes, RPCs).
+- [ ] Dry-run backfill report (unique/missing/duplicate counts) and share for review.
+- [ ] Execute backfill write with logs; correct duplicates by reassigning later users.
+- [ ] Deploy resolver/read path preferring table; keep metadata fallback for 7 days.
+- [ ] Enable webhook or pre-provision endpoint; wire client to /api/my-referral-link.
+- [ ] Harden OTP path to write-only-true via mark_otp_verified; audit other routes for otp writes and remove.
+- [ ] Add metrics/logs; set alerts for assignment failures > 0.1%.
+- [ ] Disable metadata fallback after 7 days; table is sole SoT.
+
+Notes & constraints
+- If 8-digit numeric format is a hard requirement, DB uniqueness still guarantees safety; generator should sample uniformly and rely on INSERT…ON CONFLICT retry.
+- During migration window, resolver supports both numeric and base36; after cutover, format can be standardized.
+- Environment alignment: confirm all auth and API traffic targets the same Supabase project; block deploy if env mismatch detected.
+
+End of plan (no code changes performed).

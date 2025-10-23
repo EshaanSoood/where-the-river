@@ -6,6 +6,13 @@ import ReactGlobe from 'react-globe.gl';
 import * as THREE from 'three';
 import * as topojson from 'topojson-client';
 import { geoCentroid, geoBounds } from 'd3-geo';
+// GLB support (SSR-safe usage inside onGlobeReady)
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 interface ArcData {
   startLat: number;
@@ -119,6 +126,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const lowPowerRef = useRef<boolean>(false);
   const boatsRef = useRef<Boat[]>([]);
   const boatArcKeyRef = useRef<string | null>(null);
+  const boatTemplateRef = useRef<THREE.Object3D | null>(null);
+  const boatTemplateMaterialRef = useRef<THREE.Material | null>(null);
+  const glbLoadedRef = useRef<boolean>(false);
   const countryCentroidsRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
   const countryBBoxDiagRef = useRef<Map<string, number>>(new Map());
   // Precomputed name->centroid map; use as fallback when ISO-2 missing in static table
@@ -361,9 +371,34 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       midPoint.normalize().multiplyScalar(midAltitude);
 
       const curve = new THREE.CatmullRomCurve3([startVec, midPoint, endVec]);
-      const boatMaterial = new THREE.MeshPhongMaterial({ map: paperTexture || undefined, color: 0xffffff, shininess: 5, specular: 0x111111 });
-      const boatMesh = new THREE.Mesh(paperBoatGeometry, boatMaterial);
-      boatMesh.scale.set(6, 6, 6);
+
+      // Choose GLB-based boat when enabled and available; otherwise fallback to procedural
+      const useGlbBoat = String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '').toLowerCase() === 'true' || String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '') === '1';
+      let boatMeshObj: THREE.Object3D;
+      if (useGlbBoat && boatTemplateRef.current) {
+        try {
+          const cloned = skeletonClone(boatTemplateRef.current) as THREE.Object3D;
+          cloned.traverse((child: any) => {
+            if (child.isMesh) {
+              if (boatTemplateMaterialRef.current) child.material = boatTemplateMaterialRef.current;
+              child.castShadow = false;
+              child.receiveShadow = false;
+            }
+          });
+          cloned.scale.set(6, 6, 6);
+          boatMeshObj = cloned;
+        } catch {
+          const fallbackMat = new THREE.MeshPhongMaterial({ map: paperTexture || undefined, color: 0xffffff, shininess: 5, specular: 0x111111 });
+          const primitive = new THREE.Mesh(paperBoatGeometry, fallbackMat);
+          primitive.scale.set(6, 6, 6);
+          boatMeshObj = primitive;
+        }
+      } else {
+        const fallbackMat = new THREE.MeshPhongMaterial({ map: paperTexture || undefined, color: 0xffffff, shininess: 5, specular: 0x111111 });
+        const primitive = new THREE.Mesh(paperBoatGeometry, fallbackMat);
+        primitive.scale.set(6, 6, 6);
+        boatMeshObj = primitive;
+      }
 
       // Cap to 1 active boat
       if (boatsRef.current.length >= 1) {
@@ -372,8 +407,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
           if (old && scene) scene.remove(old.mesh);
         } catch {}
       }
-      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: boatMesh, curve, startTime: performance.now(), duration: 15000 });
-      scene.add(boatMesh);
+      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: boatMeshObj as unknown as THREE.Mesh, curve, startTime: performance.now(), duration: 15000 });
+      scene.add(boatMeshObj);
     } catch {}
   };
 
@@ -775,6 +810,28 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     const scene = globeEl.current.scene();
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
+
+    // Optionally preload GLB boat model once
+    try {
+      const useGlbBoat = String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '').toLowerCase() === 'true' || String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '') === '1';
+      if (useGlbBoat && !glbLoadedRef.current) {
+        const loader = new GLTFLoader();
+        const base = (typeof window !== 'undefined' ? window.location.origin : '') || '';
+        const url = base ? new URL('/paper_boat.glb', base).toString() : '/paper_boat.glb';
+        loader.load(url, (gltf: any) => {
+          try {
+            const root = gltf?.scene as THREE.Object3D | undefined;
+            if (!root) return;
+            boatTemplateRef.current = root;
+            // Cache first material if present
+            let cached: THREE.Material | null = null;
+            root.traverse((child: any) => { if (child.isMesh && child.material && !cached) cached = child.material as THREE.Material; });
+            boatTemplateMaterialRef.current = cached;
+            glbLoadedRef.current = true;
+          } catch {}
+        }, undefined, () => { /* ignore errors; fallback remains */ });
+      }
+    } catch {}
 
     // Add starfield
     const starGeometry = new THREE.BufferGeometry();

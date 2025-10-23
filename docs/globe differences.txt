@@ -1,0 +1,51 @@
+Globe integration report (what changed and key differences)
+
+What I did
+- Added a new globe component at web/components/GlobeNew.tsx.
+- Switched the app to use GlobeNew via dynamic import in web/components/BelowMap.tsx (SSR disabled, same as before).
+- Copied the model asset to web/public/paper_boat.glb so it serves from /paper_boat.glb.
+- Implemented optional GLB boat support behind NEXT_PUBLIC_USE_GLB_BOAT (fallback remains if disabled or load fails).
+- Kept all data fetching and visualization logic intact: nodes/links from /api/globe, user info from /api/me, seeded placement, chain-based coloring, arcs assembly/sorting, overlays, accessibility summary, LOD, autorotate, low-power heuristics, DPR cap.
+- Ensured SSR safety and lifecycle cleanup for the GLB loader; added frustum/horizon culling for the boat; guarded against leaks.
+
+Key differences: new globe vs old globe
+- Boat model and fallback
+  - New: GLB-based paper boat (if NEXT_PUBLIC_USE_GLB_BOAT=true). Cloned from a cached template using SkeletonUtils; materials reused; disposed on cleanup.
+  - Fallback in new: simple box geometry (visual placeholder) if GLB is off or fails to load.
+  - Old: procedural “paper boat” mesh with canvas “paper” texture as the default.
+
+- Background starfield
+  - New: CSS radial-gradient starfield (static background, zero scene cost).
+  - Old: 3D Points star sphere added to the Three.js scene (disabled on low-power).
+
+- Atmosphere
+  - New: atmosphereColor #66c2ff, altitude 0.25 (matches old behavior).
+  - Old: same values.
+
+- Frustum/horizon culling for boat
+  - New: boat visibility is suppressed when behind the globe or off-frustum to save work.
+  - Old: boat animation/orientation did not explicitly cull by camera; always updated.
+
+- GLB loading and path handling
+  - New: GLTFLoader instanced inside onGlobeReady (client-only), resolves model URL against window.location.origin to respect basePath/assetPrefix.
+  - Old: No GLB loading (procedural only).
+
+- Data plumbing and UX
+  - New: Retains identical data flow and UX semantics: seeded node placement, user moat/sector logic, friend/chain coloring, arc construction and sorting, capped overlays, tooltip throttle, SR summary, autorotate burst/idle, LOD threshold ~220, low-power heuristic, DPR cap.
+  - Old: Same.
+
+Operational notes
+- Toggle GLB boat: set NEXT_PUBLIC_USE_GLB_BOAT=true (in .env.local) to enable GLB; omit or set false/0 to use fallback.
+- Asset size guidance remains: keep paper_boat.glb small and unlit; reuse materials across clones.
+- If we prefer the legacy procedural paper-boat shape as the fallback, we can swap the box geometry in GlobeNew for the procedural boat at any time without touching the data layer.
+
+Deploy/CDN and dev-mode risk guards
+- GLB pathing/CDN: model served from /paper_boat.glb with explicit version query via NEXT_PUBLIC_BOAT_ASSET_VERSION for cache-busting.
+- MIME: Next/Node will set application/octet-stream; can be tuned at CDN if needed, but loaders don’t require a specific type.
+- StrictMode: guarded single preload with glbLoadedRef; cloning happens per-spawn only; avoids double-instantiation in dev.
+- Culling re-entry: boat visibility toggles by hemisphere check; orientation/position continue updating so re-entry is smooth with no jump.
+
+No changes to APIs or data logging
+- All calls and response shapes remain the same (/api/globe, /api/me). No changes to logging/metrics paths.
+
+

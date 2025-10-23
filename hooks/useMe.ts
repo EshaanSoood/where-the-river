@@ -50,12 +50,37 @@ export function useMe(emailOverride?: string | null): UseMeResult {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email })
       });
+      if (resp.status === 401) {
+        // Auth/session race: retry once shortly after
+        await new Promise((r) => setTimeout(r, 300));
+        const retry = await fetch(`${baseUrl}/api/me`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+        if (!retry.ok) throw new Error(`Failed to fetch me: ${retry.status}`);
+        const json = await retry.json();
+        const m = json?.me as Partial<MeData> | undefined;
+        if (!m) throw new Error("Malformed response");
+        const code = (m.ref_code_8 || m.referral_code || null) as string | null;
+        const referral_url = (m.referral_url ?? (code ? `${baseUrl}/?ref=${code}` : null)) as string | null;
+        const boats_total = typeof m.boats_total === "number" ? m.boats_total : 0;
+        setMe({
+          email: String(m.email || email),
+          name: (m.name ?? null) as string | null,
+          country_code: (m.country_code ?? null) as string | null,
+          country_name: (m.country_name ?? null) as string | null,
+          message: (m.message ?? null) as string | null,
+          boat_color: (m.boat_color ?? null) as string | null,
+          boats_total,
+          ref_code_8: (m.ref_code_8 ?? null) as string | null,
+          referral_code: (m.referral_code ?? null) as string | null,
+          referral_url,
+        });
+        return;
+      }
       if (!resp.ok) throw new Error(`Failed to fetch me: ${resp.status}`);
       const json = await resp.json();
       const m = json?.me as Partial<MeData> | undefined;
       if (!m) throw new Error("Malformed response");
       const code = (m.ref_code_8 || m.referral_code || null) as string | null;
-      const referral_url = code ? `${baseUrl}/?ref=${code}` : null;
+      const referral_url = (m.referral_url ?? (code ? `${baseUrl}/?ref=${code}` : null)) as string | null;
       const boats_total = typeof m.boats_total === "number" ? m.boats_total : 0;
       setMe({
         email: String(m.email || email),

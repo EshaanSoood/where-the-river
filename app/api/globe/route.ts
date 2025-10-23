@@ -66,10 +66,10 @@ export async function GET(req: Request) {
       .filter(r => r.referred_by && referralToUser[r.referred_by])
       .map(r => ({ source: r.referred_by as string, target: (r.referral_id || (r.email || '')) as string }));
 
-    return NextResponse.json({ nodes, links });
+    return NextResponse.json({ nodes, links }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }
 

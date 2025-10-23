@@ -3,32 +3,52 @@ import { supabaseServer } from "@/lib/supabaseServer";
 
 export async function GET(req: NextRequest) {
   try {
-    const code = (req.nextUrl.searchParams.get("code") || "").trim();
-    if (!code) return NextResponse.json({ error: "missing_code" }, { status: 400 });
+    const raw = (req.nextUrl.searchParams.get("code") || "").trim();
+    if (!raw) return new NextResponse(JSON.stringify({ first_name: null, user_id: null }), { status: 200, headers: { "Cache-Control": "no-store" } });
+    const norm = raw.replace(/-/g, "").toUpperCase();
 
-    // Try raw_user_meta_data first; fall back to user_metadata
-    const query = supabaseServer
-      .from("auth.users")
-      .select("id, user_metadata, raw_user_meta_data")
-      .or(
-        `raw_user_meta_data->>referral_id.eq.${code},user_metadata->>referral_id.eq.${code}`
-      )
-      .limit(1);
+    // Prefer SoT tables
+    const { data: codeRow } = await supabaseServer
+      .from('referral_codes')
+      .select('user_id')
+      .eq('code', norm)
+      .maybeSingle();
 
-    const { data, error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    const row = Array.isArray(data) && data.length > 0 ? data[0] as unknown as { id: string; user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null } : null;
-    if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    let userId: string | null = null;
+    if (codeRow) {
+      userId = (codeRow as { user_id?: string | null }).user_id || null;
+    } else {
+      const { data: aliasRow } = await supabaseServer
+        .from('referral_code_aliases')
+        .select('user_id')
+        .eq('code', norm)
+        .maybeSingle();
+      userId = aliasRow ? (aliasRow as { user_id?: string | null }).user_id || null : null;
+    }
 
-    const meta = ((row.raw_user_meta_data || row.user_metadata) || {}) as Record<string, unknown>;
-    const fullName = typeof meta.name === "string" ? meta.name.trim() : "";
-    const firstName = fullName ? (fullName.split(/\s+/)[0] || "") : "";
+    if (!userId) {
+      // Constant-shape not-found
+      return new NextResponse(JSON.stringify({ first_name: null, user_id: null }), { status: 200, headers: { "Cache-Control": "no-store" } });
+    }
 
-    return NextResponse.json({ first_name: firstName || null, user_id: row.id });
+    // Resolve first name from auth metadata (best-effort)
+    const { data: authRow } = await supabaseServer
+      .from('auth.users')
+      .select('raw_user_meta_data')
+      .eq('id', userId)
+      .maybeSingle();
+    const meta = (authRow ? (authRow as { raw_user_meta_data?: Record<string, unknown> | null }).raw_user_meta_data || {} : {}) as Record<string, unknown>;
+    const fullName = typeof meta.name === 'string' ? meta.name.trim() : '';
+    const firstName = fullName ? (fullName.split(/\s+/)[0] || '') : '';
+
+    return new NextResponse(JSON.stringify({ first_name: firstName || null, user_id: userId }), { status: 200, headers: { "Cache-Control": "no-store" } });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return new NextResponse(JSON.stringify({ first_name: null, user_id: null, error: msg }), { status: 200, headers: { "Cache-Control": "no-store" } });
   }
 }
+
+
+
 
 

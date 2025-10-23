@@ -1,0 +1,401 @@
+"use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+// Note: when used in Next.js, import via dynamic(() => import(...), { ssr: false })
+import ReactGlobe from 'react-globe.gl';
+import * as THREE from 'three';
+import * as topojson from 'topojson-client';
+import { geoCentroid, geoBounds } from 'd3-geo';
+// GLB support (instantiate only in onGlobeReady)
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+
+interface CountriesData {
+    features: any[];
+}
+
+interface NodeData {
+  id: string;
+  lat: number;
+  lng: number;
+  size: number;
+  color: string;
+  countryCode?: string;
+  name?: string | null;
+}
+
+interface ArcData {
+  startLat: number;
+  startLng: number;
+  endLat: number;
+  endLng: number;
+  startId: string;
+  endId: string;
+  primary?: boolean;
+}
+
+type GlobeProps = { describedById?: string; ariaLabel?: string; tabIndex?: number };
+const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => {
+  const globeEl = useRef<any>(null);
+  const baselineDistanceRef = useRef<number>(0);
+  const hasInteractedRef = useRef<boolean>(false);
+  const [countriesLOD, setCountriesLOD] = useState<{ low: CountriesData, high: CountriesData }>({
+    low: { features: [] },
+    high: { features: [] }
+  });
+  const [currentLOD, setCurrentLOD] = useState<'low' | 'high'>('low');
+  const [zoomScale, setZoomScale] = useState<number>(1);
+  const [hoveredCountry, setHoveredCountry] = useState<any | null>(null);
+  const [tooltipContent, setTooltipContent] = useState('');
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [isTooltipVisible, setIsTooltipVisible] = useState(false);
+  const [srSummary, setSrSummary] = useState<string>("");
+  const [nodesData, setNodesData] = useState<NodeData[]>([]);
+  const [arcsData, setArcsData] = useState<ArcData[]>([]);
+  const [overlayNodes, setOverlayNodes] = useState<NodeData[]>([]);
+
+  const countriesLODRef = useRef(countriesLOD);
+  useEffect(() => { countriesLODRef.current = countriesLOD; }, [countriesLOD]);
+
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const lowPowerRef = useRef<boolean>(false);
+  const overlayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const myIdRef = useRef<string | null>(null);
+  const myFirstNameRef = useRef<string>("");
+  const myConnectionsRef = useRef<Set<string>>(new Set());
+  const myChainRef = useRef<Set<string>>(new Set());
+  const rotateIntervalRef = useRef<number | null>(null);
+  const isLoggedInRef = useRef<boolean>(false);
+  const countryCentroidsRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
+  const countryBBoxDiagRef = useRef<Map<string, number>>(new Map());
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const refitCameraRef = useRef<() => void>(() => {});
+  type AutoState = 'autorotate_burst' | 'autorotate_idle' | 'idle' | 'focused_on_user';
+  const autoStateRef = useRef<AutoState>('idle');
+  const burstTimerRef = useRef<number | null>(null);
+  const idleTimerRef = useRef<number | null>(null);
+  const controlsRef = useRef<any>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const [isGlobeReady, setIsGlobeReady] = useState(false);
+  const [fps, setFps] = useState<number>(0);
+  // GLB template refs
+  const boatTemplateRef = useRef<THREE.Object3D | null>(null);
+  const boatTemplateMaterialRef = useRef<THREE.Material | null>(null);
+  const glbLoadedRef = useRef<boolean>(false);
+  const boatsRef = useRef<{ id: number; mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; startTime: number; duration: number }[]>([]);
+  const boatArcKeyRef = useRef<string | null>(null);
+
+  // FPS Counter
+  useEffect(() => {
+    let frameId: number = 0;
+    let lastTime = performance.now();
+    let frameCount = 0;
+    const trackFps = (time: number) => {
+      frameCount++;
+      if (time - lastTime >= 1000) { setFps(frameCount); frameCount = 0; lastTime = time; }
+      frameId = requestAnimationFrame(trackFps);
+    };
+    frameId = requestAnimationFrame(trackFps);
+    return () => { cancelAnimationFrame(frameId); };
+  }, []);
+
+  // Load Country Polygons with LOD
+  useEffect(() => {
+    // Low-power heuristic
+    try {
+      const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const nav: any = typeof navigator !== 'undefined' ? navigator : {};
+      const conn: any = nav.connection || nav.mozConnection || nav.webkitConnection || null;
+      const saveData = !!(conn && conn.saveData);
+      const eff = (conn && String(conn.effectiveType || '').toLowerCase()) || '';
+      const slowNet = eff.includes('2g') || eff.includes('slow');
+      const cores = (nav.hardwareConcurrency as number) || 0;
+      const mem = (nav.deviceMemory as number) || 0;
+      const highDpr = (typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1) > 2.5;
+      lowPowerRef.current = prefersReduced || saveData || slowNet || (cores > 0 && cores <= 4) || (mem > 0 && mem <= 4) || (highDpr && cores > 0 && cores <= 4);
+    } catch { lowPowerRef.current = false; }
+    fetch('//unpkg.com/world-atlas@2/countries-110m.json')
+      .then(res => res.json())
+      .then((countriesTopo) => { const lowResFeatures = topojson.feature(countriesTopo, countriesTopo.objects.countries); setCountriesLOD(prev => ({ ...prev, low: lowResFeatures as any })); });
+    fetch('//unpkg.com/world-atlas@2/countries-50m.json')
+      .then(res => res.json())
+      .then((countriesTopo) => { const highResFeatures = topojson.feature(countriesTopo, countriesTopo.objects.countries); setCountriesLOD(prev => ({ ...prev, high: highResFeatures as any })); });
+  }, []);
+
+  const polygonsData = useMemo(() => {
+    const activeCountries = countriesLOD[currentLOD];
+    if (!activeCountries?.features?.length) return [];
+    const topLayer = activeCountries.features.map(f => ({ ...f, properties: { ...f.properties, layer: 'top' } }));
+    const bottomLayer = activeCountries.features.map(f => ({ ...f, properties: { ...f.properties, layer: 'bottom' } }));
+    return [...topLayer, ...bottomLayer];
+  }, [countriesLOD, currentLOD]);
+
+  useEffect(() => {
+    try {
+      const low = countriesLOD.low; if (!low?.features?.length) return;
+      const map = new Map<string, { lat: number; lng: number }>();
+      const bbox = new Map<string, number>();
+      for (const f of low.features) {
+        const name = f?.properties?.name as string | undefined; if (!name) continue;
+        const [lng, lat] = geoCentroid(f); map.set(name, { lat, lng });
+        try { const b = geoBounds(f as any); const [[minLng, minLat], [maxLng, maxLat]] = b; const dLat = Math.abs(maxLat - minLat); const dLng = Math.abs(maxLng - minLng); const diagDeg = Math.hypot(dLat, dLng); bbox.set(name, diagDeg); } catch {}
+      }
+      countryCentroidsRef.current = map; countryBBoxDiagRef.current = bbox;
+    } catch {}
+  }, [countriesLOD.low]);
+
+  // --- Data Pipeline (preserve API logging and preferences) ---
+  const countryCodeToLatLng: Record<string, [number, number]> = {
+    US: [39.7837304, -100.445882], CA: [61.0666922, -107.991707], GB: [54.7023545, -3.2765753], IN: [22.3511148, 78.6677428],
+    DE: [51.1638175, 10.4478313], FR: [46.603354, 1.8883335], ES: [39.3260685, -4.8379791], IT: [42.6384261, 12.674297],
+    BR: [-10.3333333, -53.2], AR: [-34.9964963, -64.9672817], AU: [-24.7761086, 134.755], JP: [36.5748441, 139.2394179],
+    CN: [35.000074, 104.999927], SG: [1.357107, 103.8194992], ZA: [-28.8166236, 24.991639], KE: [-0.1768696, 37.9083264],
+    NG: [9.6000359, 7.9999721], MX: [23.6585116, -102.0077097], RU: [64.6863136, 97.7453061], TR: [39.0616, 35.1623],
+  };
+  const hashString = (s: string): number => { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const mulberry32 = (seed: number) => () => { let t = (seed += 0x6D2B79F5); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const getCountryNameFromIso2 = (code: string): string | null => { try { const DN = (Intl as any).DisplayNames; if (!DN) return null; const r = new DN(['en'], { type: 'region' }) as { of: (c: string) => string }; const name = r.of(code); return typeof name === 'string' ? name : null; } catch { return null; } };
+  const resolveLatLngForCode = (cc: string): [number, number] => { const t = countryCodeToLatLng[cc]; if (t) return t; const name = getCountryNameFromIso2(cc); if (name) { const exact = countryCentroidsRef.current.get(name); if (exact) return [exact.lat, exact.lng]; const upper = name.toUpperCase(); for (const [k, v] of countryCentroidsRef.current.entries()) { const ku = k.toUpperCase(); if (ku.includes(upper) || upper.includes(ku)) return [v.lat, v.lng]; } } return [0, 0]; };
+  const getCountrySpreadDeg = (name: string | null | undefined, fallbackLat: number): number | undefined => { try { if (!name) return undefined; let diag = countryBBoxDiagRef.current.get(name); if (typeof diag !== 'number') { const target = name.toUpperCase(); for (const [k, v] of countryBBoxDiagRef.current.entries()) { const ku = k.toUpperCase(); if (ku.includes(target) || target.includes(ku)) { diag = v as number; break; } } } if (typeof diag !== 'number' || !(diag > 0)) return undefined; const latRad = (fallbackLat || 0) * Math.PI / 180; const latScale = Math.max(0.5, Math.cos(latRad)); const effDiag = Math.hypot(diag * latScale, diag); const base = Math.max(0.12, Math.min(1.2, effDiag * 0.1)); return base; } catch { return undefined; } };
+  const seededJitterAround = (lat: number, lng: number, id: string, spreadDeg?: number, overrideAngleRad?: number, radiusScale?: number): [number, number] => { const seed = hashString(id); const rnd = mulberry32(seed); const angle = typeof overrideAngleRad === 'number' ? overrideAngleRad : (rnd() * Math.PI * 2); const base = typeof spreadDeg === 'number' ? Math.max(0.08, Math.min(1.5, spreadDeg)) : 0.24; const rUnscaled = (0.6 * base) + rnd() * (0.4 * base); const r = (radiusScale && radiusScale > 0 ? rUnscaled * radiusScale : rUnscaled); const dLat = r * Math.sin(angle); const dLng = r * Math.cos(angle) / Math.max(0.5, Math.cos(lat * Math.PI / 180)); const jLat = Math.max(-85, Math.min(85, lat + dLat)); const jLng = ((lng + dLng + 540) % 360) - 180; return [jLat, jLng]; };
+
+  type GlobeNode = { id: string; name: string; countryCode: string; createdAt: string };
+  type GlobeLink = { source: string; target: string };
+  const fetchGlobeData = async (filter: 'all' | '30d' | '7d' = 'all'): Promise<{ nodes: GlobeNode[]; links: GlobeLink[] }> => {
+    const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || 'https://riverflowseshaan.vercel.app';
+    const base = guessedBase.replace(/\/$/, '');
+    const resp = await fetch(`${base}/api/globe?filter=${encodeURIComponent(filter)}`, { headers: { 'Content-Type': 'application/json' } });
+    if (!resp.ok) throw new Error(`globe api failed: ${resp.status}`);
+    const json = await resp.json();
+    return { nodes: json?.nodes || [], links: json?.links || [] };
+  };
+  const fetchMeSafe = async (): Promise<{ id: string | null; name: string | null } | null> => {
+    try { const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || ''; if (!guessedBase) return null; const base = guessedBase.replace(/\/$/, ''); const email = (window as any)?.RIVER_EMAIL || null; if (!email) return null; const resp = await fetch(`${base}/api/me`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); if (!resp.ok) return null; const j = await resp.json(); const ref = j?.me?.referral_code || j?.me?.ref_code_8 || null; const name = j?.me?.name || null; return { id: ref || null, name }; } catch { return null; }
+  };
+
+  // Data load + layout
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ nodes, links }, me] = await Promise.all([fetchGlobeData('all'), fetchMeSafe()]);
+        if (cancelled) return;
+        myIdRef.current = me?.id || null;
+        isLoggedInRef.current = !!myIdRef.current;
+        try { myFirstNameRef.current = ((me?.name || '').trim().split(/\s+/)[0] || ''); } catch { myFirstNameRef.current = ''; }
+        const conn = new Set<string>();
+        if (myIdRef.current) { links.forEach(l => { if (l.source === myIdRef.current) conn.add(l.target); if (l.target === myIdRef.current) conn.add(l.source); }); }
+        myConnectionsRef.current = conn;
+
+        // Build chain (ancestors+descendants) via BFS over undirected links
+        const chain = new Set<string>(); const adj = new Map<string, Set<string>>();
+        links.forEach(l => { if (!adj.has(l.source)) adj.set(l.source, new Set()); if (!adj.has(l.target)) adj.set(l.target, new Set()); adj.get(l.source)!.add(l.target); adj.get(l.target)!.add(l.source); });
+        const startId = myIdRef.current; if (startId) { const q: string[] = [startId]; chain.add(startId); while (q.length) { const cur = q.shift()!; const neigh = adj.get(cur); if (!neigh) continue; neigh.forEach(n => { if (!chain.has(n)) { chain.add(n); q.push(n); } }); } }
+        myChainRef.current = chain;
+
+        const nodeMap = new Map<string, NodeData>();
+        nodes.forEach(n => {
+          const cc = (n.countryCode || '').toUpperCase();
+          const base = resolveLatLngForCode(cc);
+          const name = getCountryNameFromIso2(cc);
+          const spread = getCountrySpreadDeg(name, base[0]);
+          const [lat, lng] = seededJitterAround(base[0], base[1], n.id, spread);
+          nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: 'rgba(255,255,255,0.95)', countryCode: cc, name: n.name || null });
+        });
+
+        // Moat around user
+        const N = 8; const sectorSize = (2 * Math.PI) / N; let userSector: number | null = null; let userAngle: number | null = null; let userCountry: string | null = null;
+        if (myIdRef.current && nodeMap.has(myIdRef.current)) { const meNode = nodeMap.get(myIdRef.current)!; userCountry = meNode.countryCode || null; const seed = hashString(myIdRef.current); const rnd = mulberry32(seed); const baseAngle = rnd() * Math.PI * 2; userSector = Math.floor(baseAngle / sectorSize) % N; userAngle = (userSector * sectorSize) + (sectorSize / 2); }
+        if (userSector !== null && userAngle !== null && userCountry) {
+          const bubbleDeg = 0.35; const bubbleRad = bubbleDeg * Math.PI / 180; const entries = Array.from(nodeMap.values());
+          for (const val of entries) {
+            const cc = (val.countryCode || '').toUpperCase(); const base = resolveLatLngForCode(cc); const name = getCountryNameFromIso2(cc); const spread = getCountrySpreadDeg(name, base[0]); const seed = hashString(val.id); const rnd = mulberry32(seed); const baseAngle = rnd() * Math.PI * 2; let angle = baseAngle; if (cc === userCountry) { let sector = Math.floor(baseAngle / sectorSize) % N; if (sector === userSector) sector = (sector + 1) % N; angle = (sector * sectorSize) + (sectorSize / 2); const diff = Math.atan2(Math.sin(angle - userAngle), Math.cos(angle - userAngle)); if (Math.abs(diff) < bubbleRad) { const leftBoundary = userSector * sectorSize; const rightBoundary = ((userSector + 1) % N) * sectorSize; const distLeft = Math.abs(Math.atan2(Math.sin(angle - leftBoundary), Math.cos(angle - leftBoundary))); const distRight = Math.abs(Math.atan2(Math.sin(angle - rightBoundary), Math.cos(angle - rightBoundary))); angle = distLeft <= distRight ? leftBoundary : rightBoundary; } } const radiusScale = (myIdRef.current && val.id === myIdRef.current) ? 1.6 : undefined; const [lat, lng] = seededJitterAround(base[0], base[1], val.id, spread, angle, radiusScale); val.lat = lat; val.lng = lng; }
+        }
+
+        const darkTeal = '#135E66'; const aqua = 'rgba(42,167,181,0.95)'; const nearWhite = 'rgba(255,255,255,0.95)';
+        nodeMap.forEach((val, key) => { if (myIdRef.current && key === myIdRef.current) { val.color = darkTeal; val.size = 0.35; } else if (myConnectionsRef.current.has(key)) { val.color = aqua; val.size = 0.28; } else { val.color = nearWhite; val.size = 0.20; } });
+        setNodesData(Array.from(nodeMap.values()));
+        const arcs: ArcData[] = []; links.forEach(l => { const a = nodeMap.get(l.source); const b = nodeMap.get(l.target); if (!a || !b) return; const isPrimary = myChainRef.current.has(a.id) && myChainRef.current.has(b.id); arcs.push({ startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng, startId: a.id, endId: b.id, primary: isPrimary }); });
+        arcs.sort((x, y) => Number(Boolean(x.primary)) - Number(Boolean(y.primary)));
+        setArcsData(arcs);
+
+        const pri = arcs.find(a => a.primary) || arcs[0];
+        if (pri && !lowPowerRef.current) {
+          const key = `${pri.startId}->${pri.endId}`;
+          if (boatArcKeyRef.current !== key) {
+            boatArcKeyRef.current = key;
+            spawnBoatAlongArc(pri.startLat, pri.startLng, pri.endLat, pri.endLng);
+          }
+        }
+
+        // Overlays list
+        const max = 6; const result: NodeData[] = []; const byId = new Map<string, NodeData>(); Array.from(nodeMap.values()).forEach(n => byId.set(n.id, n));
+        const meId = myIdRef.current; if (meId && byId.has(meId)) result.push(byId.get(meId)!);
+        for (const id of Array.from(myConnectionsRef.current.values())) { if (result.length >= max) break; const n = byId.get(id); if (n) result.push(n); }
+        setOverlayNodes(result.slice(0, max));
+      } catch { if (!cancelled) { setNodesData([]); setArcsData([]); } }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const globeMaterial = useMemo(() => new THREE.MeshPhongMaterial({ color: '#a8c5cd', opacity: 0.6, transparent: true }), []);
+
+  // Controls/Camera/Renderer and GLB preload
+  const onGlobeReady = () => {
+    if (!globeEl.current) return;
+    sceneRef.current = globeEl.current.scene();
+    controlsRef.current = globeEl.current.controls();
+    cameraRef.current = globeEl.current.camera();
+    rendererRef.current = globeEl.current.renderer?.() as any;
+    const controls = controlsRef.current; const camera = cameraRef.current; const renderer = rendererRef.current;
+    if (!controls || !camera) return;
+    controls.autoRotate = false; controls.autoRotateSpeed = 0.25; controls.enableZoom = true;
+    const getFitDistance = () => { try { const vFov = (camera.fov || 75) * Math.PI / 180; const aspect = camera.aspect || 1; const R = 100 * (1 + 0.22); const margin = 1.15; const dV = (R * margin) / Math.tan(vFov / 2); const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect); const dH = (R * margin) / Math.tan(hFov / 2); return Math.max(dV, dH, 100 * 1.3); } catch { return camera.position.length(); } };
+    camera.near = 0.1; camera.far = 5000; camera.updateProjectionMatrix();
+    const fitD = getFitDistance(); controls.target.set(0, 0, 0); camera.position.set(0, 0, fitD); camera.lookAt(0, 0, 0); camera.updateProjectionMatrix(); baselineDistanceRef.current = fitD; controls.maxDistance = fitD; controls.minDistance = Math.max(fitD / 3, 80); controls.screenSpacePanning = false;
+    try { renderer?.setPixelRatio?.(Math.min(1.75, window.devicePixelRatio || 1)); } catch {}
+    const scene = sceneRef.current; if (scene) scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    refitCameraRef.current = () => { try { if (!globeEl.current) return; const newFit = getFitDistance(); const prevFit = baselineDistanceRef.current || newFit; const dist = camera.position.length(); const ratio = Math.max(0.0001, dist / prevFit); baselineDistanceRef.current = newFit; controls.maxDistance = newFit; controls.minDistance = Math.max(newFit / 3, 80); const dir = camera.position.clone().normalize(); camera.position.copy(dir.multiplyScalar(newFit * ratio)); camera.updateProjectionMatrix(); } catch {} };
+    setIsGlobeReady(true);
+    // Preload GLB boat once (SSR-safe)
+    try { const useGlbBoat = String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '').toLowerCase() === 'true' || String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '') === '1'; if (useGlbBoat && !glbLoadedRef.current) { const loader = new GLTFLoader(); const base = (typeof window !== 'undefined' ? window.location.origin : '') || ''; const BOAT_ASSET_VERSION = (process.env.NEXT_PUBLIC_BOAT_ASSET_VERSION || '1'); const url = base ? new URL(`/paper_boat.glb?v=${encodeURIComponent(BOAT_ASSET_VERSION)}`, base).toString() : `/paper_boat.glb?v=${encodeURIComponent(BOAT_ASSET_VERSION)}`; loader.load(url, (gltf: any) => { try { const root = gltf?.scene as THREE.Object3D | undefined; if (!root) return; boatTemplateRef.current = root; let cached: THREE.Material | null = null; root.traverse((child: any) => { if (child.isMesh && child.material && !cached) cached = child.material as THREE.Material; }); boatTemplateMaterialRef.current = cached; glbLoadedRef.current = true; } catch {} }, undefined, () => { /* ignore error */ }); } } catch {}
+  };
+
+  const stopRotateInterval = useCallback(() => { if (rotateIntervalRef.current) { window.clearInterval(rotateIntervalRef.current); rotateIntervalRef.current = null; } if (controlsRef.current) controlsRef.current.autoRotate = false; }, []);
+  const startBurstRotate = useCallback(() => { stopRotateInterval(); const controls = controlsRef.current; if (!controls) return; autoStateRef.current = 'autorotate_burst'; const step = 0.01; rotateIntervalRef.current = window.setInterval(() => { try { controls.rotateLeft(step); controls.update(); } catch {} }, 33) as any; if (burstTimerRef.current) clearTimeout(burstTimerRef.current); burstTimerRef.current = window.setTimeout(() => { stopRotateInterval(); autoStateRef.current = 'idle'; }, 10000) as any; }, [stopRotateInterval]);
+  const startIdleRotate = useCallback(() => { stopRotateInterval(); const controls = controlsRef.current; if (!controls) return; autoStateRef.current = 'autorotate_idle'; const step = 0.006; rotateIntervalRef.current = window.setInterval(() => { try { controls.rotateLeft(step); controls.update(); } catch {} }, 66) as any; }, [stopRotateInterval]);
+  const startIdleTimer = useCallback(() => { if (idleTimerRef.current) { window.clearTimeout(idleTimerRef.current); idleTimerRef.current = null; } idleTimerRef.current = window.setTimeout(() => { startIdleRotate(); }, 120000) as any; }, [startIdleRotate]);
+  useEffect(() => { if (isGlobeReady) startBurstRotate(); }, [isGlobeReady, startBurstRotate]);
+  useEffect(() => {
+    if (!isGlobeReady) return;
+    const controls = controlsRef.current; const camera = cameraRef.current; const renderer = rendererRef.current; if (!controls || !camera || !renderer) return;
+    const ZOOM_LOD_THRESHOLD = 220;
+    const handleZoom = () => { const distance = camera.position.length(); setCurrentLOD(distance < ZOOM_LOD_THRESHOLD && countriesLODRef.current.high.features.length > 0 ? 'high' : 'low'); const ratio = Math.max(0.0001, baselineDistanceRef.current / distance); const raw = Math.min(2.0, Math.max(0.6, 0.85 + 0.55 * ratio)); const quant = Math.round(raw * 10) / 10; setZoomScale(prev => (Math.abs((prev ?? 0) - quant) >= 0.05 ? quant : prev)); };
+    controls.addEventListener('change', handleZoom); const onInteractionStart = () => { hasInteractedRef.current = true; }; controls.addEventListener('start', onInteractionStart);
+    if (!hasInteractedRef.current) { requestAnimationFrame(() => { if (!globeEl.current || hasInteractedRef.current) return; controls.target.set(0, 0, 0); camera.position.set(0, 0, baselineDistanceRef.current); camera.lookAt(0, 0, 0); camera.updateProjectionMatrix(); }); }
+    let resizeTimer: number | null = null; const onResize = () => { if (resizeTimer) window.clearTimeout(resizeTimer); resizeTimer = window.setTimeout(() => { refitCameraRef.current(); try { renderer.setPixelRatio?.(Math.min(1.75, window.devicePixelRatio || 1)); } catch {} }, 150) as any; }; window.addEventListener('resize', onResize);
+    const onActivity = () => { stopRotateInterval(); autoStateRef.current = 'idle'; startIdleTimer(); };
+    const onVisibilityChange = () => { if (document.hidden) { stopRotateInterval(); } else if (autoStateRef.current === 'autorotate_idle') { startIdleRotate(); } };
+    const activityEvents: (keyof DocumentEventMap)[] = ['pointerdown', 'wheel', 'keydown', 'touchstart']; activityEvents.forEach(ev => window.addEventListener(ev, onActivity, { passive: true })); document.addEventListener('visibilitychange', onVisibilityChange);
+    handleZoom();
+    return () => { controls.removeEventListener('change', handleZoom); controls.removeEventListener('start', onInteractionStart); window.removeEventListener('resize', onResize); activityEvents.forEach(ev => window.removeEventListener(ev, onActivity)); document.removeEventListener('visibilitychange', onVisibilityChange); stopRotateInterval(); if (burstTimerRef.current) window.clearTimeout(burstTimerRef.current); if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current); if (resizeTimer) window.clearTimeout(resizeTimer); };
+  }, [isGlobeReady, startIdleTimer, startIdleRotate, stopRotateInterval]);
+
+  // Observe container/renderer size changes to keep fit accurate
+  useEffect(() => { let ro: ResizeObserver | null = null; const attach = () => { const targets = [containerRef.current, rendererRef.current?.domElement].filter(Boolean); if (targets.length > 0) { ro = new ResizeObserver(() => { refitCameraRef.current?.(); }); targets.forEach(t => ro!.observe(t!)); } }; const id = window.setTimeout(attach, 100); return () => { window.clearTimeout(id); ro?.disconnect(); }; }, []);
+
+  const handlePolygonHover = (feature: any | null) => { setHoveredCountry(feature); if (feature) { setTooltipContent(feature.properties.name); setIsTooltipVisible(true); } else { setIsTooltipVisible(false); } };
+  const tooltipRefPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const rafPendingRef = useRef<boolean>(false);
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => { tooltipRefPos.current = { x: event.clientX, y: event.clientY }; if (rafPendingRef.current) return; rafPendingRef.current = true; requestAnimationFrame(() => { rafPendingRef.current = false; setTooltipPosition(tooltipRefPos.current); }); };
+
+  const containerStyle: React.CSSProperties = { width: '100%', height: '100%', position: 'relative', overflow: 'hidden', backgroundColor: '#000010', backgroundImage: `
+      radial-gradient(1.5px 1.5px at 20% 30%, white, transparent),
+      radial-gradient(1px 1px at 80% 10%, white, transparent),
+      radial-gradient(1.5px 1.5px at 50% 80%, white, transparent),
+      radial-gradient(2px 2px at 75% 60%, white, transparent),
+      radial-gradient(2.5px 2.5px at 10% 90%, white, transparent)
+    `.replace(/\s+/g, ' ') };
+
+  const tooltipStyle: React.CSSProperties = { position: 'absolute', left: `${tooltipPosition.x + 15}px`, top: `${tooltipPosition.y + 15}px`, backgroundColor: 'rgba(40, 40, 40, 0.85)', color: 'white', padding: '5px 10px', borderRadius: '5px', fontFamily: "'Roboto Mono', monospace", fontSize: '1rem', pointerEvents: 'none', zIndex: 10, whiteSpace: 'nowrap', transition: 'opacity 0.2s ease-in-out', opacity: isTooltipVisible ? 1 : 0 };
+
+  useEffect(() => { const update = () => { try { const users = nodesData.length; const countries = (() => { const s = new Set<string>(); nodesData.forEach(n => { if (n.countryCode) s.add((n.countryCode || '').toUpperCase()); }); return s.size; })(); const connections = arcsData.length; setSrSummary(`Dream River globe: ${users} people across ${countries} countries with ${connections} connections.`); } catch { setSrSummary('An interactive 3D globe showing countries of the world.'); } }; update(); window.addEventListener('focus', update); return () => window.removeEventListener('focus', update); }, [nodesData, arcsData]);
+
+  // Project helpers for overlays
+  const projectLatLngIfFront = (lat: number, lng: number): { x: number; y: number } | null => { try { const globe = globeEl.current; if (!globe) return null; const cam = globe.camera(); const c = globe.getCoords(lat, lng); if (!c) return null; const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); if (dot <= 0) return null; const v = world.project(cam); const rect = globe.renderer()?.domElement?.getBoundingClientRect?.() || { width: window.innerWidth, height: window.innerHeight } as any; const x = (v.x * 0.5 + 0.5) * rect.width; const y = (-v.y * 0.5 + 0.5) * rect.height; return { x, y }; } catch { return null; } };
+  const overlayUpdatePendingRef = useRef<boolean>(false);
+  const scheduleOverlayUpdate = () => { if (overlayUpdatePendingRef.current) return; overlayUpdatePendingRef.current = true; requestAnimationFrame(() => { overlayUpdatePendingRef.current = false; try { const globe = globeEl.current; if (!globe) return; overlayNodes.forEach(n => { const el = overlayRefs.current.get(n.id); if (!el) return; const px = projectLatLngIfFront(n.lat, n.lng); if (!px) { el.style.opacity = '0'; return; } el.style.left = `${px.x}px`; el.style.top = `${px.y}px`; el.style.opacity = '1'; }); } catch {} }); };
+
+  // --- Boat animation loop (single-boat) ---
+  useEffect(() => { if (lowPowerRef.current) return () => {}; let rafId: number; const animate = () => { const now = performance.now(); boatsRef.current.forEach(boat => { const elapsed = now - boat.startTime; const t = (elapsed / boat.duration) % 1.0; const pos = boat.curve.getPointAt(t); try { const globe = globeEl.current; const cam = globe?.camera(); if (cam) { const visible = pos.clone().normalize().dot(cam.position.clone().normalize()) > 0; (boat.mesh as any).visible = visible; if (!visible) return; } } catch {} boat.mesh.position.copy(pos); const tan = boat.curve.getTangentAt(t); boat.mesh.up.copy(pos).normalize(); boat.mesh.lookAt(pos.clone().add(tan)); }); rafId = requestAnimationFrame(animate); }; animate(); return () => { cancelAnimationFrame(rafId); try { const scene = sceneRef.current; if (scene) boatsRef.current.forEach(b => scene.remove(b.mesh)); boatsRef.current.forEach(b => { (b.mesh as any).traverse?.((child: any) => { if (child.isMesh) { child.geometry?.dispose?.(); if (child.material?.dispose) child.material.dispose(); } }); }); } catch {} boatsRef.current = []; }; }, []);
+
+  const spawnBoatAlongArc = (startLat: number, startLng: number, endLat: number, endLng: number) => {
+    try {
+      if (lowPowerRef.current) return;
+      const globe = globeEl.current; const scene = sceneRef.current || (globe ? globe.scene() : null); if (!globe || !scene) return;
+      const ARC_ALTITUDE = 0.2; const BOAT_PATH_ALTITUDE = 0.07; const GLOBE_RADIUS = 100;
+      const sC = globe.getCoords(startLat, startLng); const eC = globe.getCoords(endLat, endLng); if (!sC || !eC) return;
+      const s = new THREE.Vector3(sC.x, sC.y, sC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
+      const e = new THREE.Vector3(eC.x, eC.y, eC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
+      const mid = new THREE.Vector3().addVectors(s, e).multiplyScalar(0.5).normalize().multiplyScalar(GLOBE_RADIUS * (1 + ARC_ALTITUDE));
+      const curve = new THREE.CatmullRomCurve3([s, mid, e]);
+      const useGlbBoat = String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '').toLowerCase() === 'true' || String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '') === '1';
+      let meshObj: THREE.Object3D;
+      if (useGlbBoat && boatTemplateRef.current) { try { const cloned = skeletonClone(boatTemplateRef.current) as THREE.Object3D; cloned.traverse((child: any) => { if (child.isMesh) { if (boatTemplateMaterialRef.current) child.material = boatTemplateMaterialRef.current; child.castShadow = false; child.receiveShadow = false; } }); cloned.scale.set(6, 6, 6); meshObj = cloned; } catch { const mat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 5, specular: 0x111111 }); const prim = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), mat); prim.scale.set(6, 6, 6); meshObj = prim; } } else { const mat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 5, specular: 0x111111 }); const prim = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), mat); prim.scale.set(6, 6, 6); meshObj = prim; }
+      if (boatsRef.current.length >= 1) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
+      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: meshObj as unknown as THREE.Mesh, curve, startTime: performance.now(), duration: 15000 });
+      scene.add(meshObj);
+    } catch {}
+  };
+
+  return (
+    <div ref={containerRef} style={containerStyle} onMouseMove={handleMouseMove} role="region" aria-label={ariaLabel} aria-describedby={describedById} tabIndex={tabIndex as number | undefined}>
+      <div style={{ position: 'absolute', top: '10px', left: '10px', color: 'white', backgroundColor: 'rgba(0,0,0,0.5)', padding: '5px 8px', borderRadius: '3px', fontFamily: "'Roboto Mono', monospace", fontSize: '12px', zIndex: 100 }}>
+        {fps} FPS
+      </div>
+      <div aria-live="polite" role="status" style={{ position: 'absolute', left: -9999, top: 'auto', width: 1, height: 1, overflow: 'hidden' }}>
+        {srSummary}
+      </div>
+      <div style={tooltipStyle}>
+        {tooltipContent}
+      </div>
+      <ReactGlobe
+        ref={globeEl}
+        onGlobeReady={onGlobeReady}
+        backgroundColor="#000010"
+        globeMaterial={globeMaterial}
+        atmosphereColor="#66c2ff"
+        atmosphereAltitude={0.25}
+        arcsData={arcsData}
+        arcColor={useCallback((d: any) => { try { const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)'; const midLat = (d.startLat + d.endLat) / 2; const midLng = (d.startLng + d.endLng) / 2; const c = globe.getCoords(midLat, midLng); if (!c) return 'rgba(102, 194, 255, 0.8)'; const cam = globe.camera(); const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); const isPri = !!d.primary; const basePrimary = '140, 220, 255'; const baseSecondary = '102, 194, 255'; const alpha = dot >= 0 ? (isPri ? 0.98 : 0.64) : (isPri ? 0.42 : 0.10); const base = isPri ? basePrimary : baseSecondary; return `rgba(${base}, ${alpha})`; } catch { return 'rgba(102, 194, 255, 0.8)'; } }, [])}
+        arcStroke={useCallback((d: any) => (d?.primary ? 2.2 : 2), [])}
+        arcAltitude={0.2}
+        arcDashLength={1}
+        arcDashGap={0}
+        arcDashAnimateTime={0}
+        arcCircularResolution={24}
+        pointsData={useMemo(() => nodesData.map(n => ({ lat: n.lat, lng: n.lng, size: n.size, color: n.color })), [nodesData])}
+        pointAltitude={0.201}
+        pointRadius={useCallback((d: any) => (d?.size || 0.20) * zoomScale, [zoomScale])}
+        pointColor={useCallback((d: any) => d?.color || 'rgba(255,255,255,0.95)', [])}
+        pointsMerge={true}
+        pointsTransitionDuration={0}
+        polygonsData={polygonsData}
+        polygonCapColor={useCallback((feat: any) => { const isHovered = feat.properties.name === hoveredCountry?.properties?.name; if (feat.properties.layer === 'bottom') return '#7C4A33'; return isHovered ? '#B56B45' : '#DCA87E'; }, [hoveredCountry])}
+        polygonSideColor={useCallback((feat: any) => (feat.properties.layer === 'bottom' ? 'transparent' : '#7C4A33'), [])}
+        polygonStrokeColor={() => 'transparent'}
+        polygonAltitude={useCallback((feat: any) => { const isHovered = feat.properties.name === hoveredCountry?.properties.name; if (feat.properties.layer === 'bottom') return 0.001; return isHovered ? 0.06 : 0.04; }, [hoveredCountry])}
+        polygonsTransitionDuration={300}
+        onPolygonHover={handlePolygonHover}
+      />
+      {/* Overlays: initials for me + friends (max 6) */}
+      {overlayNodes.map((p) => {
+        if (!p.id) return null;
+        const isMe = myIdRef.current && p.id === myIdRef.current;
+        const isFriend = myConnectionsRef.current.has(p.id);
+        if (!(isMe || isFriend)) return null;
+        return (
+          <div
+            key={`ux-${p.id}`}
+            ref={(el) => { if (el) overlayRefs.current.set(p.id, el); else overlayRefs.current.delete(p.id); }}
+            style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 60, opacity: 0 }}
+            aria-hidden="true"
+          >
+            <div className="font-seasons" style={{ position: 'absolute', left: '50%', top: 18, transform: 'translate(-50%, 0)', color: 'var(--ink, #e6e6e6)', fontSize: 12, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}>
+              {isMe ? (myFirstNameRef.current || '') : (p.name ? String(p.name).split(/\s+/)[0]?.[0]?.toUpperCase() : '')}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export default Globe;
+
+

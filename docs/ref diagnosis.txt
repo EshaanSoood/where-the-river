@@ -1,0 +1,394 @@
+Referral Code Generation — Diagnosis (Read-Only)
+
+Scope
+- Summary of how referral code generation currently works.
+- Exhaustive list of plausible reasons a new signup (last name "Kota") did not receive a referral code.
+- No changes performed; this is documentation only.
+
+How referral code generation works today
+
+Primary path (during profile upsert right after OTP verification)
+- Endpoint: web/app/api/users/upsert/route.ts
+- Behavior:
+  - After OTP verify, the client calls POST /api/users/upsert with sanitized name, email, ISO‑2 country, message, color, and optional referred_by.
+  - Server looks up the user in auth.users by email using the service client.
+  - Server generates an 8‑digit numeric referral_id and ensures best‑effort uniqueness by scanning auth.users raw_user_meta_data->>referral_id with up to ~8 retries.
+  - Server builds nextMeta by copying prior metadata and only sets:
+    - referred_by if it was previously unset (first-click wins).
+    - referral_id if it was previously unset.
+    - otp_verified: true.
+  - Server persists metadata via supabase.auth.admin.updateUserById.
+  - Response includes the referral_id from nextMeta (or null if not set).
+
+Secondary path (on-demand during share link generation)
+- Endpoint: web/app/api/referral/route.ts
+- Behavior:
+  - Accepts inviterId and reads auth.users raw_user_meta_data.
+  - If referral_id exists and is non-empty, reuses it; else assigns a new base‑36 token and persists via admin.updateUserById.
+  - Returns a canonical URL using ?ref=<code>.
+
+Where the UI resolves codes for inviter hints
+- Endpoint: web/app/api/referral/resolve/route.ts (GET ?code=...)
+- Behavior:
+  - Looks up auth.users by referral_id in raw_user_meta_data or user_metadata and returns { first_name, user_id } for UI hints and guards.
+
+Every plausible reason a new user ("Kota") did not get a referral code
+
+Flow did not reach the upsert step
+- OTP verification was not completed; user closed the tab or switched devices between OTP and upsert.
+- The upsert request failed due to network, ad‑blocker, CORS, or a transient 4xx/5xx; UI would have shown "Profile creation failed" and not proceeded.
+- Magic link/OTP completed in a different browser/device profile; the local session did not execute the upsert call.
+
+Upsert exited early on validation
+- invalid_name: The sanitized full name was < 2 chars or contained no letters/digits (e.g., punctuation/emoji only).
+- invalid_country: Country dropdown not selected or unrecognized (non‑ISO‑2) leading to 400.
+
+Auth lookup failed, so no code generation ran
+- auth_user_not_found: Email case/whitespace mismatch or user not present in the target Supabase project.
+- The environment the API queried differs from where the user was created (prod vs. dev).
+
+Server environment/permissions issues
+- SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL missing/incorrect on the server, causing select/update against auth.users to fail.
+- Using an anon key for privileged operations would block reads/writes to auth.users.
+
+Metadata guard prevented assignment
+- A pre‑existing referral_id was present (even as a falsy non‑null value such as an empty string). The nullish coalescing guard keeps existing referral_id and skips generating a new one, resulting in an effectively "blank" code.
+  - Guard logic: referral_id := existing referral_id ?? newly generated code
+
+Persistence failed during admin update
+- supabase.auth.admin.updateUserById errored; metadata not saved, so no referral_id persisted.
+- API would have returned 400 with the update error message.
+
+Timing/visibility confusion
+- The server successfully assigned referral_id, but the client session (issued before update) did not reflect the new metadata yet; DB has the code but the UI looked empty until a refresh/re-fetch.
+
+Multi‑environment or route mismatch
+- Signup executed against Production; inspection was done against Development (or vice‑versa).
+- A different signup route or a legacy flow was used that did not call POST /api/users/upsert.
+
+Notes for triage (non‑mutating checks)
+- Confirm the environment (base URL and keys) used during signup vs. where you are inspecting data.
+- Check server logs for POST /api/users/upsert around the signup time for any validation or update errors.
+- Inspect auth.users.raw_user_meta_data for the user’s email:
+  - referral_id present and non-empty?
+  - otp_verified set true?
+  - Any anomalous prior referral_id value such as an empty string?
+- If available, review docs/_diagnostics/* folders near the signup time for 01/02/03 files created by the upsert route.
+
+End of report.
+
+## Report update
+
+Verification summary and adjustments based on current code:
+
+- Primary path correctness: Confirmed. 8‑digit numeric generation with best‑effort uniqueness, first‑click wins, persisted via admin update; response returns the assigned referral_id when present.
+- Secondary path correctness: Confirmed. Uses existing code or assigns base‑36 token; returns canonical ?ref=<code>.
+- Resolver correctness: Confirmed. Looks in both raw_user_meta_data and user_metadata.
+
+Clarifications/Corrections:
+- Retry exhaustion does not cause “no code”; it risks a duplicate because there is no DB‑level uniqueness on metadata.
+- Resolver does not validate format; both numeric and base‑36 resolve.
+- Field mismatch alone won’t hide codes: resolver queries both raw_user_meta_data and user_metadata.
+- Leading zeros cannot occur in primary numeric codes (range 10,000,000–99,999,999).
+
+High‑risk plausible cause for Kota:
+- Empty‑string retention: if prior metadata had referral_id:"", the nullish coalescing guard treats it as present and skips generating a new code, leaving an effectively blank value.
+
+Read‑only checks to run for Kota:
+- Verify environment alignment (prod/dev).
+- Check server logs for POST /api/users/upsert near signup time for validation/update errors.
+- Inspect auth.users metadata fields for non‑empty referral_id and otp_verified:true; confirm no empty string in prior metadata.
+- If share path was used, confirm POST /api/referral succeeded.
+
+#New update
+# Referral Code — Read-Only Triage Checklist (Kota)
+
+## A. Confirm the record (single source of truth)
+
+* [ ] Locate **Kota’s user** in `auth.users`.
+* [ ] Confirm `otp_verified` is **true**.
+* [ ] Inspect **both** `raw_user_meta_data` and `user_metadata`:
+
+  * [ ] `referral_id` exists and is a **non-empty string**.
+  * [ ] **Not** equal to `""` (empty string) anywhere.
+  * [ ] No conflicting duplicate fields (e.g., one bucket empty, the other non-empty with different values).
+* [ ] Note the **exact value** of `referral_id` (numeric vs base-36).
+
+## B. Verify the upsert event (after OTP)
+
+* [ ] Find the **POST `/api/users/upsert`** log around Kota’s signup timestamp.
+* [ ] Response body: shows a **non-empty** `referral_id`?
+* [ ] Server logs: any guard message like “**skipping** set because already present” or similar?
+* [ ] Any errors from `updateUserById` (auth update), even transient?
+
+## C. Check the share/backfill path (should be gated off)
+
+* [ ] Confirm **no** `POST /api/referral` attempt for Kota (expected if Share is gated on having a code).
+* [ ] If there is an attempt, note whether it **reused** an existing code or tried to mint a base-36 code—and the result.
+
+## D. Resolver sanity (format/visibility)
+
+* [ ] Confirm resolver config: it queries **both** metadata buckets (as documented).
+* [ ] Confirm it **accepts both** numeric and base-36 formats (no format filtering).
+* [ ] If a code exists, verify the resolver finds **Kota’s inviter info** with that code (manual call is fine; keep it read-only).
+
+## E. Client state / timing
+
+* [ ] Compare timestamps: upsert **completion** vs the client’s **last user-meta fetch**.
+* [ ] If DB has a code but the gate stayed off, note whether the client **did not re-fetch** after upsert (stale state).
+* [ ] Check for blockers on the upsert request (ad-blockers/CORS) in client telemetry or logs, even if the flow “felt” complete.
+
+## F. Scope check (spot a pattern)
+
+* [ ] Count users where `referral_id` is **empty string**.
+* [ ] Count users with **missing** `referral_id` entirely.
+* [ ] Count users with **valid** `referral_id`.
+  (If multiple empty-string cases exist, the “empty-string retention” hypothesis strengthens.)
+
+## G. Environment alignment
+
+* [ ] Confirm there is truly **one** database/project in use for this flow (keys and base URL match).
+* [ ] Confirm Kota’s signup and your inspection touched the **same** project.
+
+## H. Race/overwrites (unlikely but check)
+
+* [ ] Look for **two near-simultaneous** metadata writes (upsert + any other route) around signup.
+* [ ] Note final write content—did a later write **restore** an empty string?
+
+---
+
+## What to capture in the report
+
+* [ ] Kota’s `otp_verified` value.
+* [ ] Exact `referral_id` locations/values (both buckets), including if `""`.
+* [ ] Upsert response excerpt (presence/absence of `referral_id`).
+* [ ] Any log lines indicating a **skip** due to “already set.”
+* [ ] Resolver test outcome (if code exists, did it resolve?).
+* [ ] Whether client re-fetched metadata after upsert (yes/no).
+* [ ] Counts from the scope check (empty-string / missing / valid).
+
+## Likely outcomes (mark one)
+
+* [ ] **Empty-string retention** confirmed (root cause).
+* [ ] **DB has code; client stale** (UI didn’t re-fetch).
+* [ ] **Race/overwrite** (rare) produced blank.
+* [ ] Other (document clearly).
+
+# New update — Checklist verification report
+
+Summary
+- The triage checklist aligns with the current code paths and is actionable as read-only steps. A few clarifications ensure accuracy:
+
+Verified accurate as written
+- A. Record checks: Both `raw_user_meta_data` and `user_metadata` should be inspected; `otp_verified` is set in upsert.
+- B. Upsert event: Server generates numeric code, persists via admin update, response includes `referral_id` when present.
+- C. Share/backfill: If invoked, it reuses an existing code or mints a base‑36 token and persists.
+- D. Resolver: Queries both metadata buckets and accepts both numeric and base‑36 strings.
+- E. Client timing: Stale client state can hide a freshly written code until re-fetch.
+- F. Scope check: Empty-string/missing/valid counts are feasible via DB queries.
+- G. Environment: Prod/dev drift can explain mismatches.
+- H. Race/overwrites: Unlikely but possible; verify near-simultaneous writes.
+
+Clarifications/corrections
+- Retry exhaustion does not yield “no code”: the loop proceeds; at worst a duplicate could occur because there’s no DB-level uniqueness on metadata.
+- Leading zeros cannot occur in primary numeric codes (range 10,000,000–99,999,999).
+- Field mismatch alone won’t hide codes in the resolver: it searches both `raw_user_meta_data` and `user_metadata`.
+- The most plausible silent failure remains empty-string retention: if prior metadata had `referral_id:""`, the nullish guard prevents generating a new code.
+
+What to capture when executing the checklist (read-only)
+- `otp_verified` state; `referral_id` values/locations in both buckets (including `""`); upsert response excerpt; any admin update errors; resolver test outcome; whether client re-fetched metadata; and population counts for empty-string/missing/valid codes.
+
+Likely outcomes shortlist
+- Empty‑string retention (most likely silent cause).
+- DB has code; client stale (UI didn’t re-fetch).
+- Rare race/overwrite.
+- Other (document with evidence).
+
+#tight check
+# Tighten the evidence you capture
+
+* **Single-record snapshot (“Kota packet”)**
+  Gather in one place: timestamped upsert request/response, current `otp_verified` value, current `referral_id` value + which metadata bucket(s) it’s in, and whether any prior value was an empty string. Include the first UI render timestamp after upsert (to detect staleness).
+
+* **Population scan (counts, not code)**
+
+  * Count users with `referral_id` as a **non-empty string**.
+  * Count users with `referral_id` **missing**.
+  * Count users with `referral_id` present but **empty string**.
+    This tells you if Kota is an isolated case vs a pattern consistent with empty-string retention.
+
+* **Resolver spot-check**
+
+  * If any code exists for Kota, confirm the resolver returns a `{first_name, user_id}` payload for both **uppercase** and **hyphenless** input (to rule out formatting issues).
+
+# Quick decision tree (mark the first true box)
+
+1. **Empty-string present?**
+
+   * Yes → “Empty-string retention” confirmed.
+   * No → go to 2.
+2. **DB shows a non-empty code but UI showed none at that time?**
+
+   * Yes → “Client stale state” (no re-fetch after upsert).
+   * No → go to 3.
+3. **Two metadata writes within a tiny window around signup?**
+
+   * Yes → Possible “race/overwrite” produced blank.
+   * No → “Other” (document evidence).
+
+# Suggested doc clarifications (one-liners)
+
+* “**Retry exhaustion does not produce ‘no code’**; without DB-level uniqueness, it risks a duplicate only.”
+* “**Leading zeros cannot occur** in the primary numeric generator (10,000,000–99,999,999).”
+* “**Resolver searches both metadata buckets** and accepts numeric or base-36; field location/format alone won’t hide a valid code.”
+* “**Most plausible silent failure:** prior `referral_id: ""` blocks generation due to the nullish guard.”
+
+# What to include in the final read-only report for Kota
+
+* `otp_verified` value.
+* Exact locations and values of `referral_id` (note `""` explicitly if present).
+* Whether the upsert response contained a non-empty `referral_id`.
+* Any admin-update error messages in logs.
+* Resolver test outcome (if a code exists).
+* Whether the client re-fetched metadata after upsert.
+* The three counts (non-empty / missing / empty-string) for the user base.
+* Outcome classification from the decision tree.
+
+#Kota Checks
+
+Target
+- Environment: [prod/dev] (pending)
+- User email: (pending)
+- Inspection timestamp: (pending)
+
+## 1) Single-record snapshot (“Kota packet”)
+- otp_verified: (true/false)
+- referral_id (raw_user_meta_data): (value or missing or "")
+- referral_id (user_metadata): (value or missing or "")
+- Prior referral_id was empty string (""): (yes/no)
+- First UI render timestamp after upsert: (timestamp)
+
+## 2) Upsert event (POST /api/users/upsert)
+- Log timestamp window checked: (from → to)
+- Response contained non-empty referral_id: (yes/no) — value: (value)
+- Server guard log like “skipping set because already present”: (yes/no)
+- Any admin update errors (updateUserById): (none / message)
+
+## 3) Share/backfill path (POST /api/referral)
+- Any attempts observed: (yes/no)
+- Behavior: (reused existing / minted base-36 / error)
+- Resulting referral_id (if any): (value)
+
+## 4) Resolver sanity
+- Confirms both buckets queried: (yes)
+- Accepts numeric and base-36: (yes)
+- Manual resolver test for Kota’s code:
+  - Uppercase input result: ({ first_name, user_id } or not_found)
+  - Hyphenless input result: ({ first_name, user_id } or not_found)
+
+## 5) Client state / timing
+- Upsert completion timestamp: (timestamp)
+- Last client user-meta fetch timestamp: (timestamp)
+- If DB had code but UI showed none at that time: (yes/no)
+- Evidence of ad-blocker/CORS/blocked upsert: (yes/no/details)
+
+## 6) Population scan (counts)
+- referral_id non-empty string: (count)
+- referral_id missing: (count)
+- referral_id present but empty string: (count)
+
+## 7) Decision tree outcome
+1) Empty-string present? (yes/no)
+- If yes → Empty-string retention (confirmed)
+2) DB has non-empty code but UI showed none? (yes/no)
+- If yes → Client stale state (no re-fetch)
+3) Two near-simultaneous metadata writes? (yes/no)
+- If yes → Possible race/overwrite
+Else → Other (document evidence)
+
+## 8) Final read-only report items (to capture)
+- otp_verified value.
+- Exact referral_id locations/values (note "" explicitly if present).
+- Upsert response excerpt (presence/absence of referral_id).
+- Admin-update error messages (if any).
+- Resolver test outcome.
+- Whether the client re-fetched metadata after upsert.
+- Three counts (non-empty / missing / empty-string) from population scan.
+- Decision tree classification.
+
+#Kota Checks — Results
+
+Context
+- Environment: single Supabase project (db.odqdiswjxulimqiupydc.supabase.co)
+- Lookup criterion: name ILIKE '%Kota%'
+- Query timestamp: 2025-10-22 (UTC)
+
+## 1) Single-record snapshot (“Kota packet”)
+- id: 17f21a73-de40-46b7-9744-7d08434f9e05
+- email: aadhithyakota@gmail.com
+- created_at: 2025-10-22T08:24:20.974Z
+- name: Aadhithya Kota
+- otp_verified: null
+- referral_id (raw_user_meta_data): 79606448
+- referral_id (user_metadata): N/A (not queried; primary store is raw_user_meta_data)
+- Prior referral_id was empty string (""): unknown (current value is non-empty)
+- First UI render timestamp after upsert: unknown (client-side)
+
+## 2) Upsert event (POST /api/users/upsert)
+- Logs inspected: not available here (server logs needed)
+- Response contained non-empty referral_id: unknown
+- Guard log “skipping set because already present”: unknown
+- Admin update errors: unknown
+
+## 3) Share/backfill path (POST /api/referral)
+- Attempts observed: unknown
+- Behavior/result: unknown
+
+## 4) Resolver sanity
+- Expectation: resolver matches by referral_id in either metadata bucket
+- Manual DB lookup by referral_id 79606448 would return this record (same table)
+
+## 5) Client state / timing
+- Upsert completion timestamp: unknown
+- Last client user-meta fetch timestamp: unknown
+- If DB had code but UI showed none at that time: likely (per report)
+- Evidence of ad-blocker/CORS/blocked upsert: unknown
+
+## 6) Population scan (counts)
+- referral_id non-empty string: 24
+- referral_id missing: 0
+- referral_id present but empty string: 0
+
+## 7) Decision tree outcome
+1) Empty-string present? No
+2) DB has non-empty code but UI showed none? Likely Yes → Client stale state (no re-fetch after upsert)
+3) Two near-simultaneous metadata writes? Unknown
+
+## 8) Final read-only notes
+- Kota has a valid numeric referral_id (79606448) in raw_user_meta_data; `otp_verified` is null in current record.
+- No evidence of empty-string retention pattern in population counts.
+
+#OTP diagnosis
+
+Evidence captured (last 24h)
+- Chronological metadata/audit events for user id 17f21a73-de40-46b7-9744-7d08434f9e05 (Aadhithya Kota):
+  - 2025-10-22 08:24:21.054+00 — action=user_signedup, actor=aadhithyakota@gmail.com
+  - 2025-10-22 08:24:21.081+00 — action=login, actor=aadhithyakota@gmail.com
+  - 2025-10-22 08:24:21.151+00 — action=user_recovery_requested, actor=aadhithyakota@gmail.com
+  - 2025-10-22 08:24:45.782+00 — action=login, actor=aadhithyakota@gmail.com
+- Current snapshot (auth.users):
+  - created_at: 2025-10-22 08:24:20.974+00
+  - updated_at: 2025-10-22 08:24:45.788+00
+  - last_sign_in_at: 2025-10-22 08:24:45.785+00
+  - raw_user_meta_data.otp_verified: null
+  - raw_user_meta_data.referral_id: 79606448
+- Snapshot (post-upsert with otp_verified:true): not observed in DB (requires server logs if it was set transiently in response).
+- Confirmed record: email exactly aadhithyakota@gmail.com; key path checked: raw_user_meta_data.otp_verified.
+
+Population context (for empty-string hypothesis)
+- referral_id non-empty: 24, missing: 0, empty-string: 0
+
+Decision tree mark
+1) Empty-string present? No
+2) DB shows non-empty code but UI showed none? Yes → Client stale at the time
+3) Two+ metadata writes within window? Likely Yes → later overwrite/clobber of otp_verified (audit shows multiple events near signup)

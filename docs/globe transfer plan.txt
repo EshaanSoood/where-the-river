@@ -1,0 +1,101 @@
+Globe Transfer Plan (Read-Only, No Code Changes Yet)
+
+What’s different in the new globe/boat set
+- Scene library boundary
+  - New BoatModel.tsx uses @react-three/drei/useGLTF (react-three-fiber context).
+  - Current globe uses react-globe.gl with imperative three.js access (no R3F context). You can’t mount BoatModel directly into ReactGlobe; you must load the GLB and add it to globe.scene() imperatively.
+
+- Boat implementation
+  - New: paper_boat.glb model (GLTF), via drei.
+  - Current: procedural paper boat geometry + CanvasTexture “paper” and CatmullRomCurve3 pathing.
+  - Orientation/path integration is already solved in current globe (progress, tangent, up vector, lookAt). New boat needs to be cloned and animated along the same curve.
+
+- Data plumbing
+  - New globe.tsx shows polygons, LOD, camera handling, tooltips, FPS HUD—no nodes/arcs or DB plumbing.
+  - Current Globe.tsx already fetches nodes/links, seeded jitter, user chain coloring, primary/secondary arcs, boat spawn on first primary arc, overlays, accessibility summary, autorotate state machine, low-power heuristics.
+
+- Atmosphere/background
+  - New: atmosphereColor '#87CEEB', atmosphereAltitude 0.35, CSS starfield via radial-gradients.
+  - Current: atmosphereColor '#66c2ff', altitude 0.25, real 3D star Points geometry.
+
+- Performance/UX guards
+  - New: FPS counter; no low-power heuristics.
+  - Current: low-power heuristic, DPR cap, LOD thresholding, overlay throttling, accessibility SR summary.
+
+- Asset pathing
+  - BoatModel.tsx expects '/paper_boat.glb' from public root.
+  - Provided GLB lives under 'new globe and boat/paper_boat.glb'; for Next static serve it must be at 'web/public/paper_boat.glb'.
+
+How to prep this globe/boat to be drop-in (no data changes)
+- Boat model integration (no data changes)
+  - Place asset: copy 'paper_boat.glb' into 'web/public/paper_boat.glb' so it’s served at '/paper_boat.glb'.
+  - Avoid drei in ReactGlobe: load GLB via three/examples/jsm/loaders/GLTFLoader inside current Globe.tsx (in onGlobeReady). Keep a cached reference (e.g., boatTemplate).
+  - Replace only the mesh creation in spawnBoatAlongArc:
+    - On first use, clone the loaded GLTF scene; set scale ~6; apply existing orientation logic (tangent + up = position.normalize()).
+    - Keep one-boat cap and current altitudes (PATH 0.07, ARC 0.2) to avoid clipping.
+    - If GLB fails to load, fall back to the existing procedural paper boat.
+
+- Keep the data pipeline unchanged
+  - Leave fetchGlobeData, seeded jitter, user-chain coloring, overlay labels, and arcs building exactly as-is.
+  - Do not change pointsData/arcsData shapes or sizes/colors.
+
+- Visual decisions
+  - Optionally adopt atmosphereAltitude 0.35 (cosmetic). Keep current 3D star field for performance consistency.
+  - FPS HUD can be added behind a dev flag if desired.
+
+- Performance & readiness
+  - Preload GLB at onGlobeReady so first spawn doesn’t stutter.
+  - Keep low-power heuristic, DPR cap, and LOD threshold.
+
+- Packaging/deps
+  - Prefer GLTFLoader (no @react-three/drei required). If drei is desired, it needs an R3F Canvas bridge—adds complexity with ReactGlobe.
+  - Confirm asset path '/paper_boat.glb' works in prod.
+
+- Accessibility/UX
+  - Preserve SR live summary, tooltips, overlay limits, and quantized node sizing.
+
+- Safe swap plan
+  1) Add GLTFLoader + preload GLB (feature-flag off).
+  2) Behind a flag, switch spawnBoatAlongArc to clone GLB mesh instead of procedural geometry; compare perf.
+  3) Optional: adjust atmosphereAltitude; keep everything else unchanged.
+
+Net effect
+- Users still see the same people/nodes/arcs, colors, autorotate, and overlays.
+- Only the boat mesh changes from procedural to GLTF, with identical pathing and pacing.
+- Zero impact on data fetching or mapping.
+
+Additional implementation notes (feedback incorporated)
+- GLB loader lifecycle & disposal: on unmount/flag-change, remove spawned boat meshes from the scene and dispose geometries/materials/textures (or keep a single cached template and dispose once). Guard against double-preload in React StrictMode.
+- Model origin/forward/scale sanity: normalize the GLB once after load (center pivot if needed, confirm forward ≈ +Z, confirm scale). Keep existing tangent+up orientation logic.
+- Clone method choice: prefer SkeletonUtils.clone() if the GLB is ever skinned/animated; otherwise a shallow scene.clone() is fine for static meshes.
+- Feature-flag surface: introduce a clear switch (e.g., NEXT_PUBLIC_USE_GLB_BOAT or a React prop) to A/B GLB vs procedural boats.
+- SSR safety: instantiate GLTFLoader only after the globe is ready (inside onGlobeReady), not at module top-level, to avoid SSR pitfalls.
+- Public path robustness: resolve the model URL against window.location.origin (or apply Next.js basePath/assetPrefix) instead of hardcoding /paper_boat.glb.
+- Single material/texture instance: reuse material(s)/texture(s) from the cached template across all clones to minimize memory churn.
+- Z-order safety margin: keep the boat path altitude slightly above the tallest cap (e.g., 0.075 vs current 0.07) if rare z-fighting appears; otherwise retain current values.
+- Event listener hygiene: add no new global listeners for the boat swap; rely on existing zoom/resize/visibility/controls hooks; verify cleanup paths already detach in unmount.
+- Boat spawn key semantics: continue spawning on the first primary arc; if none exists, deterministically choose the first available arc (or noop) to keep behavior consistent.
+- FPS & low-power alignment: retain current low-power heuristic and DPR cap; show any FPS HUD only behind a dev flag so production UX remains unchanged.
+- Starfield consistency: keep the current 3D Points starfield and low-power behavior; do not reintroduce the CSS starfield.
+- Tooltips/overlays unchanged: the boat swap must not touch overlay/tooltip layout or throttling; preserve the current camera projection and update cadence.
+- Failure fallback: if GLB load fails or the asset is malformed, automatically fall back to the procedural paper boat so the scene never appears empty.
+
+Power, asset, and deploy considerations (validated)
+- Asset size & format budget (VALID)
+  - Lock a max GLB size (target ≤ 300–500 KB uncompressed; triangle count ≈ ≤ 5k). If larger, decimate/simplify before shipping.
+  - Prefer embedded, unlit materials (no lights/shadows required). Avoid normal maps; if necessary, keep them tiny.
+
+- Color management & render settings (VALID)
+  - Ensure any GLB textures are sRGB and keep renderer output encoding consistent with the scene; do not change toneMapping/gamma specifically for the boat.
+
+- Curve sampling & update cadence (VALID, optional optimization)
+  - Current system advances along a CatmullRomCurve3 via getPointAt(t). With one active boat, cost is already low. For high-DPI/mobile, you may tie curve sample density to on-screen pixel length if you ever bake a path geometry (not required for current parametric updates).
+  - If needed, advance logic at ~30 Hz (timer) and interpolate pose to 60 Hz for rendering to reduce per-frame math on mobile. Optional since single-boat overhead is minimal.
+
+- Frustum/horizon culling (VALID)
+  - If the active arc is entirely behind the globe or outside the camera frustum, pause updates and hide the boat; resume when it re-enters view.
+
+- Thermal/low-power behavior (VALID)
+  - Reuse the existing low-power heuristic and DPR cap. Optionally monitor FPS (dev-only) and, if sustained < ~45 FPS for ~2s, drop non-essential effects first and then hide the boat. Keep this behind a flag so production UX remains unchanged unless needed.
+
+

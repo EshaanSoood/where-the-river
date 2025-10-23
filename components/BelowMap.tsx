@@ -17,7 +17,7 @@ import HowToPlayVideo from "@/components/HowToPlayVideo";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 import { getReferralSnapshot, onReferralUpdate } from "@/lib/referral";
 
-  const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
+  const Globe = dynamic(() => import("@/components/GlobeNew"), { ssr: false });
   const RewardsView = dynamic(() => import("@/components/RewardsView"), { ssr: false });
 
   // Dashboard data bindings removed for overhaul; UI will use placeholders.
@@ -1045,10 +1045,10 @@ export default function BelowMap() {
                     {/* Removed duplicate helper copy on mobile per request */}
                     {/* Streaming logos row (no heading) */}
                     <div id="dashboard-streaming" className="flex items-center justify-between gap-3 flex-wrap">
-                      <a className="stream-btn" href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify"><span className="stream-icon spotify" aria-hidden="true" /></a>
-                      <a className="stream-btn" href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" target="_blank" rel="noopener noreferrer" aria-label="Listen on Apple Music"><span className="stream-icon applemusic" aria-hidden="true" /></a>
-                      <a className="stream-btn" href="https://www.youtube.com/playlist?list=OLAK5uy_kDt671HE3YUlBusqp-KMypwqupSNT0bJw" target="_blank" rel="noopener noreferrer" aria-label="Listen on YouTube Music"><span className="stream-icon youtube" aria-hidden="true" /></a>
-                      <a className="stream-btn" href="https://eshaansood.bandcamp.com/" target="_blank" rel="noopener noreferrer" aria-label="Listen on Bandcamp"><span className="stream-icon bandcamp" aria-hidden="true" /></a>
+                      <a className="stream-btn" href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify"><img src="/Streaming/spotify.svg.png" alt="Spotify" width="28" height="28" /></a>
+                      <a className="stream-btn" href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" target="_blank" rel="noopener noreferrer" aria-label="Listen on Apple Music"><img src="/Streaming/applemusic.svg" alt="Apple Music" width="28" height="28" /></a>
+                      <a className="stream-btn" href="https://www.youtube.com/playlist?list=OLAK5uy_kDt671HE3YUlBusqp-KMypwqupSNT0bJw" target="_blank" rel="noopener noreferrer" aria-label="Listen on YouTube Music"><img src="/Streaming/youtube.svg.png" alt="YouTube Music" width="28" height="28" /></a>
+                      <a className="stream-btn" href="https://eshaansood.bandcamp.com/" target="_blank" rel="noopener noreferrer" aria-label="Listen on Bandcamp"><img src="/Streaming/bandcamp.svg.png" alt="Bandcamp" width="28" height="28" /></a>
                     </div>
                     {/* Rewards and Logout */}
                     <button className="w-full min-h-12 rounded-[24px] font-seasons text-white" aria-label="Redeem Rewards" onClick={() => { setRewardsOpen(true); setShareOpen(false); }} style={{ background: 'var(--teal)' }}>
@@ -1139,10 +1139,10 @@ export default function BelowMap() {
                       <div>
                         <div className="font-seasons text-lg">Stream The Album</div>
                         <div id="dashboard-streaming-desktop" className="mt-2 flex items-center gap-4 flex-wrap">
-                          <a className="stream-btn" href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify"><span className="stream-icon spotify" aria-hidden="true" /></a>
-                          <a className="stream-btn" href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" target="_blank" rel="noopener noreferrer" aria-label="Listen on Apple Music"><span className="stream-icon applemusic" aria-hidden="true" /></a>
-                          <a className="stream-btn" href="https://www.youtube.com/playlist?list=OLAK5uy_kDt671HE3YUlBusqp-KMypwqupSNT0bJw" target="_blank" rel="noopener noreferrer" aria-label="Listen on YouTube Music"><span className="stream-icon youtube" aria-hidden="true" /></a>
-                          <a className="stream-btn" href="https://eshaansood.bandcamp.com/" target="_blank" rel="noopener noreferrer" aria-label="Listen on Bandcamp"><span className="stream-icon bandcamp" aria-hidden="true" /></a>
+                          <a className="stream-btn" href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify"><img src="/Streaming/spotify.svg.png" alt="Spotify" width="28" height="28" /></a>
+                          <a className="stream-btn" href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" target="_blank" rel="noopener noreferrer" aria-label="Listen on Apple Music"><img src="/Streaming/applemusic.svg" alt="Apple Music" width="28" height="28" /></a>
+                          <a className="stream-btn" href="https://www.youtube.com/playlist?list=OLAK5uy_kDt671HE3YUlBusqp-KMypwqupSNT0bJw" target="_blank" rel="noopener noreferrer" aria-label="Listen on YouTube Music"><img src="/Streaming/youtube.svg.png" alt="YouTube Music" width="28" height="28" /></a>
+                          <a className="stream-btn" href="https://eshaansood.bandcamp.com/" target="_blank" rel="noopener noreferrer" aria-label="Listen on Bandcamp"><img src="/Streaming/bandcamp.svg.png" alt="Bandcamp" width="28" height="28" /></a>
                         </div>
                       </div>
 
@@ -1268,11 +1268,7 @@ export default function BelowMap() {
         #panel-leaderboard button { border-radius: 24px; }
         /* Streaming icons: uniform size, teal tint @ 80% */
         .stream-btn { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; border-radius: 12px; background: rgba(42,167,181,0.08); }
-        .stream-icon { display: inline-block; width: 28px; height: 28px; background-color: rgba(42,167,181,0.8); -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
-        .stream-icon.spotify { -webkit-mask-image: url('/Streaming/spotify.eps'); mask-image: url('/Streaming/spotify.eps'); }
-        .stream-icon.applemusic { -webkit-mask-image: url('/Streaming/applemusic.eps'); mask-image: url('/Streaming/applemusic.eps'); }
-        .stream-icon.youtube { -webkit-mask-image: url('/Streaming/youtube.eps'); mask-image: url('/Streaming/youtube.eps'); }
-        .stream-icon.bandcamp { -webkit-mask-image: url('/Streaming/bandcamp.eps'); mask-image: url('/Streaming/bandcamp.eps'); }
+        .stream-icon { display: inline-block; width: 28px; height: 28px; }
       `}</style>
       {/* Privacy Policy Modal */}
       {privacyOpen && (

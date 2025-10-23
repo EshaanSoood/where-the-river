@@ -27,13 +27,13 @@ export default function LandingPage() {
               <img src="/logos/Mail.svg" alt="Email" className="footer-icon" />
             </a>
             <a href="https://www.youtube.com/@eshaansoood" aria-label="YouTube" className="footer-btn" target="_blank" rel="noopener noreferrer">
-              <span className="footer-mask youtube" aria-hidden="true" />
+              <img src="/Streaming/youtube.svg.png" alt="YouTube" className="footer-icon" />
             </a>
             <a href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" aria-label="Apple Music" className="footer-btn" target="_blank" rel="noopener noreferrer">
-              <span className="footer-mask applemusic" aria-hidden="true" />
+              <img src="/Streaming/applemusic.svg" alt="Apple Music" className="footer-icon" />
             </a>
             <a href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" aria-label="Spotify" className="footer-btn" target="_blank" rel="noopener noreferrer">
-              <span className="footer-mask spotify" aria-hidden="true" />
+              <img src="/Streaming/spotify.svg.png" alt="Spotify" className="footer-icon" />
             </a>
           </div>
           <div className="h-px" style={{ background: '#0b0d1a', opacity: 0.6 }} />
