@@ -71,8 +71,16 @@ export async function POST(req: Request) {
         }
       } catch {}
     }
-    const baseUrl = ((process.env.NEXT_PUBLIC_SITE_URL as string) || (process.env.PUBLIC_APP_BASE_URL as string) || '').replace(/\/$/, '');
-    const referral_url = referral_code ? `${baseUrl}/?ref=${referral_code}` : null;
+    // Build absolute base URL from env or request headers (works behind proxies)
+    let baseUrl = ((process.env.NEXT_PUBLIC_SITE_URL as string) || (process.env.PUBLIC_APP_BASE_URL as string) || '').replace(/\/$/, '');
+    if (!baseUrl) {
+      try {
+        const proto = (req.headers.get('x-forwarded-proto') || 'https').replace(/\s/g, '');
+        const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || '').replace(/\s/g, '');
+        if (host) baseUrl = `${proto}://${host}`;
+      } catch {}
+    }
+    const referral_url = referral_code && baseUrl ? `${baseUrl}/?ref=${referral_code}` : (referral_code ? `/?ref=${referral_code}` : null);
 
     return NextResponse.json({
       exists: true,

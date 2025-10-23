@@ -667,6 +667,8 @@ export default function BelowMap() {
                             const j = await r.json();
                             exists = !!j?.exists;
                           } catch {}
+                          // Prewarm dashboard data in background so Share is instant post-verify
+                          try { fetch('/api/me', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailNorm }) }).then(res => res.json()).then(j => { try { localStorage.setItem('river.prewarm.me', JSON.stringify(j?.me || {})); } catch {} }).catch(() => {}); } catch {}
                           if (exists) {
                             // Existing user → send login OTP and go to Screen D
                             const { error: signInErr } = await supabase.auth.signInWithOtp({ email: emailNorm, options: { shouldCreateUser: false } });
@@ -772,6 +774,8 @@ export default function BelowMap() {
                                 boat_color: boatColor,
                               }),
                             });
+                            // Hydrate from prewarm cache immediately; then revalidate
+                            try { const cached = JSON.parse(localStorage.getItem('river.prewarm.me') || 'null'); if (cached && !cached.referral_url && cached.referral_code) { const base = window.location.origin; cached.referral_url = `${base}/?ref=${cached.referral_code}`; } if (cached) { /* noop: useMe will re-fetch, but dashboard reads from hook state */ } } catch {}
                             try { await refreshMe(); } catch {}
                             setDashboardMode('user');
                             setShareOpen(false);
@@ -819,6 +823,8 @@ export default function BelowMap() {
                                 boat_color: boatColor,
                               }),
                             });
+                            // Hydrate from prewarm cache immediately; then revalidate
+                            try { const cached = JSON.parse(localStorage.getItem('river.prewarm.me') || 'null'); if (cached && !cached.referral_url && cached.referral_code) { const base = window.location.origin; cached.referral_url = `${base}/?ref=${cached.referral_code}`; } } catch {}
                             try { await refreshMe(); } catch {}
                             setDashboardMode('user');
                             setShareOpen(false);
