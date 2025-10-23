@@ -690,7 +690,7 @@ export default function BelowMap() {
 
               {guestStep === 'signup_code' && (
                 <div className="space-y-3">
-                  <h2 className="font-seasons text-xl" style={{ color: 'var(--teal)' }}>Let's Start Sailing.</h2>
+                  <h2 className="font-seasons text-xl" style={{ color: 'var(--teal)' }}>Let&apos;s Start Sailing.</h2>
                   <div className="text-sm" style={{ color: 'var(--ink-2)' }}>Enter the code we sent to start your journey.</div>
                   <input
                     className="border rounded-md px-3 py-2 bg-background tracking-widest text-center"
