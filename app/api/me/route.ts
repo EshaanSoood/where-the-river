@@ -56,6 +56,21 @@ export async function POST(req: Request) {
         referral_code = (codeRow as { code: string }).code;
       }
     } catch {}
+
+    // Ensure-on-read for signed-in users: if no SoT code yet, mint via RPC (idempotent) and re-read
+    if (!referral_code) {
+      try {
+        await supabaseServer.rpc('assign_referral_code', { p_user_id: target.id });
+        const { data: codeRow2 } = await supabaseServer
+          .from('referral_codes')
+          .select('code')
+          .eq('user_id', target.id)
+          .maybeSingle();
+        if (codeRow2 && (codeRow2 as { code?: string | null }).code) {
+          referral_code = (codeRow2 as { code: string }).code;
+        }
+      } catch {}
+    }
     const baseUrl = ((process.env.NEXT_PUBLIC_SITE_URL as string) || (process.env.PUBLIC_APP_BASE_URL as string) || '').replace(/\/$/, '');
     const referral_url = referral_code ? `${baseUrl}/?ref=${referral_code}` : null;
 

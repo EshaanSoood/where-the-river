@@ -1086,7 +1086,8 @@ export default function BelowMap() {
                     >
                       Share Your Boat
                     </button>
-                    {/* Removed duplicate helper copy on mobile per request */}
+                    {/* Helper copy (mobile) */}
+                    <div className="font-sans text-sm opacity-80">Share your boat using this button to extend your river.</div>
                     {/* Streaming logos row (no heading) */}
                     <div id="dashboard-streaming" className="flex items-center justify-between gap-3 flex-wrap">
                       <a className="stream-btn" href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify"><span className="stream-icon spotify" aria-hidden="true" /></a>
