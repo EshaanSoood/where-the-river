@@ -1,0 +1,71 @@
+Boat not spawning/rendering – diagnosis and steps (no code changes yet)
+
+Observed
+- The boat isn’t visible after the GlobeNew integration.
+
+Likely root causes (ranked)
+1) Low‑power mode disabled boat animation and initial positioning
+   - Our animation loop is skipped when the low‑power heuristic is true. Without that loop, the boat mesh is added but never positioned/oriented on the curve, so it likely sits at (0,0,0) inside the globe and is invisible.
+   - Heuristic can trip on devices with save‑data, low cores/memory, or very high DPR.
+
+2) Arc selection + culling: boat may start behind the globe
+   - We pick the first primary arc (or first arc). If that route is initially behind the camera, hemisphere culling marks the boat invisible until the camera rotates.
+   - If autorotate stops early (user interaction), the boat may never rotate into view.
+
+3) Data dependency: no arcs -> no spawn
+   - If /api/globe returns 0 links (or links don’t connect existing nodes), we never build arcs and won’t call spawn.
+
+4) GLB not required, but fallback may still be missed
+   - GLB load is optional; we fall back to a simple primitive if disabled or the model fails to load. If everything else above is fine, the fallback should still render. Missing boat still points back to (1) or (2).
+
+5) Asset pathing/caching
+   - GLB url is `/paper_boat.glb?v=<NEXT_PUBLIC_BOAT_ASSET_VERSION>`. If the file isn’t present or CDN returned a stale 404, the GLB won’t load (but fallback should still show). Cache‑bust fixes this.
+
+Quick checks
+- Verify GLB availability (should 200, ~size > 0):
+  curl -I https://riverflowseshaan.vercel.app/paper_boat.glb?v=1
+
+- Verify globe data returns nodes and links (expect arrays, non‑empty):
+  curl -s https://riverflowseshaan.vercel.app/api/globe | jq .
+
+- Confirm public flag on prod (boat is optional; this confirms intended state):
+  - Check Vercel Env: NEXT_PUBLIC_USE_GLB_BOAT = true
+  - Optionally set NEXT_PUBLIC_BOAT_ASSET_VERSION = 1 (or bump) to cache‑bust
+
+- Visual sanity in prod:
+  - Open the stable URL and watch for: auto‑rotate burst for ~10s; if not rotating, click‑drag a bit to rotate the globe and see if the boat appears from behind.
+
+What to change (plan only; do not implement yet)
+1) Low‑power safe initial placement
+   - On spawn, set the boat’s initial position/orientation once (getPointAt(0), tangent) before relying on the animation loop. This ensures visibility even if animation is disabled in low‑power.
+   - Optionally run a minimal (lower cadence) animator even in low‑power (e.g., 10–15 Hz) with an early exit if FPS degrades further.
+
+2) Front‑facing spawn bias
+   - If the chosen arc’s midpoint is behind the camera, rotate controls a small amount (or pick the next arc with a midpoint on the front hemisphere) before spawning, to improve first‑paint visibility.
+
+3) Ensure spawn happens once and stays current
+   - Keep the current `boatArcKeyRef` guard so we don’t respawn repeatedly, but also allow respawn when the primary arc changes in new sessions.
+
+4) GLB pathing/CORS/mime
+   - Keep resolving the URL against `window.location.origin` and keep `?v=...` cache‑bust.
+   - Confirm the file is in `web/public/paper_boat.glb` and accessible without auth.
+
+5) Observability breadcrumbs (temporary)
+   - Add console.info markers for: low‑power status, arcs count, chosen arc key, GLB load success/fail, and first frame position vector length (~>100 indicates above globe radius). Remove after verification.
+
+6) Optional fallback improvements
+   - Replace the simple box fallback with the legacy procedural paper‑boat geometry to better match expected visibility and silhouette.
+
+Acceptance criteria
+- With low‑power on: boat appears at correct path altitude (static or slow‑tick animation), visible without manual camera rotation.
+- With low‑power off: boat animates smoothly along the first primary arc; reappears correctly after moving behind the globe.
+- GLB on/off: either mode shows a visible boat (GLB clone or fallback primitive) with correct scale and orientation.
+
+Next steps (execute when approved)
+1) Add initial placement/orientation on spawn (before animation loop).
+2) Add optional slow‑tick animator under low‑power.
+3) Front‑hemisphere check at spawn; if behind, nudge camera or pick the first front‑facing arc.
+4) Temporarily add console breadcrumbs to verify path, visibility, and GLB load/state in prod; then remove.
+5) Validate on staging and prod; if GLB cache issues appear, bump NEXT_PUBLIC_BOAT_ASSET_VERSION.
+
+

@@ -88,7 +88,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const boatTemplateMaterialRef = useRef<THREE.Material | null>(null);
   const glbLoadedRef = useRef<boolean>(false);
   const boatsRef = useRef<{ id: number; mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; startTime: number; duration: number }[]>([]);
-  const boatArcKeyRef = useRef<string | null>(null);
+  const boatArcKeysRef = useRef<Set<string>>(new Set());
+  const pendingSpawnsRef = useRef<{ curve: THREE.CatmullRomCurve3; arcKey: string }[]>([]);
 
   // FPS Counter
   useEffect(() => {
@@ -225,11 +226,19 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         setArcsData(arcs);
 
         const pri = arcs.find(a => a.primary) || arcs[0];
-        if (pri && !lowPowerRef.current) {
+        const sec = arcs.find(a => !a.primary);
+        if (pri) {
           const key = `${pri.startId}->${pri.endId}`;
-          if (boatArcKeyRef.current !== key) {
-            boatArcKeyRef.current = key;
-            spawnBoatAlongArc(pri.startLat, pri.startLng, pri.endLat, pri.endLng);
+          if (!boatArcKeysRef.current.has(key)) {
+            boatArcKeysRef.current.add(key);
+            spawnBoatAlongArc(pri.startLat, pri.startLng, pri.endLat, pri.endLng, key);
+          }
+        }
+        if (sec) {
+          const key2 = `${sec.startId}->${sec.endId}`;
+          if (!boatArcKeysRef.current.has(key2)) {
+            boatArcKeysRef.current.add(key2);
+            spawnBoatAlongArc(sec.startLat, sec.startLng, sec.endLat, sec.endLng, key2);
           }
         }
 
@@ -263,7 +272,36 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     refitCameraRef.current = () => { try { if (!globeEl.current) return; const newFit = getFitDistance(); const prevFit = baselineDistanceRef.current || newFit; const dist = camera.position.length(); const ratio = Math.max(0.0001, dist / prevFit); baselineDistanceRef.current = newFit; controls.maxDistance = newFit; controls.minDistance = Math.max(newFit / 3, 80); const dir = camera.position.clone().normalize(); camera.position.copy(dir.multiplyScalar(newFit * ratio)); camera.updateProjectionMatrix(); } catch {} };
     setIsGlobeReady(true);
     // Preload GLB boat once (SSR-safe)
-    try { const useGlbBoat = String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '').toLowerCase() === 'true' || String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '') === '1'; if (useGlbBoat && !glbLoadedRef.current) { const loader = new GLTFLoader(); const base = (typeof window !== 'undefined' ? window.location.origin : '') || ''; const BOAT_ASSET_VERSION = (process.env.NEXT_PUBLIC_BOAT_ASSET_VERSION || '1'); const url = base ? new URL(`/paper_boat.glb?v=${encodeURIComponent(BOAT_ASSET_VERSION)}`, base).toString() : `/paper_boat.glb?v=${encodeURIComponent(BOAT_ASSET_VERSION)}`; loader.load(url, (gltf: any) => { try { const root = gltf?.scene as THREE.Object3D | undefined; if (!root) return; boatTemplateRef.current = root; let cached: THREE.Material | null = null; root.traverse((child: any) => { if (child.isMesh && child.material && !cached) cached = child.material as THREE.Material; }); boatTemplateMaterialRef.current = cached; glbLoadedRef.current = true; } catch {} }, undefined, () => { /* ignore error */ }); } } catch {}
+    try {
+      if (!glbLoadedRef.current) {
+        const loader = new GLTFLoader();
+        const base = (typeof window !== 'undefined' ? window.location.origin : '') || '';
+        const BOAT_ASSET_VERSION = (process.env.NEXT_PUBLIC_BOAT_ASSET_VERSION || '1');
+        const url = base ? new URL(`/paper_boat.glb?v=${encodeURIComponent(BOAT_ASSET_VERSION)}`, base).toString() : `/paper_boat.glb?v=${encodeURIComponent(BOAT_ASSET_VERSION)}`;
+        loader.load(
+          url,
+          (gltf: any) => {
+            try {
+              const root = gltf?.scene as THREE.Object3D | undefined;
+              if (!root) return;
+              boatTemplateRef.current = root;
+              let cached: THREE.Material | null = null;
+              root.traverse((child: any) => { if (child.isMesh && child.material && !cached) cached = child.material as THREE.Material; });
+              boatTemplateMaterialRef.current = cached;
+              glbLoadedRef.current = true;
+              // Spawn any pending boats now that the model is ready
+              try {
+                pendingSpawnsRef.current.splice(0).forEach(({ curve, arcKey }) => {
+                  spawnBoatFromCurve(curve, arcKey);
+                });
+              } catch {}
+            } catch {}
+          },
+          undefined,
+          () => { /* ignore error */ }
+        );
+      }
+    } catch {}
   };
 
   const stopRotateInterval = useCallback(() => { if (rotateIntervalRef.current) { window.clearInterval(rotateIntervalRef.current); rotateIntervalRef.current = null; } if (controlsRef.current) controlsRef.current.autoRotate = false; }, []);
@@ -312,11 +350,51 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const scheduleOverlayUpdate = () => { if (overlayUpdatePendingRef.current) return; overlayUpdatePendingRef.current = true; requestAnimationFrame(() => { overlayUpdatePendingRef.current = false; try { const globe = globeEl.current; if (!globe) return; overlayNodes.forEach(n => { const el = overlayRefs.current.get(n.id); if (!el) return; const px = projectLatLngIfFront(n.lat, n.lng); if (!px) { el.style.opacity = '0'; return; } el.style.left = `${px.x}px`; el.style.top = `${px.y}px`; el.style.opacity = '1'; }); } catch {} }); };
 
   // --- Boat animation loop (single-boat) ---
-  useEffect(() => { if (lowPowerRef.current) return () => {}; let rafId: number; const animate = () => { const now = performance.now(); boatsRef.current.forEach(boat => { const elapsed = now - boat.startTime; const t = (elapsed / boat.duration) % 1.0; const pos = boat.curve.getPointAt(t); try { const globe = globeEl.current; const cam = globe?.camera(); if (cam) { const visible = pos.clone().normalize().dot(cam.position.clone().normalize()) > 0; (boat.mesh as any).visible = visible; if (!visible) return; } } catch {} boat.mesh.position.copy(pos); const tan = boat.curve.getTangentAt(t); boat.mesh.up.copy(pos).normalize(); boat.mesh.lookAt(pos.clone().add(tan)); }); rafId = requestAnimationFrame(animate); }; animate(); return () => { cancelAnimationFrame(rafId); try { const scene = sceneRef.current; if (scene) boatsRef.current.forEach(b => scene.remove(b.mesh)); boatsRef.current.forEach(b => { (b.mesh as any).traverse?.((child: any) => { if (child.isMesh) { child.geometry?.dispose?.(); if (child.material?.dispose) child.material.dispose(); } }); }); } catch {} boatsRef.current = []; }; }, []);
+  useEffect(() => {
+    // Always animate at a modest cadence, even on low-power, so boats remain visible
+    let rafId: number;
+    const animate = () => {
+      const now = performance.now();
+      boatsRef.current.forEach(boat => {
+        const elapsed = now - boat.startTime;
+        const t = (elapsed / boat.duration) % 1.0;
+        const pos = boat.curve.getPointAt(t);
+        try {
+          const globe = globeEl.current; const cam = globe?.camera();
+          if (cam) {
+            const visible = pos.clone().normalize().dot(cam.position.clone().normalize()) > 0;
+            (boat.mesh as any).visible = visible;
+            if (!visible) return;
+          }
+        } catch {}
+        boat.mesh.position.copy(pos);
+        const tan = boat.curve.getTangentAt(t);
+        boat.mesh.up.copy(pos).normalize();
+        boat.mesh.lookAt(pos.clone().add(tan));
+      });
+      rafId = requestAnimationFrame(animate);
+    };
+    animate();
+    return () => {
+      cancelAnimationFrame(rafId);
+      try {
+        const scene = sceneRef.current;
+        if (scene) boatsRef.current.forEach(b => scene.remove(b.mesh));
+        boatsRef.current.forEach(b => {
+          (b.mesh as any).traverse?.((child: any) => {
+            if (child.isMesh) {
+              child.geometry?.dispose?.();
+              if (child.material?.dispose) child.material.dispose();
+            }
+          });
+        });
+      } catch {}
+      boatsRef.current = [];
+    };
+  }, []);
 
-  const spawnBoatAlongArc = (startLat: number, startLng: number, endLat: number, endLng: number) => {
+  const spawnBoatAlongArc = (startLat: number, startLng: number, endLat: number, endLng: number, arcKey?: string) => {
     try {
-      if (lowPowerRef.current) return;
       const globe = globeEl.current; const scene = sceneRef.current || (globe ? globe.scene() : null); if (!globe || !scene) return;
       const ARC_ALTITUDE = 0.2; const BOAT_PATH_ALTITUDE = 0.07; const GLOBE_RADIUS = 100;
       const sC = globe.getCoords(startLat, startLng); const eC = globe.getCoords(endLat, endLng); if (!sC || !eC) return;
@@ -324,12 +402,31 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       const e = new THREE.Vector3(eC.x, eC.y, eC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
       const mid = new THREE.Vector3().addVectors(s, e).multiplyScalar(0.5).normalize().multiplyScalar(GLOBE_RADIUS * (1 + ARC_ALTITUDE));
       const curve = new THREE.CatmullRomCurve3([s, mid, e]);
-      const useGlbBoat = String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '').toLowerCase() === 'true' || String(process.env.NEXT_PUBLIC_USE_GLB_BOAT || '') === '1';
-      let meshObj: THREE.Object3D;
-      if (useGlbBoat && boatTemplateRef.current) { try { const cloned = skeletonClone(boatTemplateRef.current) as THREE.Object3D; cloned.traverse((child: any) => { if (child.isMesh) { if (boatTemplateMaterialRef.current) child.material = boatTemplateMaterialRef.current; child.castShadow = false; child.receiveShadow = false; } }); cloned.scale.set(6, 6, 6); meshObj = cloned; } catch { const mat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 5, specular: 0x111111 }); const prim = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), mat); prim.scale.set(6, 6, 6); meshObj = prim; } } else { const mat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 5, specular: 0x111111 }); const prim = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 2), mat); prim.scale.set(6, 6, 6); meshObj = prim; }
-      if (boatsRef.current.length >= 1) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
-      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: meshObj as unknown as THREE.Mesh, curve, startTime: performance.now(), duration: 15000 });
-      scene.add(meshObj);
+      // If GLB not ready yet, queue the spawn
+      if (!boatTemplateRef.current) {
+        pendingSpawnsRef.current.push({ curve, arcKey: arcKey || `${startLat},${startLng}->${endLat},${endLng}` });
+        return;
+      }
+      spawnBoatFromCurve(curve, arcKey || `${startLat},${startLng}->${endLat},${endLng}`);
+    } catch {}
+  };
+
+  const spawnBoatFromCurve = (curve: THREE.CatmullRomCurve3, arcKey: string) => {
+    const scene = sceneRef.current; const globe = globeEl.current; if (!scene || !globe) return;
+    try {
+      const cloned = skeletonClone(boatTemplateRef.current!) as THREE.Object3D;
+      cloned.traverse((child: any) => { if (child.isMesh) { if (boatTemplateMaterialRef.current) child.material = boatTemplateMaterialRef.current; child.castShadow = false; child.receiveShadow = false; } });
+      cloned.scale.set(6, 6, 6);
+      // Initial placement & orientation at t=0 for immediate visibility
+      const pos0 = curve.getPointAt(0);
+      cloned.position.copy(pos0);
+      const tan0 = curve.getTangentAt(0);
+      cloned.up.copy(pos0).normalize();
+      cloned.lookAt(pos0.clone().add(tan0));
+      // Cap to two boats: remove oldest if exceeding
+      if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
+      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned as unknown as THREE.Mesh, curve, startTime: performance.now(), duration: 15000 });
+      scene.add(cloned);
     } catch {}
   };
 
