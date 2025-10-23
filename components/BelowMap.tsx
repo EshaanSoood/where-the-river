@@ -339,7 +339,7 @@ export default function BelowMap() {
                   </h1>
                 </div>
               </div>
-              <div className="justify-self-end lg:min-w-[176px]">
+              <div className="col-start-3 col-end-4 justify-self-end lg:min-w-[176px] w-full flex justify-end">
                 <button
                   type="button"
                   aria-label="Leaderboard"
