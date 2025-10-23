@@ -72,6 +72,8 @@ export default function BelowMap() {
   const [showTopFade, setShowTopFade] = useState(false);
   const [showBottomFade, setShowBottomFade] = useState(false);
   const dashboardFetchAttemptsRef = useRef<number>(0);
+  const lastReferralUrlRef = useRef<string | null>(null);
+  const autoRefreshedRef = useRef<boolean>(false);
 
   useEffect(() => {
     const el = rightPanelRef.current;
@@ -240,6 +242,31 @@ export default function BelowMap() {
     if (!dashboardOpen || dashboardMode !== 'user') return;
     refreshMe().catch(() => {});
   }, [dashboardOpen, dashboardMode, refreshMe]);
+
+  // Auto-refresh fallback: when referral_url becomes available, ensure UI enables immediately
+  useEffect(() => {
+    try {
+      const current = (me?.referral_url || null) as string | null;
+      const prev = lastReferralUrlRef.current;
+      lastReferralUrlRef.current = current;
+      if (!prev && current && dashboardOpen && dashboardMode === 'user') {
+        // Soft refresh first
+        if (!autoRefreshedRef.current) {
+          autoRefreshedRef.current = true;
+          refreshMe().catch(() => {});
+          // Hard refresh if still disabled after a brief delay (storage-restricted clients)
+          setTimeout(() => {
+            try {
+              const stillMissing = !((me?.referral_url || '') as string);
+              if (stillMissing && typeof window !== 'undefined') {
+                window.location.reload();
+              }
+            } catch {}
+          }, 1200);
+        }
+      }
+    } catch {}
+  }, [me?.referral_url, dashboardOpen, dashboardMode, refreshMe]);
 
   // Manage focus when switching into/out of the inline Share view
   useEffect(() => {

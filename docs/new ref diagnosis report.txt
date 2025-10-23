@@ -1,0 +1,37 @@
+Working (verified)
+- SoT schema present: public.referral_codes, public.referral_code_aliases, public.user_verifications; pgcrypto installed.
+- RPCs available: assign_referral_code, remint_referral_code, mark_otp_verified.
+- Webhook handler: /api/webhooks/user-created calls assign_referral_code (idempotent).
+- Ensure-on-read paths:
+  - /api/my-referral-link (session-token) mints if missing, constant-shape, no-store.
+  - /api/me (email-based) now mints if missing and returns absolute referral_url.
+- Client Share enablement:
+  - useMe builds referral_url; fallback to session-based /api/my-referral-link if missing.
+  - Prewarm added: on Send Code, background /api/me run caches data so Share is instant post-verify.
+- OTP durability: /api/users/upsert calls mark_otp_verified (monotonic true).
+- First-click preservation: referred_by written once in upsert (no overwrite).
+- Leaderboard API: reads boats_totals; filters otp_verified && boat_color from metadata; no-store.
+
+Requires user intervention / operational setup
+- Supabase Auth webhook must be configured to hit /api/webhooks/user-created in prod (idempotent; reduces races).
+- Identify and backfill legacy users missing boat_color or otp_verified in metadata if they are expected on leaderboard.
+- Confirm env vars in prod: NEXT_PUBLIC_SITE_URL or proxy headers present (now auto-falls back to X-Forwarded-Host/Proto).
+
+Fragility / could break due to loading or browser state
+- Auth/session race: dashboard opened before user session resolves → useMe now retries and falls back to session RPC, but slow devices may show a brief disabled state without prewarm.
+- Multi-tab/device: prewarm by email runs in the requesting tab only; finishing OTP in a different origin/tab can miss cached data (session fallback mitigates).
+- Storage-restricted browsers: prewarm caching in localStorage may be unavailable; functionality still works via server fetch, with minor first-render delay.
+- Redirect/query loss: if marketing redirects strip ?ref, client capture may miss referred_by on OTP; server-side first-click is still honored when provided.
+- Resolver/load caching: dynamic APIs are no-store; CDN misconfiguration could cache responses—verify host config periodically.
+- Leaderboard filters: users without metadata boat_color or otp_verified are excluded despite boats_totals; intentional, but looks like "inaccurate" totals.
+
+What’s working end-to-end now (critical flows)
+- New signup: referral code minted via webhook or ensure-on-read; OTP verified; upsert persists first-click referred_by and boat_color; Share enabled with absolute link; no refresh needed.
+- Returning sign-in: ensure-on-read mints code if absent; Share enabled via useMe + session fallback even if prewarm not present.
+- Remint continuity: remint_referral_code swaps canonical and inserts alias to preserve historical links.
+- Zero collisions: DB UNIQUE on code and user_id + retry logic.
+
+Recommendations
+- Lock webhook config in prod and add a lightweight health log (count and lag p95).
+- Add a nightly audit job: list users missing referral_codes; should be zero; alert if nonzero.
+- For leaderboard UX, either backfill boat_color/otp_verified for seeded users or relax filter to user_verifications. 

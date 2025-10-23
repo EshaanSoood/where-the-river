@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getSupabase } from "@/lib/supabaseClient";
 import { useUser } from "@/hooks/useUser";
 
 export type MeData = {
@@ -94,6 +95,24 @@ export function useMe(emailOverride?: string | null): UseMeResult {
         referral_code: (m.referral_code ?? null) as string | null,
         referral_url,
       });
+      // Fallback: if referral_url still null, attempt session-based ensure-on-read
+      if (!referral_url) {
+        try {
+          const supabase = getSupabase();
+          const { data: sess } = await supabase.auth.getSession();
+          const token = sess?.session?.access_token;
+          if (token) {
+            const r2 = await fetch(`${baseUrl}/api/my-referral-link`, { headers: { Authorization: `Bearer ${token}` } });
+            if (r2.ok) {
+              const j2 = await r2.json();
+              if (j2 && (j2.referral_url || j2.referral_code)) {
+                const url2 = (j2.referral_url ?? (j2.referral_code ? `${baseUrl}/?ref=${j2.referral_code}` : null)) as string | null;
+                setMe((prev) => prev ? { ...prev, referral_code: (prev.referral_code || j2.referral_code || null), ref_code_8: (prev.ref_code_8 || j2.referral_code || null), referral_url: url2 } : prev);
+              }
+            }
+          }
+        } catch {}
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
       setMe(null);
