@@ -66,8 +66,10 @@ export async function POST(req: Request) {
     if (!authUser) return NextResponse.json({ error: 'auth_user_not_found' }, { status: 404 });
 
     // Ensure referral code via SoT (idempotent). Do not mint in this route.
+    let canonicalCode: string | null = null;
     try {
-      await supabaseServer.rpc('assign_referral_code', { p_user_id: (authUser as { id: string }).id });
+      const { data: codeData } = await supabaseServer.rpc('assign_referral_code', { p_user_id: (authUser as { id: string }).id });
+      canonicalCode = (codeData as unknown as string) || null;
     } catch {}
 
     const row = authUser as unknown as AuthUserRow;
@@ -83,10 +85,10 @@ export async function POST(req: Request) {
       otp_verified: true,
     };
 
-    // Update auth user metadata via admin API
+    // Update auth user metadata via admin API (mirror canonical referral_id for dashboard convenience)
     const { error: updErr } = await supabaseServer.auth.admin.updateUserById(
       row.id,
-      { user_metadata: nextMeta }
+      { user_metadata: { ...nextMeta, ...(canonicalCode ? { referral_id: canonicalCode } : {}) } }
     );
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 400 });
 

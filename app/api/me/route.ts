@@ -82,6 +82,13 @@ export async function POST(req: Request) {
     }
     const referral_url = referral_code && baseUrl ? `${baseUrl}/?ref=${referral_code}` : (referral_code ? `/?ref=${referral_code}` : null);
 
+    // Best-effort mirror: if we have a canonical code, mirror to auth.users metadata for dashboard convenience
+    try {
+      if (referral_code) {
+        await supabaseServer.auth.admin.updateUserById(target.id, { user_metadata: { ...(meta as Record<string, unknown>), referral_id: referral_code } });
+      }
+    } catch {}
+
     return NextResponse.json({
       exists: true,
       me: {

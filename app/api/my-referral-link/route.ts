@@ -39,6 +39,13 @@ export async function GET(req: NextRequest) {
     const baseUrl = ((process.env.NEXT_PUBLIC_SITE_URL as string) || (process.env.PUBLIC_APP_BASE_URL as string) || req.nextUrl.origin || "").replace(/\/$/, "");
     const referralUrl = code ? `${baseUrl}/?ref=${code}` : null;
 
+    // Best-effort mirror: write canonical code into auth.users metadata for dashboard convenience
+    try {
+      if (code) {
+        await supabaseServer.auth.admin.updateUserById(userId, { user_metadata: { referral_id: code } });
+      }
+    } catch {}
+
     return new NextResponse(JSON.stringify({ referral_url: referralUrl, referral_code: code, otp_verified: otpVerified }), {
       status: 200,
       headers: { "Cache-Control": "no-store" }
