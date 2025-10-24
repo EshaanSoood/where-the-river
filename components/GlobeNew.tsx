@@ -83,6 +83,11 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const [isGlobeReady, setIsGlobeReady] = useState(false);
   const [fps, setFps] = useState<number>(0);
+  const dprRef = useRef<number>(1);
+  const lowFpsAccumMsRef = useRef<number>(0);
+  const highFpsAccumMsRef = useRef<number>(0);
+  const lastFpsEvalRef = useRef<number>(performance.now());
+  const isHiddenRef = useRef<boolean>(false);
   // GLB template refs
   const boatTemplateRef = useRef<THREE.Object3D | null>(null);
   const boatTemplateMaterialRef = useRef<THREE.Material | null>(null);
@@ -104,6 +109,48 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     frameId = requestAnimationFrame(trackFps);
     return () => { cancelAnimationFrame(frameId); };
   }, []);
+
+  // Adaptive DPR based on FPS
+  useEffect(() => {
+    const now = performance.now();
+    const dt = Math.max(0, now - (lastFpsEvalRef.current || now));
+    lastFpsEvalRef.current = now;
+    try {
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+      // Accumulate low/high fps durations
+      if (fps > 0 && fps < 40) {
+        lowFpsAccumMsRef.current += dt;
+        highFpsAccumMsRef.current = Math.max(0, highFpsAccumMsRef.current - dt);
+      } else if (fps >= 59) {
+        highFpsAccumMsRef.current += dt;
+        lowFpsAccumMsRef.current = Math.max(0, lowFpsAccumMsRef.current - dt);
+      } else {
+        // neutral
+        lowFpsAccumMsRef.current = Math.max(0, lowFpsAccumMsRef.current - dt * 0.5);
+        highFpsAccumMsRef.current = Math.max(0, highFpsAccumMsRef.current - dt * 0.5);
+      }
+      // Drop DPR if sustained low fps
+      if (lowFpsAccumMsRef.current >= 3000) {
+        const target = 1.0;
+        if (Math.abs((dprRef.current || 1) - target) > 0.05) {
+          dprRef.current = target;
+          try { renderer.setPixelRatio?.(target); } catch {}
+        }
+        lowFpsAccumMsRef.current = 0;
+      }
+      // Raise DPR carefully if sustained high fps
+      if (highFpsAccumMsRef.current >= 10000) {
+        const maxDevice = Math.min((typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1), 1.5);
+        const target = Math.min(1.5, Math.max(1.0, maxDevice));
+        if (target > (dprRef.current || 1) + 0.05) {
+          dprRef.current = target;
+          try { renderer.setPixelRatio?.(target); } catch {}
+        }
+        highFpsAccumMsRef.current = 0;
+      }
+    } catch {}
+  }, [fps]);
 
   // Load Country Polygons with LOD
   useEffect(() => {
@@ -267,7 +314,11 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     const getFitDistance = () => { try { const vFov = (camera.fov || 75) * Math.PI / 180; const aspect = camera.aspect || 1; const R = 100 * (1 + 0.22); const margin = 1.15; const dV = (R * margin) / Math.tan(vFov / 2); const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect); const dH = (R * margin) / Math.tan(hFov / 2); return Math.max(dV, dH, 100 * 1.3); } catch { return camera.position.length(); } };
     camera.near = 0.1; camera.far = 5000; camera.updateProjectionMatrix();
     const fitD = getFitDistance(); controls.target.set(0, 0, 0); camera.position.set(0, 0, fitD); camera.lookAt(0, 0, 0); camera.updateProjectionMatrix(); baselineDistanceRef.current = fitD; controls.maxDistance = fitD; controls.minDistance = Math.max(fitD / 3, 80); controls.screenSpacePanning = false;
-    try { renderer?.setPixelRatio?.(Math.min(1.75, window.devicePixelRatio || 1)); } catch {}
+    try {
+      const initial = Math.min(1.25, (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1));
+      dprRef.current = initial;
+      renderer?.setPixelRatio?.(initial);
+    } catch {}
     const scene = sceneRef.current; if (scene) scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     refitCameraRef.current = () => { try { if (!globeEl.current) return; const newFit = getFitDistance(); const prevFit = baselineDistanceRef.current || newFit; const dist = camera.position.length(); const ratio = Math.max(0.0001, dist / prevFit); baselineDistanceRef.current = newFit; controls.maxDistance = newFit; controls.minDistance = Math.max(newFit / 3, 80); const dir = camera.position.clone().normalize(); camera.position.copy(dir.multiplyScalar(newFit * ratio)); camera.updateProjectionMatrix(); } catch {} };
     setIsGlobeReady(true);
@@ -318,7 +369,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     if (!hasInteractedRef.current) { requestAnimationFrame(() => { if (!globeEl.current || hasInteractedRef.current) return; controls.target.set(0, 0, 0); camera.position.set(0, 0, baselineDistanceRef.current); camera.lookAt(0, 0, 0); camera.updateProjectionMatrix(); }); }
     let resizeTimer: number | null = null; const onResize = () => { if (resizeTimer) window.clearTimeout(resizeTimer); resizeTimer = window.setTimeout(() => { refitCameraRef.current(); try { renderer.setPixelRatio?.(Math.min(1.75, window.devicePixelRatio || 1)); } catch {} }, 150) as any; }; window.addEventListener('resize', onResize);
     const onActivity = () => { stopRotateInterval(); autoStateRef.current = 'idle'; startIdleTimer(); };
-    const onVisibilityChange = () => { if (document.hidden) { stopRotateInterval(); } else if (autoStateRef.current === 'autorotate_idle') { startIdleRotate(); } };
+    const onVisibilityChange = () => { isHiddenRef.current = !!document.hidden; if (document.hidden) { stopRotateInterval(); } else if (autoStateRef.current === 'autorotate_idle') { startIdleRotate(); } };
     const activityEvents: (keyof DocumentEventMap)[] = ['pointerdown', 'wheel', 'keydown', 'touchstart']; activityEvents.forEach(ev => window.addEventListener(ev, onActivity, { passive: true })); document.addEventListener('visibilitychange', onVisibilityChange);
     handleZoom();
     return () => { controls.removeEventListener('change', handleZoom); controls.removeEventListener('start', onInteractionStart); window.removeEventListener('resize', onResize); activityEvents.forEach(ev => window.removeEventListener(ev, onActivity)); document.removeEventListener('visibilitychange', onVisibilityChange); stopRotateInterval(); if (burstTimerRef.current) window.clearTimeout(burstTimerRef.current); if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current); if (resizeTimer) window.clearTimeout(resizeTimer); };
@@ -349,29 +400,35 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const overlayUpdatePendingRef = useRef<boolean>(false);
   const scheduleOverlayUpdate = () => { if (overlayUpdatePendingRef.current) return; overlayUpdatePendingRef.current = true; requestAnimationFrame(() => { overlayUpdatePendingRef.current = false; try { const globe = globeEl.current; if (!globe) return; overlayNodes.forEach(n => { const el = overlayRefs.current.get(n.id); if (!el) return; const px = projectLatLngIfFront(n.lat, n.lng); if (!px) { el.style.opacity = '0'; return; } el.style.left = `${px.x}px`; el.style.top = `${px.y}px`; el.style.opacity = '1'; }); } catch {} }); };
 
-  // --- Boat animation loop (single-boat) ---
+  // --- Boat animation loop (single-boat) with fixed-step simulation ---
   useEffect(() => {
-    // Always animate at a modest cadence, even on low-power, so boats remain visible
     let rafId: number;
+    const TICK_MS_ACTIVE = 33; // ~30Hz
+    const TICK_MS_HIDDEN = 1000; // 1Hz when hidden (user-requested)
+    let lastTick = performance.now();
     const animate = () => {
       const now = performance.now();
-      boatsRef.current.forEach(boat => {
-        const elapsed = now - boat.startTime;
-        const t = (elapsed / boat.duration) % 1.0;
-        const pos = boat.curve.getPointAt(t);
-        try {
-          const globe = globeEl.current; const cam = globe?.camera();
-          if (cam) {
-            const visible = pos.clone().normalize().dot(cam.position.clone().normalize()) > 0;
-            (boat.mesh as any).visible = visible;
-            if (!visible) return;
-          }
-        } catch {}
-        boat.mesh.position.copy(pos);
-        const tan = boat.curve.getTangentAt(t);
-        boat.mesh.up.copy(pos).normalize();
-        boat.mesh.lookAt(pos.clone().add(tan));
-      });
+      const tickMs = isHiddenRef.current ? TICK_MS_HIDDEN : TICK_MS_ACTIVE;
+      if (now - lastTick >= tickMs) {
+        lastTick = now;
+        boatsRef.current.forEach(boat => {
+          const elapsed = now - boat.startTime;
+          const t = (elapsed / boat.duration) % 1.0;
+          const pos = boat.curve.getPointAt(t);
+          try {
+            const globe = globeEl.current; const cam = globe?.camera();
+            if (cam) {
+              const visible = pos.clone().normalize().dot(cam.position.clone().normalize()) > 0;
+              (boat.mesh as any).visible = visible;
+              if (!visible) return;
+            }
+          } catch {}
+          boat.mesh.position.copy(pos);
+          const tan = boat.curve.getTangentAt(t);
+          boat.mesh.up.copy(pos).normalize();
+          boat.mesh.lookAt(pos.clone().add(tan));
+        });
+      }
       rafId = requestAnimationFrame(animate);
     };
     animate();
@@ -430,6 +487,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     } catch {}
   };
 
+  const arcResolution = useMemo(() => {
+    // Base 24; reduce on low-power or wide zoom-outs to bound vertices
+    if (lowPowerRef.current) return 16;
+    if (zoomScale <= 0.9) return 18;
+    return 24;
+  }, [zoomScale]);
+
   return (
     <div ref={containerRef} style={containerStyle} onMouseMove={handleMouseMove} role="region" aria-label={ariaLabel} aria-describedby={describedById} tabIndex={tabIndex as number | undefined}>
       <div style={{ position: 'absolute', top: '10px', left: '10px', color: 'white', backgroundColor: 'rgba(0,0,0,0.5)', padding: '5px 8px', borderRadius: '3px', fontFamily: "'Roboto Mono', monospace", fontSize: '12px', zIndex: 100 }}>
@@ -455,7 +519,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         arcDashLength={1}
         arcDashGap={0}
         arcDashAnimateTime={0}
-        arcCircularResolution={24}
+        arcCircularResolution={arcResolution}
         pointsData={useMemo(() => nodesData.map(n => ({ lat: n.lat, lng: n.lng, size: n.size, color: n.color })), [nodesData])}
         pointAltitude={0.201}
         pointRadius={useCallback((d: any) => (d?.size || 0.20) * zoomScale, [zoomScale])}

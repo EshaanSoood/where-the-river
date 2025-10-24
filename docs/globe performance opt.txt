@@ -1,0 +1,82 @@
+GlobeNew performance optimization plan (no visual/function compromises)
+
+Performance goals
+- Desktop ≥ 60 fps steady; mobile/low‑power ≥ 30 fps steady (no thermal runaway)
+- Max CPU ~≤ 60% on mid laptops; GPU ~≤ 50% sustained; memory growth < 10% over 5 min
+- Cold start TTI ≤ 2.5s (4G); boat visible ≤ 2.0s (procedural fallback ≤ 1.0s)
+
+Profiling & guardrails
+- Dev‑only HUD: rolling FPS, 1% low frame time, draw calls, geometries, textures, JS heap delta @ 2m
+- One‑time log: chosen caps (DPR, LOD, arc segments), deviceMemory, powerPreference
+- Kill‑switch: if FPS < 24 for 5s → enter “safe profile” automatically (see below)
+
+Frame pacing & DPR
+- Simulation at fixed 30 Hz (33.33 ms); render at display refresh with interpolation (boat + rotate)
+- Adaptive DPR: start at min(devicePixelRatio, 1.25); raise to 1.5 only if FPS > 58 for 10s; drop to 1.0 if FPS < 40 for 3s
+- Use WebGL context with powerPreference: "low-power" on mobile; "high-performance" only on explicit desktop flag
+
+Render cost (draw calls, geometry, materials)
+- Single shared materials/textures (boat + globe); set toneMapped=false where possible; avoid state changes
+- Merge static geometries; BufferGeometry only; never reallocate attributes per frame
+- Disable shadows and postprocessing; Linear tone mapping or none; outputEncoding sRGB
+- Arc segments by screen length (px sampling) to bound vertex count on retina screens
+- Frustum/horizon culling: skip boat/arc updates when path midpoint off‑frustum or behind globe
+
+Allocations & data flow
+- Zero per‑frame object churn: preallocate Vector3/Quat/Matrix4; reuse arrays for culling, raycasts
+- Typed arrays for bulk buffers; set .needsUpdate only on actual changes; hoist hot‑path functions/constants
+
+Animation throttle
+- Boat simulation @ 30 Hz; render interpolation only
+- Autorotate max 30 Hz; stop on interaction; resume idle after 120s at 20 Hz
+- Page hidden: pause animation; background tabs: clamp to 1 Hz
+
+Globe & overlays
+- LOD: lower land detail and coast lines on low‑power; preserve silhouette with 1–2px CSS inner glow
+- Tooltip/overlays: RAF throttled; 1 compute per frame; requestIdleCallback fallback on low‑power
+- Screen‑space capacity: limit visible nodes/arcs; quantize zoom; recompute layout only on threshold crossings
+
+Boat (GLB) lifecycle
+- Lazy‑load GLB boat after first paint; show procedural fallback immediately; swap only when GLB ready AND FPS ≥ 28
+- Cache parsed GLTF; shallow clone; share single material; dispose geometry/material/texture on unmount/flag change
+
+Texture/material budget
+- Boat textures ≤ 512px (or embedded color only); unlit materials preferred; normal maps only if ≤ 128px
+- Disable mipmaps for tiny textures; use mobile precision="mediump"
+
+Events & timers
+- Single visibility/resize listeners; debounce resize 150 ms; recompute DPR after stable resize
+- Avoid pointermove processing when overlays hidden; batch DOM writes inside RAF
+
+Memory & GC
+- Explicit dispose path on route changes; release geometries/materials/textures; verify no retained refs
+- Dev sanity: after 60s idle, heap delta < 5 MB; log if higher
+
+Safe profile (auto‑degrade without visible regressions)
+- DPR=1.0; simulation 20 Hz with render interpolation; arc sampling −30%; starfield −50%
+- Disable GLB boat (procedural triangle); pause autorotate
+
+Loading & startup
+- First paint: minimal globe (flat/wireframe) then swap to full land under 100 ms idle window
+- Lazy‑load GLTFLoader + boat code after scene is interactive
+
+Thermal behavior
+- If sustained CPU > 75% or device temperature hints suggest hot → step down DPR and tick rate by 20% until recovered
+
+Testing (triple pass)
+- A: Desktop Chrome/Safari/Firefox (60/144 Hz). Cold start, interact 2m, idle 2m → FPS ≥ 60, stable memory
+- B: iOS Safari, Android Chrome. DPR cap engaged; FPS ≥ 30; no thermal warnings; boat ≤ 2s (fallback ok)
+- C: Stress: open via /r/<code>, switch tabs, resize, bg/fg cycles → auto‑degrade triggers and recovers; Share enabled post‑verify without refresh
+
+Metrics & acceptance
+- Track: avg FPS, 1% low, draw calls, geometries, textures, JS heap delta @ 2m, time‑to‑boat
+- Accept if: desktop ≥ 60 FPS; mobile ≥ 30 FPS; no memory growth; time‑to‑boat ≤ 2s; no hard‑reload required
+
+Implementation checklist (no visual regressions)
+- Add adaptive DPR + fixed 30 Hz with render interpolation
+- Arc sampling by screen length; cap segments
+- Frustum/horizon culling for boat + arc updates
+- Material/geometry reuse; single boat material; audited dispose lifecycle
+- Idle/visibility throttling; background 10 Hz guard
+- Lazy GLB load with procedural fallback; GLB swap only when FPS ≥ 28
+- Dev‑only telemetry overlay with kill‑switch

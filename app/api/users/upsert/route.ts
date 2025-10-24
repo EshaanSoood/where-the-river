@@ -85,6 +85,17 @@ export async function POST(req: Request) {
       otp_verified: true,
     };
 
+    // Server-side attribution: prefer HttpOnly cookie when present
+    try {
+      const cookie = (req.headers.get("cookie") || "");
+      const m = cookie.match(/(?:^|; )river_ref_h=([^;]+)/);
+      const v = m ? decodeURIComponent(m[1]) : "";
+      const norm = (v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (norm && !(prevMeta as { referred_by?: unknown }).referred_by && !nextMeta.referred_by) {
+        (nextMeta as { referred_by?: string | null }).referred_by = norm;
+      }
+    } catch {}
+
     // Update auth user metadata via admin API (mirror canonical referral_id for dashboard convenience)
     const { error: updErr } = await supabaseServer.auth.admin.updateUserById(
       row.id,
