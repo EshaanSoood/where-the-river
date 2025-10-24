@@ -1,0 +1,225 @@
+# Referral System Deep Audit (read-only)
+- Repo root: /Users/eshaansood/Where-the-river/web
+- Date/Time (UTC): 2025-10-24T01:20:00Z
+- Auditor: Cursor
+
+## Summary Verdict
+- Issue A (Share button SSOT read): Dashboard does not exclusively read referral from the Users table. It mixes sources: most dashboard fields from `auth.users` metadata, but referral comes from SoT (`public.referral_codes`) via `/api/me` and only mirrors into metadata opportunistically. Client gating (requires email; async retry) and the disabled state `!me?.referral_url` cause Share to be disabled on first render or auth-race. Additionally, client-side code still mints a non-canonical `referral_id` during OTP flows, creating SSOT drift.
+- Issue B (Ref forwarding to new signups): Flow relies on early client capture plus server HttpOnly cookie. If middleware/capture didn’t run or cookie isn’t available (redirects/tab changes/privacy modes), `referred_by` can be empty at upsert. Client still attempts to mint codes in metadata on signup, which is non-authoritative and can diverge from SoT.
+
+## High-Risk Breakpoints (Top 5)
+1) web/components/BelowMap.tsx:709–722 — Client mints `referral_id` randomly on signup (non-canonical) — evidence:
+   """
+   const referralId8 = String(Math.floor(10000000 + Math.random() * 90000000));
+   ...
+   options: { shouldCreateUser: true, data: { ... , referral_id: referralId8, } }
+   """
+2) web/components/BelowMap.tsx:788–802 and 837–851 — Client mints and POSTs `referral_id` again on verify to `/api/users/upsert` — evidence:
+   """
+   const referral_id = Math.random().toString(36).slice(2, 10);
+   await fetch('/api/users/upsert', { body: JSON.stringify({ ..., referral_id, referred_by: referredByCode, ... }) })
+   """
+3) web/hooks/useMe.ts:124–131 — SSOT fetch gated by email; if email not ready, no fetch — evidence:
+   """
+   if (!email) { setMe(null); return; }
+   fetchMe().catch(() => {});
+   """
+4) web/components/BelowMap.tsx:1115–1119 — Share button disabled if `me.referral_url` missing — evidence:
+   """
+   onClick={() => setShareOpen(true)}
+   disabled={!me?.referral_url}
+   """
+5) web/app/api/me/route.ts:47–58, 83–90 — Referral read from SoT then mirrored to metadata; not Users-only SSOT — evidence:
+   """
+   let referral_code = (meta.referral_id ?? null) as string | null;
+   const { data: codeRow } = await supabaseServer.from('referral_codes').select('code').eq('user_id', target.id).maybeSingle();
+   ...
+   await supabaseServer.auth.admin.updateUserById(target.id, { user_metadata: { ..., referral_id: referral_code } });
+   """
+
+## Data Model & Policies
+- Schema (users/profiles) referral fields found at:
+  - supabase/migrations/20251023_referral_sot.sql:8–13 `public.referral_codes(user_id PK, code UNIQUE)`; 14–18 `public.referral_code_aliases`; 20–24 `public.user_verifications`.
+  - web/app/api/users/upsert/route.ts:83–86 sets `referred_by` in `auth.users` metadata (first-click wins).
+- Constraints/Indexes:
+  - 20251023_referral_sot.sql:10 `code text not null unique` on `referral_codes.code`.
+- RLS impacting referral reads/writes:
+  - 20251023_referral_sot.sql:26–33 enables RLS and omits client policies; server uses service role to read/write.
+- SSOT definition as implemented:
+  - Canonical referral code is SoT `public.referral_codes.code`. Metadata `auth.users.user_metadata.referral_id` is a mirror (best-effort). Multiple server paths mirror-on-read/write.
+
+## API & Server Path Audit
+### /api/my-referral-link — web/app/api/my-referral-link/route.ts
+- Purpose: Return session-authenticated user’s canonical referral link; ensure-on-read mint via RPC.
+- Inputs/outputs: Authorization Bearer (client access token); returns `{ referral_url, referral_code, otp_verified }`.
+- Referral fields touched (read/write): Calls `assign_referral_code`; reads `user_verifications.otp_verified`; mirrors to `auth.users` metadata.
+- Caching headers: `Cache-Control: no-store` at all exits.
+- Breakpoints:
+  - 401 when token missing/invalid (constant shape) can defer Share unless client retries.
+  - Depends on session readiness; if called too early, returns 401 and requires client retry.
+- Evidence:
+  - 9–23: 401 constant-shape when Authorization missing/invalid.
+  - 27–31: RPC `assign_referral_code` call.
+  - 49–55: no-store response.
+
+### /api/me — web/app/api/me/route.ts
+- Purpose: Dashboard data by email; mixes Admin metadata with SoT referral and boats_totals.
+- Inputs/outputs: POST { email }; returns `{ me: { ..., referral_code, referral_url } }`.
+- Referral fields touched: Prefers SoT; ensure-on-read mint via RPC; mirrors to metadata.
+- Caching headers: `no-store` on success and error.
+- Breakpoints:
+  - Email-gated; if email not ready in client, fetch is skipped.
+  - Referral URL null until SoT read/mint completes; Share remains disabled meanwhile.
+- Evidence:
+  - 47–58: SoT read of `referral_codes`.
+  - 60–72: Ensure-on-read mint via `assign_referral_code` then re-read.
+  - 83–90: Build absolute referral_url and mirror to metadata.
+
+### /api/users/upsert — web/app/api/users/upsert/route.ts
+- Purpose: Post-verify upsert of profile details; OTP monotonic mark; server-side referral attribution.
+- Inputs/outputs: POST JSON; returns `{ user: { ..., referral_id } }`.
+- Referral fields touched: Calls `assign_referral_code` for canonical; sets `referred_by` once (first-click wins); mirrors canonical `referral_id` to metadata.
+- Caching headers: default (JSON response; not SSR cached).
+- Breakpoints:
+  - Relies on HttpOnly cookie fallback for referred_by; if missing (capture failed), attribution may be empty.
+  - Client still sends a non-canonical `referral_id` in body during flows (from BelowMap).
+- Evidence:
+  - 69–73: `assign_referral_code` RPC.
+  - 83–86: first-click `referred_by` write.
+  - 88–96: HttpOnly cookie `river_ref_h` normalization for server-side attribution.
+  - 99–104: Mirror canonical `referral_id` to metadata.
+
+### /api/referral/resolve — web/app/api/referral/resolve/route.ts
+- Purpose: Resolve code→user for visual cues; constant-shape responses; reads aliases fallback.
+- Inputs/outputs: GET ?code=.
+- Caching headers: `no-store` (constant-shape 200 even on errors).
+
+### /api/referral (share) — web/app/api/referral/route.ts
+- Purpose: Build share URL from SoT; if missing, returns `pending:true` to instruct client to call session path.
+- Caching: `no-store`.
+
+### Webhook — (not shown here) documented in CONTEXT.md as `POST /api/webhooks/user-created` to call `assign_referral_code` idempotently.
+
+## Client SSOT Read & Share Button Audit
+- Components: web/components/BelowMap.tsx; web/hooks/useMe.ts; web/components/ShareTiles.tsx (indirect via BelowMap).
+- Data sources: `/api/me` (email-based), fallback `/api/my-referral-link` (session-based).
+- Null/undefined paths:
+  - useMe.ts:124–131 skips fetch when `email` unset; Share remains disabled.
+  - BelowMap Share disabled until `me.referral_url` truthy.
+- Browser branch behavior:
+  - Clipboard used for Copy; `navigator.share` not directly referenced in these excerpts; clipboard path present in BelowMap.
+- Breakpoints & Evidence:
+  - BelowMap.tsx:1115–1119 — disabled if `!me?.referral_url`.
+  - useMe.ts:98–113 — fallback to `/api/my-referral-link` only after first `/api/me` response and only when referral_url is null.
+
+## Client Capture & Signup Pass-Through Audit
+- Capture points:
+  - middleware.ts:20–29 handles `/r/<code>`; 33–43 handles `?ref=...` and sets `river_ref_h` (HttpOnly) + `river_ref` (client) cookies.
+  - providers.tsx:15–19 calls `/api/referral/capture` and then `ensureRefCapturedAndResolved()`.
+- Storage used: localStorage (`river.ref`) and non-HttpOnly cookie `river_ref` for client cues; HttpOnly cookie `river_ref_h` for server attribution.
+- OTP → upsert handoff:
+  - BelowMap.tsx (signup verify): POST `/api/users/upsert` with `referred_by: getReferralSnapshot().code` (client) while server additionally reads `river_ref_h` cookie.
+- First-click-wins logic and early-returns:
+  - upsert route sets `referred_by` only if `prevMeta.referred_by` empty; otherwise preserves existing.
+- Tab/window context risks:
+  - If OTP verify opens in fresh context without cookie (or cookie blocked), client snapshot may be empty in private modes; upsert fallback relies on server cookie presence.
+- Breakpoints & Evidence:
+  - middleware.ts:33–43 cookie set on `?ref=`; 20–29 cookie set on `/r/`.
+  - providers.tsx:15–19 backstop capture to set cookies server-side.
+  - upsert route.ts:88–96 reads HttpOnly cookie; 83–86 preserves first-click.
+  - BelowMap.tsx:783–803/839–851 sends `referred_by` from client snapshot (may be null in private modes/new tab).
+
+## Caching & Consistency Risks
+- Server caching: All dynamic endpoints audited set `Cache-Control: no-store` (me, my-referral-link, resolve, referral, leaderboard, globe).
+- Client caching: Local prewarm uses localStorage; may be unavailable in private mode (non-fatal; increases first-render latency).
+- Mismatch scenarios:
+  - Client-minted `referral_id` (metadata) vs canonical SoT code → dashboard may display SoT-derived link while metadata shows different value elsewhere.
+  - Email-gated `/api/me` + disabled Share until response.
+- Evidence:
+  - new ref diagnosis/tests docs confirm no-store intent.
+
+## Edge Case Matrix (Static Analysis)
+- a) Fresh user: landing with `?ref=CODE` → OTP signup same tab — PASS
+  - middleware.ts:33–43 sets HttpOnly cookie; upsert route.ts:88–96 applies cookie; first-click preserved 83–86.
+- b) Landing with `?ref=CODE` → OTP opens in new tab (no `?ref`), Safari Private — SUSPECT
+  - Relies on cookie; if cookie blocked or cross-origin, `referred_by` may be empty. Evidence: upsert route.ts:88–96 cookie reliance; BelowMap depends on localStorage snapshot for client-sent `referred_by`.
+- c) Signed-in existing user pressing Share (offline, slow network, 401 refresh) — SUSPECT
+  - useMe.ts:124–131 email gating; 98–113 fallback only after first fetch; Share disabled by BelowMap until `referral_url` set.
+- d) Re-login with existing `referred_by` set — PASS
+  - upsert route.ts:83–86 first-click no-overwrite; SoT ensure-on-read mints canonical; mirroring keeps metadata aligned.
+- e) Deep link to Share page without full app mount — SUSPECT
+  - If `useMe` hasn’t fetched (email not ready), `me` null and Share stays disabled; requires subsequent refresh/interaction.
+
+## Concrete Indicators To Probe Next (no edits yet)
+- Add temporary server logs (not applied):
+  - /api/me: before/after SoT fetch, include `had_meta_referral_id`, `mint_attempted`, `final_referral_code`.
+  - /api/users/upsert: log `cookie_ref_present`, `body_referred_by_present`, `applied_referred_by`.
+  - /api/my-referral-link: log `token_valid`, `minted_on_read`.
+- Client (debug-only):
+  - Log when Share button mounts disabled and when it enables; include `has_email`, `me_loaded`, `fallback_called`.
+
+## Appendix: Code Evidence
+- BelowMap client-mints referral_id (signup submit): web/components/BelowMap.tsx:709–722
+  """
+  const referralId8 = String(Math.floor(10000000 + Math.random() * 90000000));
+  ...
+  options: { shouldCreateUser: true, data: { ..., referral_id: referralId8, }, },
+  """
+- BelowMap client-mints referral_id (verify enter): web/components/BelowMap.tsx:788–802
+  """
+  const referral_id = Math.random().toString(36).slice(2, 10);
+  await fetch('/api/users/upsert', { body: JSON.stringify({ ..., referral_id, referred_by: referredByCode, ... }) })
+  """
+- BelowMap client-mints referral_id (verify click): web/components/BelowMap.tsx:837–851
+  """
+  const referral_id = Math.random().toString(36).slice(2, 10);
+  await fetch('/api/users/upsert', { body: JSON.stringify({ ..., referral_id, referred_by: referredByCode, ... }) })
+  """
+- Share disabled until URL present: web/components/BelowMap.tsx:1115–1119
+  """
+  onClick={() => setShareOpen(true)}
+  disabled={!me?.referral_url}
+  """
+- useMe email gating / fallback: web/hooks/useMe.ts:124–131 and 98–113
+  """
+  if (!email) { setMe(null); return; }
+  ...
+  if (!referral_url) { /* call /api/my-referral-link with Bearer token */ }
+  """
+- /api/me reads SoT then mirrors: web/app/api/me/route.ts:47–58, 60–72, 83–90
+  """
+  const { data: codeRow } = await supabaseServer.from('referral_codes').select('code').eq('user_id', target.id).maybeSingle();
+  ... ensure-on-read via assign_referral_code ...
+  await supabaseServer.auth.admin.updateUserById(target.id, { user_metadata: { ..., referral_id: referral_code } });
+  """
+- /api/my-referral-link ensure-on-read + no-store: web/app/api/my-referral-link/route.ts:9–23, 27–31, 49–55
+  """
+  if (!m) return 401 { referral_url: null, referral_code: null }
+  const { data: userRes } = await supabaseAnon.auth.getUser(token);
+  const { data: codeData } = await supabaseServer.rpc("assign_referral_code", { p_user_id: userId });
+  return 200 { referral_url, referral_code } with Cache-Control: no-store
+  """
+- Server-side referral capture (middleware): web/middleware.ts:20–29, 33–43
+  """
+  res.cookies.set("river_ref_h", code, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 604800, secure: true });
+  res.cookies.set("river_ref", code, { httpOnly: false, sameSite: "lax", path: "/", maxAge: 604800, secure: true });
+  """
+- Client capture backstop: web/app/providers.tsx:15–19; client resolver: web/lib/referral.ts:111–126
+  """
+  fetch("/api/referral/capture", { method: "POST", body: JSON.stringify({ code: ref }) })
+  ensureRefCapturedAndResolved(): URL > cookie > localStorage; resolve inviter name/id
+  """
+- Upsert preserves first click and reads HttpOnly cookie: web/app/api/users/upsert/route.ts:83–86, 88–96
+  """
+  referred_by: prevMeta.referred_by ?? sanitized.referred_by
+  const m = cookie.match(/(?:^|; )river_ref_h=([^;]+)/);
+  if (norm && !prevMeta.referred_by && !nextMeta.referred_by) nextMeta.referred_by = norm;
+  """
+- SoT schema and RLS: supabase/migrations/20251023_referral_sot.sql:8–13, 26–33, 60–73
+  """
+  create table public.referral_codes (... code text not null unique ...);
+  alter table public.referral_codes enable row level security;
+  function public.assign_referral_code(p_user_id uuid) returns text ...
+  """
+
+

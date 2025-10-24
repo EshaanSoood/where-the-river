@@ -44,10 +44,11 @@ export default function BelowMap() {
   const [dashboardMode, setDashboardMode] = useState<"guest" | "user">("guest");
   const { me, refresh: refreshMe } = useMe();
   const [shareOpen, setShareOpen] = useState(false);
+  const [shareReferralUrl, setShareReferralUrl] = useState<string | null>(null);
   const [rewardsOpen, setRewardsOpen] = useState(false);
   // Points modal state lives inside RewardsView now
   const [shareMessage, setShareMessage] = useState("Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I've been listening to Dream River by them lately and I think you'll enjoy it too.");
-  const [signupReferralId, setSignupReferralId] = useState<string | null>(null);
+  // Removed client-generated referral_id; canonical is minted server-side via SoT
   const [refInviterFirst, setRefInviterFirst] = useState<string | null>(null);
   const [refInviterId, setRefInviterId] = useState<string | null>(null);
   
@@ -117,6 +118,41 @@ export default function BelowMap() {
       }
     } catch {}
   }, []);
+
+  // Session-based referral link fetch with short backoff; decoupled from /api/me
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchReferralWithRetry() {
+      try {
+        const supabase = getSupabase();
+        const start = Date.now();
+        let attempt = 0;
+        while (!cancelled && Date.now() - start < 3000) { // ~3s window
+          const { data: sess } = await supabase.auth.getSession();
+          const token = sess?.session?.access_token || null;
+          if (token) {
+            try {
+              const r = await fetch("/api/my-referral-link", { headers: { Authorization: `Bearer ${token}` } });
+              if (r.ok) {
+                const j = await r.json();
+                const url = (j?.referral_url || (j?.referral_code ? `${window.location.origin}/?ref=${j.referral_code}` : null)) as string | null;
+                if (url) { setShareReferralUrl(url); return; }
+              }
+            } catch {}
+          }
+          attempt += 1;
+          const backoff = Math.min(1000, 200 + attempt * 200);
+          await new Promise((r) => setTimeout(r, backoff));
+        }
+      } catch {}
+    }
+    if (user) {
+      fetchReferralWithRetry();
+    } else {
+      setShareReferralUrl(null);
+    }
+    return () => { cancelled = true; };
+  }, [user]);
 
   // Referral hint state: initialize from snapshot and subscribe for background resolve
   useEffect(() => {
@@ -706,7 +742,9 @@ export default function BelowMap() {
                           } else {
                             // New user → send signup OTP with metadata and go to Screen C
                           const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-                          const referralId8 = String(Math.floor(10000000 + Math.random() * 90000000));
+                          const snap = getReferralSnapshot();
+                          const codeParam = snap.code ? `?ref=${encodeURIComponent(snap.code)}` : '';
+                          const redirectTo = (typeof window !== 'undefined') ? `${window.location.origin}/${codeParam}` : undefined;
                             const { error: signUpErr } = await supabase.auth.signInWithOtp({
                               email: emailNorm,
                               options: {
@@ -718,12 +756,11 @@ export default function BelowMap() {
                                   country_code: country,
                                   boat_color: boatColor,
                                   message: favoriteSong,
-                                referral_id: referralId8,
                                 },
+                                emailRedirectTo: redirectTo,
                               },
                             });
                             if (signUpErr) throw signUpErr;
-                          setSignupReferralId(referralId8);
                             setLastOtpAt(Date.now());
                             setGuestStep('signup_code');
                             setAlert('We emailed you a 6-digit code. Enter it below.');
@@ -785,7 +822,6 @@ export default function BelowMap() {
                           if (error) throw error;
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
-                            const referral_id = Math.random().toString(36).slice(2, 10);
                             const referredByCode = (getReferralSnapshot().code || null);
                             await fetch('/api/users/upsert', {
                               method: 'POST',
@@ -796,7 +832,6 @@ export default function BelowMap() {
                                 country_code: country,
                                 message: favoriteSong,
                                 photo_url: null,
-                                referral_id,
                                 referred_by: referredByCode,
                                 boat_color: boatColor,
                               }),
@@ -834,7 +869,6 @@ export default function BelowMap() {
                           if (error) throw error;
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
-                            const referral_id = Math.random().toString(36).slice(2, 10);
                             const referredByCode = (getReferralSnapshot().code || null);
                             await fetch('/api/users/upsert', {
                               method: 'POST',
@@ -845,7 +879,6 @@ export default function BelowMap() {
                                 country_code: country,
                                 message: favoriteSong,
                                 photo_url: null,
-                                referral_id,
                                 referred_by: referredByCode,
                                 boat_color: boatColor,
                               }),
@@ -884,6 +917,9 @@ export default function BelowMap() {
                         try {
                           const supabase = getSupabase();
                           const emailNorm = email.trim().toLowerCase();
+                          const snap2 = getReferralSnapshot();
+                          const codeParam2 = snap2.code ? `?ref=${encodeURIComponent(snap2.code)}` : '';
+                          const redirectTo2 = (typeof window !== 'undefined') ? `${window.location.origin}/${codeParam2}` : undefined;
                           const { error: signUpErr } = await supabase.auth.signInWithOtp({
                             email: emailNorm,
                             options: {
@@ -895,8 +931,8 @@ export default function BelowMap() {
                                 country_code: country,
                                 boat_color: boatColor,
                                 message: favoriteSong,
-                                referral_id: signupReferralId || String(Math.floor(10000000 + Math.random() * 90000000)),
                               },
+                              emailRedirectTo: redirectTo2,
                             },
                           });
                           if (signUpErr) throw signUpErr;
@@ -1114,7 +1150,7 @@ export default function BelowMap() {
                       className="w-full min-h-12 rounded-[24px] font-seasons text-white"
                       aria-label="Share Your Boat"
                       onClick={() => setShareOpen(true)}
-                      disabled={!me?.referral_url}
+                      disabled={!((shareReferralUrl || me?.referral_url) as string | null)}
                       style={{ background: 'var(--teal)' }}
                     >
                       Share Your Boat
@@ -1185,7 +1221,7 @@ export default function BelowMap() {
                             className="w-full min-h-14 rounded-[24px] font-seasons text-white transition-all duration-300 ease-out"
                             aria-label="Share Your Boat"
                             onClick={() => setShareOpen(true)}
-                            disabled={!me?.referral_url}
+                            disabled={!((shareReferralUrl || me?.referral_url) as string | null)}
                             style={{ background: 'var(--teal)' }}
                           >
                             Share Your Boat
@@ -1199,14 +1235,14 @@ export default function BelowMap() {
                             </div>
                             <h4 id="share-title" ref={shareHeadingRef} tabIndex={-1} className="font-seasons text-lg mb-2" aria-label="Share">Share</h4>
                             <div className="grid grid-cols-2 gap-4">
-                              <ShareTiles referralUrl={me?.referral_url || ''} message={shareMessage} userFullName={me?.name || ''} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
+                              <ShareTiles referralUrl={(shareReferralUrl || me?.referral_url || '') as string} message={shareMessage} userFullName={me?.name || ''} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
                             </div>
                             <div className="mt-3 space-y-2">
                               <label className="font-sans text-sm" htmlFor="shareMessage">Message</label>
                               <textarea id="shareMessage" className="w-full border rounded-md px-3 py-2" rows={4} value={shareMessage} onChange={(e) => setShareMessage(e.target.value)} />
                               <div className="flex items-center gap-2">
-                                <input className="flex-1 border rounded-md px-3 py-2 bg-background" value={me?.referral_url || ''} readOnly aria-label="Referral link" />
-                                <button type="button" className="rounded-md px-3 py-2 btn" onClick={async () => { try { await navigator.clipboard.writeText(`${shareMessage} ${me?.referral_url || ''}`); setAnnounce('Copied invite to clipboard'); } catch {} }}>Copy</button>
+                                <input className="flex-1 border rounded-md px-3 py-2 bg-background" value={(shareReferralUrl || me?.referral_url || '') as string} readOnly aria-label="Referral link" />
+                                <button type="button" className="rounded-md px-3 py-2 btn" onClick={async () => { try { await navigator.clipboard.writeText(`${shareMessage} ${(shareReferralUrl || me?.referral_url || '') as string}`); setAnnounce('Copied invite to clipboard'); } catch {} }}>Copy</button>
                               </div>
                             </div>
                           </div>
