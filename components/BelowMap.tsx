@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 import { getIsoCountries, type IsoCountry } from "@/lib/countryList";
@@ -16,6 +16,7 @@ import LeftPanelEmbeds from "@/components/LeftPanelEmbeds";
 import HowToPlayVideo from "@/components/HowToPlayVideo";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 import { getReferralSnapshot, onReferralUpdate, hasCookieRef, trySetCookieRef } from "@/lib/referral";
+import { refDebug } from "@/lib/refDebug";
 
   const Globe = dynamic(() => import("@/components/GlobeNew"), { ssr: false });
   const RewardsView = dynamic(() => import("@/components/RewardsView"), { ssr: false });
@@ -44,7 +45,12 @@ export default function BelowMap() {
   const [dashboardMode, setDashboardMode] = useState<"guest" | "user">("guest");
   const { me, refresh: refreshMe } = useMe();
   const [shareOpen, setShareOpen] = useState(false);
-  const [shareReferralUrl, setShareReferralUrl] = useState<string | null>(null);
+  const [shareReady, setShareReady] = useState(false);
+  const [shareAutoOpened, setShareAutoOpened] = useState(false);
+  const [referralUrl, setReferralUrl] = useState<string>('');
+  const [isLoadingReferral, setIsLoadingReferral] = useState<boolean>(true);
+  const [shareLoading, setShareLoading] = useState(false);
+  // Share uses referral_url from the unified dashboard payload
   const [rewardsOpen, setRewardsOpen] = useState(false);
   // Points modal state lives inside RewardsView now
   const [shareMessage, setShareMessage] = useState("Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I've been listening to Dream River by them lately and I think you'll enjoy it too.");
@@ -56,6 +62,22 @@ export default function BelowMap() {
   const dashboardRef = useRef<HTMLDivElement | null>(null);
   const leaderboardRef = useRef<HTMLDivElement | null>(null);
   const { user, loading } = useUser();
+  // Flip Share loading state once referral_url is present; auto-open once
+  useEffect(() => {
+    try {
+      const url = (me?.referral_url || '') as string;
+      // Initialize local referral state from profile
+      if (isLoadingReferral) setIsLoadingReferral(false);
+      if (url && url !== referralUrl) setReferralUrl(url);
+      if (!shareReady && url) {
+        setShareReady(true);
+        if (!shareOpen && !shareAutoOpened) {
+          setShareOpen(true);
+          setShareAutoOpened(true);
+        }
+      }
+    } catch {}
+  }, [me?.referral_url, shareOpen, shareReady, shareAutoOpened, isLoadingReferral, referralUrl]);
   const anyPanelOpen = dashboardOpen || leaderboardOpen;
   const [accOpen, setAccOpen] = useState<{ how: boolean; why: boolean; who: boolean }>({ how: false, why: false, who: false });
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -119,40 +141,7 @@ export default function BelowMap() {
     } catch {}
   }, []);
 
-  // Session-based referral link fetch with short backoff; decoupled from /api/me
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchReferralWithRetry() {
-      try {
-        const supabase = getSupabase();
-        const start = Date.now();
-        let attempt = 0;
-        while (!cancelled && Date.now() - start < 3000) { // ~3s window
-          const { data: sess } = await supabase.auth.getSession();
-          const token = sess?.session?.access_token || null;
-          if (token) {
-            try {
-              const r = await fetch("/api/my-referral-link", { headers: { Authorization: `Bearer ${token}` } });
-              if (r.ok) {
-                const j = await r.json();
-                const url = (j?.referral_url || (j?.referral_code ? `${window.location.origin}/?ref=${j.referral_code}` : null)) as string | null;
-                if (url) { setShareReferralUrl(url); return; }
-              }
-            } catch {}
-          }
-          attempt += 1;
-          const backoff = Math.min(1000, 200 + attempt * 200);
-          await new Promise((r) => setTimeout(r, backoff));
-        }
-      } catch {}
-    }
-    if (user) {
-      fetchReferralWithRetry();
-    } else {
-      setShareReferralUrl(null);
-    }
-    return () => { cancelled = true; };
-  }, [user]);
+  // Remove separate session fetch; rely on useMe unified payload
 
   // Referral hint state: initialize from snapshot and subscribe for background resolve
   useEffect(() => {
@@ -279,30 +268,90 @@ export default function BelowMap() {
     refreshMe().catch(() => {});
   }, [dashboardOpen, dashboardMode, refreshMe]);
 
-  // Auto-refresh fallback: when referral_url becomes available, ensure UI enables immediately
+  // Removed auto-refresh fallback; server ensures referral_url in single profile response
+
+  // Dev-only: share mounted + pointer-events sanity
   useEffect(() => {
     try {
-      const current = (me?.referral_url || null) as string | null;
-      const prev = lastReferralUrlRef.current;
-      lastReferralUrlRef.current = current;
-      if (!prev && current && dashboardOpen && dashboardMode === 'user') {
-        // Soft refresh first
-        if (!autoRefreshedRef.current) {
-          autoRefreshedRef.current = true;
-          refreshMe().catch(() => {});
-          // Hard refresh if still disabled after a brief delay (storage-restricted clients)
-          setTimeout(() => {
-            try {
-              const stillMissing = !((me?.referral_url || '') as string);
-              if (stillMissing && typeof window !== 'undefined') {
-                window.location.reload();
-              }
-            } catch {}
-          }, 1200);
+      refDebug('share-mounted', { meHasUrl: !!me?.referral_url, profileHasUrl: !!me?.referral_url });
+      const btn = shareButtonRef.current;
+      if (!btn) return;
+      const style = getComputedStyle(btn);
+      if (style.pointerEvents === 'none') {
+        refDebug('overlay-blocking-clicks', { culpritSelector: 'button(self)' });
+        (btn as HTMLButtonElement).style.pointerEvents = 'auto';
+      }
+      let p: HTMLElement | null = btn.parentElement as HTMLElement | null;
+      while (p) {
+        const ps = getComputedStyle(p);
+        if (ps.pointerEvents === 'none') {
+          refDebug('overlay-blocking-clicks', { culpritSelector: p.tagName.toLowerCase() });
+          break;
         }
+        p = p.parentElement as HTMLElement | null;
       }
     } catch {}
-  }, [me?.referral_url, dashboardOpen, dashboardMode, refreshMe]);
+  }, [me?.referral_url]);
+
+  const getReferralUrl = useCallback(async (): Promise<string> => {
+    const stateUrl = referralUrl || (me?.referral_url || '') as string;
+    if (stateUrl) return stateUrl;
+    const resp = await fetch('/api/my-referral-link', { credentials: 'include', headers: { 'Cache-Control': 'no-store' } });
+    if (!resp.ok) throw new Error('Unable to fetch referral link');
+    const json = await resp.json();
+    const url = (json?.referral_url || '') as string;
+    if (!url) throw new Error('Referral link unavailable');
+    try { setReferralUrl(url); } catch {}
+    return url;
+  }, [referralUrl, me?.referral_url]);
+
+  const handleShareClick = useCallback(async (e: React.MouseEvent<HTMLButtonElement>) => {
+    try {
+      e.preventDefault();
+      refDebug('share-click', { t: Date.now(), kind: 'share-click', hasHandler: true, enabled: !shareLoading, referralInState: !!me?.referral_url });
+      setShareLoading(true);
+      const url = await getReferralUrl();
+      // Open Share UI immediately after resolving URL
+      try { setShareOpen(true); } catch {}
+      // Try Web Share API on HTTPS
+      if (typeof navigator !== 'undefined' && 'share' in navigator && typeof window !== 'undefined' && window.location.protocol === 'https:') {
+        try {
+          const n = navigator as Navigator & { share: (data: ShareData) => Promise<void> };
+          await n.share({ url, title: 'Share my river link' });
+          setAnnounce('Share sheet opened');
+          refDebug('share-click-success', { hadUrl: !!url, path: 'navigator.share' });
+          return;
+        } catch {}
+      }
+      // Clipboard API
+      try {
+        await navigator.clipboard.writeText(url);
+        setAnnounce('Link copied!');
+        refDebug('share-click-success', { hadUrl: !!url, path: 'clipboard' });
+        return;
+      } catch {}
+      // Fallback: hidden textarea
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'absolute';
+        ta.style.left = '-10000px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        setAnnounce('Link copied!');
+        refDebug('share-click-success', { hadUrl: !!url, path: 'textarea-fallback' });
+        return;
+      } catch (err) {
+        setAnnounce('Unable to copy link');
+        refDebug('share-click-fail', { error: (err as Error)?.message || String(err) });
+      }
+    } finally {
+      setShareLoading(false);
+    }
+  }, [getReferralUrl, me?.referral_url, shareLoading]);
 
   // Manage focus when switching into/out of the inline Share view
   useEffect(() => {
@@ -730,8 +779,7 @@ export default function BelowMap() {
                             const j = await r.json();
                             exists = !!j?.exists;
                           } catch {}
-                          // Prewarm dashboard data in background so Share is instant post-verify
-                          try { fetch('/api/me', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailNorm }) }).then(res => res.json()).then(j => { try { localStorage.setItem('river.prewarm.me', JSON.stringify(j?.me || {})); } catch {} }).catch(() => {}); } catch {}
+                          // No client prewarm; server profile is authoritative
                           if (exists) {
                             // Existing user → send login OTP and go to Screen D
                             const { error: signInErr } = await supabase.auth.signInWithOtp({ email: emailNorm, options: { shouldCreateUser: false } });
@@ -836,8 +884,6 @@ export default function BelowMap() {
                                 boat_color: boatColor,
                               }),
                             });
-                            // Hydrate from prewarm cache immediately; then revalidate
-                            try { const cached = JSON.parse(localStorage.getItem('river.prewarm.me') || 'null'); if (cached && !cached.referral_url && cached.referral_code) { const base = window.location.origin; cached.referral_url = `${base}/?ref=${cached.referral_code}`; } if (cached) { /* noop: useMe will re-fetch, but dashboard reads from hook state */ } } catch {}
                             try { await refreshMe(); } catch {}
                             setDashboardMode('user');
                             setShareOpen(false);
@@ -883,8 +929,6 @@ export default function BelowMap() {
                                 boat_color: boatColor,
                               }),
                             });
-                            // Hydrate from prewarm cache immediately; then revalidate
-                            try { const cached = JSON.parse(localStorage.getItem('river.prewarm.me') || 'null'); if (cached && !cached.referral_url && cached.referral_code) { const base = window.location.origin; cached.referral_url = `${base}/?ref=${cached.referral_code}`; } } catch {}
                             try { await refreshMe(); } catch {}
                             setDashboardMode('user');
                             setShareOpen(false);
@@ -1148,9 +1192,9 @@ export default function BelowMap() {
                     <button
                       ref={shareButtonRef}
                       className="w-full min-h-12 rounded-[24px] font-seasons text-white"
+                      type="button"
                       aria-label="Share Your Boat"
-                      onClick={() => setShareOpen(true)}
-                      disabled={!((shareReferralUrl || me?.referral_url) as string | null)}
+                      onClick={handleShareClick}
                       style={{ background: 'var(--teal)' }}
                     >
                       Share Your Boat
@@ -1219,9 +1263,9 @@ export default function BelowMap() {
                           <button
                             ref={shareButtonRef}
                             className="w-full min-h-14 rounded-[24px] font-seasons text-white transition-all duration-300 ease-out"
+                            type="button"
                             aria-label="Share Your Boat"
-                            onClick={() => setShareOpen(true)}
-                            disabled={!((shareReferralUrl || me?.referral_url) as string | null)}
+                            onClick={handleShareClick}
                             style={{ background: 'var(--teal)' }}
                           >
                             Share Your Boat
@@ -1235,14 +1279,14 @@ export default function BelowMap() {
                             </div>
                             <h4 id="share-title" ref={shareHeadingRef} tabIndex={-1} className="font-seasons text-lg mb-2" aria-label="Share">Share</h4>
                             <div className="grid grid-cols-2 gap-4">
-                              <ShareTiles referralUrl={(shareReferralUrl || me?.referral_url || '') as string} message={shareMessage} userFullName={me?.name || ''} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
+                              <ShareTiles referralUrl={(me?.referral_url || '') as string} message={shareMessage} userFullName={me?.name || ''} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
                             </div>
                             <div className="mt-3 space-y-2">
                               <label className="font-sans text-sm" htmlFor="shareMessage">Message</label>
                               <textarea id="shareMessage" className="w-full border rounded-md px-3 py-2" rows={4} value={shareMessage} onChange={(e) => setShareMessage(e.target.value)} />
                               <div className="flex items-center gap-2">
-                                <input className="flex-1 border rounded-md px-3 py-2 bg-background" value={(shareReferralUrl || me?.referral_url || '') as string} readOnly aria-label="Referral link" />
-                                <button type="button" className="rounded-md px-3 py-2 btn" onClick={async () => { try { await navigator.clipboard.writeText(`${shareMessage} ${(shareReferralUrl || me?.referral_url || '') as string}`); setAnnounce('Copied invite to clipboard'); } catch {} }}>Copy</button>
+                                <input className="flex-1 border rounded-md px-3 py-2 bg-background" value={(me?.referral_url || '') as string} readOnly aria-label="Referral link" />
+                                <button type="button" className="rounded-md px-3 py-2 btn" onClick={async () => { try { await navigator.clipboard.writeText(`${shareMessage} ${(me?.referral_url || '') as string}`); setAnnounce('Copied invite to clipboard'); } catch {} }}>Copy</button>
                               </div>
                             </div>
                           </div>

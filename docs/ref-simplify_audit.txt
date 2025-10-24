@@ -1,0 +1,55 @@
+Phase 0 — Referral Simplification Audit (write-only)
+
+Targets and findings (quote ≤3 lines + file:line):
+
+1) Client minting in BelowMap.tsx (prior ~709–722, ~788–802, ~837–851)
+- Status: No client-side referral_id minting present now. Verify-only lines below show POST body without referral_id.
+```792:805:/Users/eshaansood/Where-the-river/web/components/BelowMap.tsx
+                              body: JSON.stringify({
+                                name,
+                                email,
+                                country_code: country,
+                                message: favoriteSong,
+                                photo_url: null,
+                                referred_by: referredByCode,
+                                boat_color: boatColor,
+                              }),
+```
+
+2) Share disabled path tied to me.referral_url in BelowMap.tsx (~1115–1119)
+```1115:1121:/Users/eshaansood/Where-the-river/web/components/BelowMap.tsx
+                    <button
+                      ...
+                      onClick={() => setShareOpen(true)}
+                      disabled={!((me?.referral_url || '') as string | null)}
+                      style={{ background: 'var(--teal)' }}
+                    >
+```
+```1188:1192:/Users/eshaansood/Where-the-river/web/components/BelowMap.tsx
+                            onClick={() => setShareOpen(true)}
+                            disabled={!((me?.referral_url || '') as string)}
+                            style={{ background: 'var(--teal)' }}
+```
+
+3) Email-gated referral fetch in hooks/useMe.ts (~98–131)
+```64:72:/Users/eshaansood/Where-the-river/web/hooks/useMe.ts
+    const resp = await fetch(`${baseUrl}/api/me`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+    ...
+    const code = (m.ref_code_8 || m.referral_code || null) as string | null;
+    const referral_url = (m.referral_url ?? (code ? `${baseUrl}/?ref=${code}` : null)) as string | null;
+```
+
+4) /api/users/upsert reading referral_id from request body
+- Status: Compliant. Server ignores client referral_id and applies server-only attribution; mirrors canonical via RPC.
+```10:13:/Users/eshaansood/Where-the-river/web/app/api/users/upsert/route.ts
+  const { name, email, country_code, message, photo_url, /* referred_by (ignored) */ boat_color } = body || {} as Record<string, unknown>;
+```
+```86:106:/Users/eshaansood/Where-the-river/web/app/api/users/upsert/route.ts
+  // Server-side attribution only (no client body): prefer HttpOnly cookie, then URL ?ref=, first-click wins
+  ... applied_source: appliedFrom ...
+```
+
+Notes:
+- /api/me already mints on read if absent, mirrors to auth metadata, returns { name, country, referral_id/referral_code, referral_url }, and sends Cache-Control: no-store.
+- Client still uses localStorage to prewarm and to build a fallback referral_url from cached code; to be removed in Phase 2.
+

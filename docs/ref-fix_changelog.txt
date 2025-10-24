@@ -1,0 +1,22 @@
+Referral Fix — Changelog
+
+- Unified read: name/country/referral from one profile payload (/api/me)
+- Server-only: capture, mint, attribution; client is UI-only
+- Removed client mint/localStorage/extra endpoints
+
+Quick test results
+1) New user, same tab
+   - Landed with ?ref=CODE → OTP/verify → dashboard loaded once → profile payload included referral_url → Share enabled immediately (no refresh).
+2) Private Browsing/new tab
+   - Landed with ?ref=CODE → OTP redirectTo threaded ?ref=CODE → server set referred_by via HttpOnly cookie/URL → profile payload included referral_url → Share enabled.
+3) Existing user
+   - Dashboard single profile payload included referral_url; Share enabled without email gating.
+
+Guarantees
+- No client-generated codes; first-click-wins preserved; user referral code immutable after mint.
+
+Notes (final pass)
+- Share: removed disable-by-me.referral_url; now shows loading until profile payload arrives.
+- useMe.ts: session-based profile fetch; removed email gating and localStorage fallback.
+- Server upsert unchanged; cookie/URL attribution only.
+

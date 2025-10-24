@@ -4,22 +4,33 @@ import { getCountryNameFromCode } from "@/lib/countryMap";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { email } = body || {};
-    if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    const { email } = (body || {}) as { email?: string };
 
     // Source of truth: Supabase Auth Admin users (metadata)
-    const { data: list, error: listErr } = await supabaseServer.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    if (listErr) return NextResponse.json({ error: listErr.message }, { status: 400 });
-    type AdminUser = {
-      id: string;
-      email: string | null;
-      user_metadata?: Record<string, unknown> | null;
-      raw_user_meta_data?: Record<string, unknown> | null;
-    };
-    const users = (list?.users || []) as AdminUser[];
-    const target = users.find((u) => (u.email || "").toLowerCase() === String(email).toLowerCase());
-    if (!target) return NextResponse.json({ exists: false }, { status: 404 });
+    // Try Authorization Bearer first (session-based), then fall back to email lookup
+    let target: { id: string; email: string | null; user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null } | null = null;
+    const authz = req.headers.get('authorization') || req.headers.get('Authorization');
+    if (authz && authz.startsWith('Bearer ')) {
+      const token = authz.slice(7);
+      try {
+        const { data: userRes, error: userErr } = await supabaseServer.auth.getUser(token);
+        if (!userErr && userRes?.user) {
+          const u = userRes.user as { id: string; email: string | null; user_metadata?: Record<string, unknown> | null };
+          target = { id: u.id, email: u.email, user_metadata: (u.user_metadata || null), raw_user_meta_data: (u.user_metadata || null) };
+        }
+      } catch {}
+    }
+    if (!target) {
+      if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+      const { data: list, error: listErr } = await supabaseServer.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (listErr) return NextResponse.json({ error: listErr.message }, { status: 400, headers: { "Cache-Control": "no-store" } });
+      type AdminUser = { id: string; email: string | null; user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null };
+      const users = (list?.users || []) as AdminUser[];
+      const found = users.find((u) => (u.email || "").toLowerCase() === String(email).toLowerCase());
+      if (!found) return NextResponse.json({ exists: false }, { status: 404, headers: { "Cache-Control": "no-store" } });
+      target = found as { id: string; email: string | null; user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null };
+    }
 
     type AuthMeta = { name?: string | null; country_code?: string | null; message?: string | null; boat_color?: string | null; boats_total?: number | null; referral_id?: string | null };
     const meta = ((target.user_metadata || target.raw_user_meta_data) || {}) as AuthMeta;
@@ -99,6 +110,7 @@ export async function POST(req: Request) {
         message,
         boat_color,
         boats_total,
+        referral_id: referral_code,
         referral_code,
         ref_code_8: referral_code,
         referral_url,

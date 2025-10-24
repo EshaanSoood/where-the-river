@@ -1,0 +1,23 @@
+Runtime Audit — Share Button (dev)
+
+Mount state:
+- share-mounted logged with flags: meHasUrl, profileHasUrl
+
+Click path instrumentation:
+- on click: logs { t, kind: 'share-click', hasHandler: true, enabled, referralInState }
+- last-mile read: GET /api/my-referral-link if state empty
+- success path: navigator.share OR clipboard OR textarea-fallback
+
+CSS/DOM checks:
+- pointer-events on button and ancestors logged if blocking
+- dev-only pointerEvents auto-enable applied when necessary
+
+Latest observation (to be updated after manual test):
+- handleShareClick fired: TBD
+- had state referral_url at click: TBD
+- session fetch returned url: TBD
+- path used (share/clipboard/fallback): TBD
+- overlay/pointer-events issue: TBD
+- PASS/FAIL: TBD (must share/copy on first click without reload)
+
+

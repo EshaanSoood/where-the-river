@@ -9,10 +9,7 @@ import { geoCentroid, geoBounds } from 'd3-geo';
 // GLB support (instantiate only in onGlobeReady)
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+// GLTFLoader and SkeletonUtils are dynamically imported in onGlobeReady to reduce cold-start cost
 
 interface CountriesData {
     features: any[];
@@ -88,22 +85,66 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const highFpsAccumMsRef = useRef<number>(0);
   const lastFpsEvalRef = useRef<number>(performance.now());
   const isHiddenRef = useRef<boolean>(false);
+  const safeProfileRef = useRef<boolean>(false);
+  const lowFpsKillAccumMsRef = useRef<number>(0);
+  const devHudEnabledRef = useRef<boolean>(false);
+  const hudElRef = useRef<HTMLDivElement | null>(null);
+  const frameTimesRef = useRef<number[]>([]);
+  const heapBaseRef = useRef<number | null>(null);
+  const lastHeapLogRef = useRef<number>(performance.now());
   // GLB template refs
   const boatTemplateRef = useRef<THREE.Object3D | null>(null);
   const boatTemplateMaterialRef = useRef<THREE.Material | null>(null);
   const glbLoadedRef = useRef<boolean>(false);
-  const boatsRef = useRef<{ id: number; mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; startTime: number; duration: number }[]>([]);
+  const boatsRef = useRef<{ id: number; mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; startTime: number; duration: number; isPlaceholder?: boolean }[]>([]);
   const boatArcKeysRef = useRef<Set<string>>(new Set());
   const pendingSpawnsRef = useRef<{ curve: THREE.CatmullRomCurve3; arcKey: string }[]>([]);
+  const cloneFnRef = useRef<null | ((obj: THREE.Object3D) => THREE.Object3D)>(null);
+  const fpsRef = useRef<number>(0);
+  useEffect(() => { fpsRef.current = fps; }, [fps]);
 
-  // FPS Counter
+  // FPS Counter + Dev HUD metrics
   useEffect(() => {
     let frameId: number = 0;
     let lastTime = performance.now();
     let frameCount = 0;
+    // enable HUD via ?hud=1 or ?debug=1
+    try {
+      const qs = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      devHudEnabledRef.current = !!(qs && (qs.get('hud') === '1' || qs.get('debug') === '1'));
+    } catch {}
     const trackFps = (time: number) => {
       frameCount++;
+      frameTimesRef.current.push(time - lastTime);
+      if (frameTimesRef.current.length > 600) frameTimesRef.current.splice(0, frameTimesRef.current.length - 600);
       if (time - lastTime >= 1000) { setFps(frameCount); frameCount = 0; lastTime = time; }
+      // Dev HUD sampling (once per ~500ms)
+      if (devHudEnabledRef.current && hudElRef.current && rendererRef.current) {
+        const now = performance.now();
+        if (now - lastHeapLogRef.current >= 500) {
+          lastHeapLogRef.current = now;
+          try {
+            // 1% low FPS
+            const times = frameTimesRef.current.slice();
+            times.sort((a, b) => a - b);
+            const idx = Math.max(0, Math.floor(times.length * 0.99) - 1);
+            const p99Ms = times[idx] || 0;
+            const onePercentLow = p99Ms > 0 ? Math.round(1000 / p99Ms) : 0;
+            const info = (rendererRef.current as any)?.info;
+            const draws = info?.render?.calls ?? 0;
+            const geoms = info?.memory?.geometries ?? 0;
+            const textures = info?.memory?.textures ?? 0;
+            let heapLine = '';
+            const mem: any = (performance as any).memory;
+            if (mem && typeof mem.usedJSHeapSize === 'number') {
+              if (heapBaseRef.current == null) heapBaseRef.current = mem.usedJSHeapSize;
+              const delta = mem.usedJSHeapSize - (heapBaseRef.current || 0);
+              heapLine = ` heapΔ ${(delta/1024/1024).toFixed(1)}MB`;
+            }
+            hudElRef.current.textContent = `${fps} fps | 1% ${onePercentLow} | draws ${draws} | geo ${geoms} | tex ${textures}${heapLine}`;
+          } catch {}
+        }
+      }
       frameId = requestAnimationFrame(trackFps);
     };
     frameId = requestAnimationFrame(trackFps);
@@ -129,6 +170,17 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         // neutral
         lowFpsAccumMsRef.current = Math.max(0, lowFpsAccumMsRef.current - dt * 0.5);
         highFpsAccumMsRef.current = Math.max(0, highFpsAccumMsRef.current - dt * 0.5);
+      }
+      // Safe profile kill-switch: fps < 24 for 5s
+      if (fps > 0 && fps < 24) {
+        lowFpsKillAccumMsRef.current += dt;
+      } else {
+        lowFpsKillAccumMsRef.current = Math.max(0, lowFpsKillAccumMsRef.current - dt * 0.5);
+      }
+      if (!safeProfileRef.current && lowFpsKillAccumMsRef.current >= 5000) {
+        safeProfileRef.current = true;
+        try { renderer.setPixelRatio?.(1.0); dprRef.current = 1.0; } catch {}
+        stopRotateInterval();
       }
       // Drop DPR if sustained low fps
       if (lowFpsAccumMsRef.current >= 3000) {
@@ -300,6 +352,21 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   }, []);
 
   const globeMaterial = useMemo(() => new THREE.MeshPhongMaterial({ color: '#a8c5cd', opacity: 0.6, transparent: true }), []);
+  useEffect(() => { try { (globeMaterial as any).toneMapped = false; } catch {} }, [globeMaterial]);
+
+  const rendererConfig = useMemo(() => {
+    try {
+      const nav: any = typeof navigator !== 'undefined' ? navigator : {};
+      const ua = String(nav.userAgent || '').toLowerCase();
+      const isMobile = /iphone|ipad|android/.test(ua);
+      const qs = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const forceHigh = !!(qs && qs.get('hp') === '1');
+      const powerPreference = (lowPowerRef.current || isMobile) && !forceHigh ? 'low-power' : 'high-performance';
+      return { powerPreference, alpha: true, antialias: true, precision: lowPowerRef.current ? 'mediump' : 'highp' } as any;
+    } catch {
+      return { powerPreference: 'low-power', alpha: true, antialias: true } as any;
+    }
+  }, []);
 
   // Controls/Camera/Renderer and GLB preload
   const onGlobeReady = () => {
@@ -322,10 +389,30 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     const scene = sceneRef.current; if (scene) scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     refitCameraRef.current = () => { try { if (!globeEl.current) return; const newFit = getFitDistance(); const prevFit = baselineDistanceRef.current || newFit; const dist = camera.position.length(); const ratio = Math.max(0.0001, dist / prevFit); baselineDistanceRef.current = newFit; controls.maxDistance = newFit; controls.minDistance = Math.max(newFit / 3, 80); const dir = camera.position.clone().normalize(); camera.position.copy(dir.multiplyScalar(newFit * ratio)); camera.updateProjectionMatrix(); } catch {} };
     setIsGlobeReady(true);
+    // One-time log of chosen caps
+    try {
+      const nav: any = typeof navigator !== 'undefined' ? navigator : {};
+      // eslint-disable-next-line no-console
+      console.log('[GlobeNew] caps', {
+        dpr: dprRef.current,
+        rendererPower: (renderer as any)?.getContext?.()?.getContextAttributes?.()?.powerPreference || '(unknown)',
+        deviceMemory: nav.deviceMemory,
+        lowPower: lowPowerRef.current
+      });
+    } catch {}
     // Preload GLB boat once (SSR-safe)
     try {
       if (!glbLoadedRef.current) {
-        const loader = new GLTFLoader();
+        // Dynamic import to reduce cold-start
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        import('three/examples/jsm/utils/SkeletonUtils.js').then((m: any) => { try { cloneFnRef.current = m?.clone || null; } catch {} }).catch(() => {});
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        import('three/examples/jsm/loaders/GLTFLoader.js').then((mod: any) => {
+          const GLTFLoaderClass = mod?.GLTFLoader;
+          if (!GLTFLoaderClass) return;
+          const loader = new GLTFLoaderClass();
         const base = (typeof window !== 'undefined' ? window.location.origin : '') || '';
         const BOAT_ASSET_VERSION = (process.env.NEXT_PUBLIC_BOAT_ASSET_VERSION || '1');
         const url = base ? new URL(`/paper_boat.glb?v=${encodeURIComponent(BOAT_ASSET_VERSION)}`, base).toString() : `/paper_boat.glb?v=${encodeURIComponent(BOAT_ASSET_VERSION)}`;
@@ -342,15 +429,18 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
               glbLoadedRef.current = true;
               // Spawn any pending boats now that the model is ready
               try {
-                pendingSpawnsRef.current.splice(0).forEach(({ curve, arcKey }) => {
-                  spawnBoatFromCurve(curve, arcKey);
-                });
+                  if (!safeProfileRef.current && fpsRef.current >= 28) {
+                    pendingSpawnsRef.current.splice(0).forEach(({ curve, arcKey }) => {
+                      spawnBoatFromCurve(curve, arcKey);
+                    });
+                  }
               } catch {}
             } catch {}
-          },
-          undefined,
-          () => { /* ignore error */ }
-        );
+            },
+            undefined,
+            () => { /* ignore error */ }
+          );
+        }).catch(() => {});
       }
     } catch {}
   };
@@ -400,21 +490,22 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const overlayUpdatePendingRef = useRef<boolean>(false);
   const scheduleOverlayUpdate = () => { if (overlayUpdatePendingRef.current) return; overlayUpdatePendingRef.current = true; requestAnimationFrame(() => { overlayUpdatePendingRef.current = false; try { const globe = globeEl.current; if (!globe) return; overlayNodes.forEach(n => { const el = overlayRefs.current.get(n.id); if (!el) return; const px = projectLatLngIfFront(n.lat, n.lng); if (!px) { el.style.opacity = '0'; return; } el.style.left = `${px.x}px`; el.style.top = `${px.y}px`; el.style.opacity = '1'; }); } catch {} }); };
 
-  // --- Boat animation loop (single-boat) with fixed-step simulation ---
+  // --- Boat animation loop (single-boat) with fixed-step simulation (allocation-free) ---
   useEffect(() => {
     let rafId: number;
-    const TICK_MS_ACTIVE = 33; // ~30Hz
     const TICK_MS_HIDDEN = 1000; // 1Hz when hidden (user-requested)
     let lastTick = performance.now();
+    const pos = new THREE.Vector3();
+    const tan = new THREE.Vector3();
     const animate = () => {
       const now = performance.now();
-      const tickMs = isHiddenRef.current ? TICK_MS_HIDDEN : TICK_MS_ACTIVE;
+      const tickMs = isHiddenRef.current ? TICK_MS_HIDDEN : (safeProfileRef.current ? 50 : 33);
       if (now - lastTick >= tickMs) {
         lastTick = now;
         boatsRef.current.forEach(boat => {
           const elapsed = now - boat.startTime;
           const t = (elapsed / boat.duration) % 1.0;
-          const pos = boat.curve.getPointAt(t);
+          boat.curve.getPointAt(t, pos);
           try {
             const globe = globeEl.current; const cam = globe?.camera();
             if (cam) {
@@ -424,7 +515,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
             }
           } catch {}
           boat.mesh.position.copy(pos);
-          const tan = boat.curve.getTangentAt(t);
+          boat.curve.getTangentAt(t, tan);
           boat.mesh.up.copy(pos).normalize();
           boat.mesh.lookAt(pos.clone().add(tan));
         });
@@ -450,6 +541,15 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     };
   }, []);
 
+  const proceduralBoatMaterialRef = useRef<THREE.Material | null>(null);
+  const createProceduralBoat = () => {
+    const geom = new THREE.ConeGeometry(2.5, 6, 3);
+    if (!proceduralBoatMaterialRef.current) proceduralBoatMaterialRef.current = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const mesh = new THREE.Mesh(geom, proceduralBoatMaterialRef.current);
+    mesh.castShadow = false; (mesh as any).receiveShadow = false;
+    return mesh as THREE.Mesh;
+  };
+
   const spawnBoatAlongArc = (startLat: number, startLng: number, endLat: number, endLng: number, arcKey?: string) => {
     try {
       const globe = globeEl.current; const scene = sceneRef.current || (globe ? globe.scene() : null); if (!globe || !scene) return;
@@ -459,19 +559,23 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       const e = new THREE.Vector3(eC.x, eC.y, eC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
       const mid = new THREE.Vector3().addVectors(s, e).multiplyScalar(0.5).normalize().multiplyScalar(GLOBE_RADIUS * (1 + ARC_ALTITUDE));
       const curve = new THREE.CatmullRomCurve3([s, mid, e]);
-      // If GLB not ready yet, queue the spawn
-      if (!boatTemplateRef.current) {
-        pendingSpawnsRef.current.push({ curve, arcKey: arcKey || `${startLat},${startLng}->${endLat},${endLng}` });
+      const key = arcKey || `${startLat},${startLng}->${endLat},${endLng}`;
+      if (!boatTemplateRef.current || safeProfileRef.current) {
+        // Spawn procedural fallback immediately and record for later upgrade
+        spawnProceduralBoatFromCurve(curve, key);
+        if (boatTemplateRef.current && !safeProfileRef.current) return;
+        pendingSpawnsRef.current.push({ curve, arcKey: key });
         return;
       }
-      spawnBoatFromCurve(curve, arcKey || `${startLat},${startLng}->${endLat},${endLng}`);
+      spawnBoatFromCurve(curve, key);
     } catch {}
   };
 
   const spawnBoatFromCurve = (curve: THREE.CatmullRomCurve3, arcKey: string) => {
     const scene = sceneRef.current; const globe = globeEl.current; if (!scene || !globe) return;
     try {
-      const cloned = skeletonClone(boatTemplateRef.current!) as THREE.Object3D;
+      const src = boatTemplateRef.current!;
+      const cloned = (cloneFnRef.current ? cloneFnRef.current(src) : src.clone(true)) as THREE.Object3D;
       cloned.traverse((child: any) => { if (child.isMesh) { if (boatTemplateMaterialRef.current) child.material = boatTemplateMaterialRef.current; child.castShadow = false; child.receiveShadow = false; } });
       cloned.scale.set(6, 6, 6);
       // Initial placement & orientation at t=0 for immediate visibility
@@ -482,16 +586,35 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       cloned.lookAt(pos0.clone().add(tan0));
       // Cap to two boats: remove oldest if exceeding
       if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
-      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned as unknown as THREE.Mesh, curve, startTime: performance.now(), duration: 15000 });
+      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned as unknown as THREE.Mesh, curve, startTime: performance.now(), duration: 15000, isPlaceholder: false });
       scene.add(cloned);
     } catch {}
   };
 
+  const spawnProceduralBoatFromCurve = (curve: THREE.CatmullRomCurve3, arcKey: string) => {
+    const scene = sceneRef.current; if (!scene) return;
+    try {
+      const mesh = createProceduralBoat();
+      const pos0 = curve.getPointAt(0);
+      const tan0 = curve.getTangentAt(0);
+      mesh.position.copy(pos0);
+      (mesh as any).up.copy(pos0).normalize();
+      (mesh as any).lookAt(pos0.clone().add(tan0));
+      if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
+      boatsRef.current.push({ id: Date.now() + Math.random(), mesh, curve, startTime: performance.now(), duration: 15000, isPlaceholder: true });
+      scene.add(mesh);
+    } catch {}
+  };
+
   const arcResolution = useMemo(() => {
-    // Base 24; reduce on low-power or wide zoom-outs to bound vertices
-    if (lowPowerRef.current) return 16;
-    if (zoomScale <= 0.9) return 18;
-    return 24;
+    // Dynamic segments by approximate screen scale; clamp for bounds
+    const rect = rendererRef.current?.domElement?.getBoundingClientRect?.();
+    const width = rect?.width || (typeof window !== 'undefined' ? window.innerWidth : 1200);
+    const pxScale = Math.min(1.6, Math.max(0.7, (dprRef.current || 1) * (width / 1200)));
+    let seg = Math.round(16 + 8 * Math.min(1, zoomScale * pxScale));
+    if (lowPowerRef.current || safeProfileRef.current) seg -= 4;
+    seg = Math.max(12, Math.min(24, seg));
+    return seg;
   }, [zoomScale]);
 
   return (
@@ -499,6 +622,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       <div style={{ position: 'absolute', top: '10px', left: '10px', color: 'white', backgroundColor: 'rgba(0,0,0,0.5)', padding: '5px 8px', borderRadius: '3px', fontFamily: "'Roboto Mono', monospace", fontSize: '12px', zIndex: 100 }}>
         {fps} FPS
       </div>
+      {devHudEnabledRef.current && (
+        <div ref={hudElRef} style={{ position: 'absolute', top: '28px', left: '10px', color: 'white', backgroundColor: 'rgba(0,0,0,0.5)', padding: '5px 8px', borderRadius: '3px', fontFamily: "'Roboto Mono', monospace", fontSize: '12px', zIndex: 100 }} />
+      )}
       <div aria-live="polite" role="status" style={{ position: 'absolute', left: -9999, top: 'auto', width: 1, height: 1, overflow: 'hidden' }}>
         {srSummary}
       </div>
@@ -508,6 +634,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       <ReactGlobe
         ref={globeEl}
         onGlobeReady={onGlobeReady}
+        rendererConfig={rendererConfig}
         backgroundColor="#000010"
         globeMaterial={globeMaterial}
         atmosphereColor="#66c2ff"

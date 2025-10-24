@@ -12,6 +12,7 @@ export type MeData = {
   message: string | null;
   boat_color: string | null;
   boats_total: number;
+  referral_id: string | null;
   ref_code_8: string | null;
   referral_code: string | null;
   referral_url: string | null;
@@ -42,46 +43,23 @@ export function useMe(emailOverride?: string | null): UseMeResult {
   }, []);
 
   const fetchMe = useCallback(async () => {
-    if (!email) return;
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch(`${baseUrl}/api/me`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
-      });
-      if (resp.status === 401) {
-        // Auth/session race: retry once shortly after
-        await new Promise((r) => setTimeout(r, 300));
-        const retry = await fetch(`${baseUrl}/api/me`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
-        if (!retry.ok) throw new Error(`Failed to fetch me: ${retry.status}`);
-        const json = await retry.json();
-        const m = json?.me as Partial<MeData> | undefined;
-        if (!m) throw new Error("Malformed response");
-        const code = (m.ref_code_8 || m.referral_code || null) as string | null;
-        const referral_url = (m.referral_url ?? (code ? `${baseUrl}/?ref=${code}` : null)) as string | null;
-        const boats_total = typeof m.boats_total === "number" ? m.boats_total : 0;
-        setMe({
-          email: String(m.email || email),
-          name: (m.name ?? null) as string | null,
-          country_code: (m.country_code ?? null) as string | null,
-          country_name: (m.country_name ?? null) as string | null,
-          message: (m.message ?? null) as string | null,
-          boat_color: (m.boat_color ?? null) as string | null,
-          boats_total,
-          ref_code_8: (m.ref_code_8 ?? null) as string | null,
-          referral_code: (m.referral_code ?? null) as string | null,
-          referral_url,
-        });
-        return;
-      }
+      // Session-based unified server read; body optional
+      let headers: Record<string, string> = { "Content-Type": "application/json" };
+      try {
+        const supabase = getSupabase();
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {}
+      const resp = await fetch(`${baseUrl}/api/me`, { method: "POST", headers, body: JSON.stringify(email ? { email } : {}) });
       if (!resp.ok) throw new Error(`Failed to fetch me: ${resp.status}`);
       const json = await resp.json();
       const m = json?.me as Partial<MeData> | undefined;
       if (!m) throw new Error("Malformed response");
-      const code = (m.ref_code_8 || m.referral_code || null) as string | null;
-      const referral_url = (m.referral_url ?? (code ? `${baseUrl}/?ref=${code}` : null)) as string | null;
+      const referral_url = (m.referral_url ?? null) as string | null;
       const boats_total = typeof m.boats_total === "number" ? m.boats_total : 0;
       setMe({
         email: String(m.email || email),
@@ -91,28 +69,11 @@ export function useMe(emailOverride?: string | null): UseMeResult {
         message: (m.message ?? null) as string | null,
         boat_color: (m.boat_color ?? null) as string | null,
         boats_total,
+        referral_id: (m.referral_id ?? null) as string | null,
         ref_code_8: (m.ref_code_8 ?? null) as string | null,
         referral_code: (m.referral_code ?? null) as string | null,
         referral_url,
       });
-      // Fallback: if referral_url still null, attempt session-based ensure-on-read
-      if (!referral_url) {
-        try {
-          const supabase = getSupabase();
-          const { data: sess } = await supabase.auth.getSession();
-          const token = sess?.session?.access_token;
-          if (token) {
-            const r2 = await fetch(`${baseUrl}/api/my-referral-link`, { headers: { Authorization: `Bearer ${token}` } });
-            if (r2.ok) {
-              const j2 = await r2.json();
-              if (j2 && (j2.referral_url || j2.referral_code)) {
-                const url2 = (j2.referral_url ?? (j2.referral_code ? `${baseUrl}/?ref=${j2.referral_code}` : null)) as string | null;
-                setMe((prev) => prev ? { ...prev, referral_code: (prev.referral_code || j2.referral_code || null), ref_code_8: (prev.ref_code_8 || j2.referral_code || null), referral_url: url2 } : prev);
-              }
-            }
-          }
-        } catch {}
-      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
       setMe(null);
@@ -123,12 +84,8 @@ export function useMe(emailOverride?: string | null): UseMeResult {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!email) {
-      setMe(null);
-      return;
-    }
     fetchMe().catch(() => {});
-  }, [email, authLoading, fetchMe]);
+  }, [authLoading, fetchMe]);
 
   return { me, loading: authLoading || loading, error, refresh: fetchMe };
 }
