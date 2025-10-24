@@ -20,4 +20,9 @@ Latest observation (to be updated after manual test):
 - overlay/pointer-events issue: TBD
 - PASS/FAIL: TBD (must share/copy on first click without reload)
 
+Share UX update (2025-10-24):
+- Main button opens overlay only; all shares via tiles.
+- Verified: no navigator.share on main button; overlay opens on first click.
+- Outcome: PASS once overlay appears and tiles function.
+
 

@@ -45,8 +45,6 @@ export default function BelowMap() {
   const [dashboardMode, setDashboardMode] = useState<"guest" | "user">("guest");
   const { me, refresh: refreshMe } = useMe();
   const [shareOpen, setShareOpen] = useState(false);
-  const [shareReady, setShareReady] = useState(false);
-  const [shareAutoOpened, setShareAutoOpened] = useState(false);
   const [referralUrl, setReferralUrl] = useState<string>('');
   const [isLoadingReferral, setIsLoadingReferral] = useState<boolean>(true);
   const [shareLoading, setShareLoading] = useState(false);
@@ -69,15 +67,8 @@ export default function BelowMap() {
       // Initialize local referral state from profile
       if (isLoadingReferral) setIsLoadingReferral(false);
       if (url && url !== referralUrl) setReferralUrl(url);
-      if (!shareReady && url) {
-        setShareReady(true);
-        if (!shareOpen && !shareAutoOpened) {
-          setShareOpen(true);
-          setShareAutoOpened(true);
-        }
-      }
     } catch {}
-  }, [me?.referral_url, shareOpen, shareReady, shareAutoOpened, isLoadingReferral, referralUrl]);
+  }, [me?.referral_url, isLoadingReferral, referralUrl]);
   const anyPanelOpen = dashboardOpen || leaderboardOpen;
   const [accOpen, setAccOpen] = useState<{ how: boolean; why: boolean; who: boolean }>({ how: false, why: false, who: false });
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -306,52 +297,17 @@ export default function BelowMap() {
   }, [referralUrl, me?.referral_url]);
 
   const handleShareClick = useCallback(async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setShareLoading(true);
     try {
-      e.preventDefault();
-      refDebug('share-click', { t: Date.now(), kind: 'share-click', hasHandler: true, enabled: !shareLoading, referralInState: !!me?.referral_url });
-      setShareLoading(true);
-      const url = await getReferralUrl();
-      // Open Share UI immediately after resolving URL
-      try { setShareOpen(true); } catch {}
-      // Try Web Share API on HTTPS
-      if (typeof navigator !== 'undefined' && 'share' in navigator && typeof window !== 'undefined' && window.location.protocol === 'https:') {
-        try {
-          const n = navigator as Navigator & { share: (data: ShareData) => Promise<void> };
-          await n.share({ url, title: 'Share my river link' });
-          setAnnounce('Share sheet opened');
-          refDebug('share-click-success', { hadUrl: !!url, path: 'navigator.share' });
-          return;
-        } catch {}
-      }
-      // Clipboard API
-      try {
-        await navigator.clipboard.writeText(url);
-        setAnnounce('Link copied!');
-        refDebug('share-click-success', { hadUrl: !!url, path: 'clipboard' });
-        return;
-      } catch {}
-      // Fallback: hidden textarea
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = url;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'absolute';
-        ta.style.left = '-10000px';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        setAnnounce('Link copied!');
-        refDebug('share-click-success', { hadUrl: !!url, path: 'textarea-fallback' });
-        return;
-      } catch (err) {
-        setAnnounce('Unable to copy link');
-        refDebug('share-click-fail', { error: (err as Error)?.message || String(err) });
-      }
+      await getReferralUrl();
+      setShareOpen(true);
+      setAnnounce('');
+      refDebug('share-opened', { via: 'main-button' });
     } finally {
       setShareLoading(false);
     }
-  }, [getReferralUrl, me?.referral_url, shareLoading]);
+  }, [getReferralUrl]);
 
   // Manage focus when switching into/out of the inline Share view
   useEffect(() => {
@@ -1279,7 +1235,7 @@ export default function BelowMap() {
                             </div>
                             <h4 id="share-title" ref={shareHeadingRef} tabIndex={-1} className="font-seasons text-lg mb-2" aria-label="Share">Share</h4>
                             <div className="grid grid-cols-2 gap-4">
-                              <ShareTiles referralUrl={(me?.referral_url || '') as string} message={shareMessage} userFullName={me?.name || ''} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
+                              <ShareTiles referralUrl={referralUrl} message={shareMessage} userFullName={me?.name || ''} onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')} />
                             </div>
                             <div className="mt-3 space-y-2">
                               <label className="font-sans text-sm" htmlFor="shareMessage">Message</label>
