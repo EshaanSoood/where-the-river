@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     // 01 — signup payload (as received)
     await writeDiag("01-signup-payload.txt", [
       "Payload included name,email,country_code,boat_color → " + ((name && email && country_code && boat_color) ? "PASS" : "FAIL"),
-      JSON.stringify({ name, email, country_code, boat_color, message, photo_url, referred_by }, null, 2)
+      JSON.stringify({ name, email, country_code, boat_color, message, photo_url }, null, 2)
     ]);
 
     // Name validation: trim, collapse spaces, length 2..80, must contain a letter or digit
