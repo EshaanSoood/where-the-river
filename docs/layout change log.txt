@@ -1,0 +1,40 @@
+Layout changes — 2025-10-25 (desktop-only)
+
+- Guardrail: All edits are desktop-only; mobile sizes/spacing/behavior unchanged.
+
+Global
+- Soft rounded corners by default (~12px); light borders; removed panel drop shadows.
+- Consistent side gutters via page-frame/page-container: clamp(16px, 4vw, 32px).
+- Full-height on desktop with subtle top/bottom cushions; header/footer remain flush.
+
+Header (Participate · Title · Leaderboard)
+- Unified frosted header bar (3 columns), only bottom corners rounded.
+- Left: Participate uses compact aqua frosted style (navy text), accessible label kept.
+- Center: True H1 “Dream River”, white on navy frosted pill (heading, not a button).
+- Right: Leaderboard matches left (aqua frosted, navy icon/text), aria-label “Open leaderboard”.
+- Thin dividers between columns; slim vertical padding.
+
+Three-column layout (Left embeds · Center globe · Right text)
+- Grid uses items-stretch; outer boxes share top/bottom baselines; proportions ~1:2:1.
+- Right panel is the only internal scroller; page scroll stays enabled. Added generous padding/line-height and a subtle bottom gradient hint that appears only on overflow.
+- Center globe centered and square via aspect-ratio: 1 / 1; max-height: 100%.
+- Left panel: YouTube first (16:9, frosted), then Bandcamp auto-fills remaining height; ensured minimum space and accounted for padding so Bandcamp controls are visible.
+
+Panels
+- Frosted panels clip background/content to rounded shape; no dark slivers.
+
+Footer
+- Top corners rounded, bottom flush; icons left-aligned.
+- Standardized icons (20×20) with dark teal tint; fixed paths:
+  - Email: /logos/email.png
+  - YouTube: /Streaming/youtube.svg.png
+  - Apple Music: /Streaming/applemusic.svg
+  - Spotify: /Streaming/spotify.svg
+  - Bandcamp: /Streaming/bandcamp.svg.png (mask class available)
+
+Contrast
+- Dark text on light frosted panels uses deep ink; links teal; H1 is crisp white on navy.
+
+Gutters & alignment
+- Side gutters ~32px on large screens, ≥16px on small.
+- Final baseline check: outer boxes align within ~2px; inner content may vary slightly.

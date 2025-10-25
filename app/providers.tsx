@@ -3,6 +3,7 @@
 import PlausibleProvider from "next-plausible";
 import { PropsWithChildren } from "react";
 import { useEffect } from "react";
+import { getSupabase } from "@/lib/supabaseClient";
 import { ensureRefCapturedAndResolved } from "@/lib/referral";
 
 export default function Providers({ children }: PropsWithChildren) {
@@ -17,6 +18,16 @@ export default function Providers({ children }: PropsWithChildren) {
       }
     } catch {}
     ensureRefCapturedAndResolved().catch(() => {});
+  }, []);
+  useEffect(() => {
+    // Revalidate profile store on auth state changes
+    try {
+      const supabase = getSupabase();
+      const { data: sub } = supabase.auth.onAuthStateChange(() => {
+        try { window.dispatchEvent(new CustomEvent('profile:revalidate')); } catch {}
+      });
+      return () => { try { sub?.subscription.unsubscribe(); } catch {} };
+    } catch { return () => {} }
   }, []);
   return (
     <PlausibleProvider domain={domain || "localhost"} trackOutboundLinks>

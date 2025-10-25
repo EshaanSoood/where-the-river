@@ -64,7 +64,6 @@ export default function BelowMap() {
   useEffect(() => {
     try {
       const url = (me?.referral_url || '') as string;
-      // Initialize local referral state from profile
       if (isLoadingReferral) setIsLoadingReferral(false);
       if (url && url !== referralUrl) setReferralUrl(url);
     } catch {}
@@ -108,7 +107,7 @@ export default function BelowMap() {
       try { el.removeEventListener('scroll', update as EventListener); } catch {}
       try { window.removeEventListener('resize', update); } catch {}
     };
-  }, [rightPanelRef.current]);
+  }, [rightPanelRef]);
 
   const rewardTiers: { boats: number; title: string; subtitle: string; copy: string }[] = [
     { boats: 20, title: "Watch The Documentary", subtitle: "Early access documentary", copy: "Unlocks early access to a short film about Dream River and the making of this project." },
@@ -152,8 +151,8 @@ export default function BelowMap() {
   useEffect(() => {
     try {
       const update = () => {
-        const shouldLock = anyPanelOpen;
-        document.body.style.overflow = shouldLock ? 'hidden' : '';
+        const shouldLock = false; // keep page scroll enabled; panels manage their own scroll
+        document.body.style.overflow = '';
         const inertify = (el: HTMLElement | null, on: boolean) => {
           if (!el) return;
           if (on) {
@@ -287,14 +286,15 @@ export default function BelowMap() {
   const getReferralUrl = useCallback(async (): Promise<string> => {
     const stateUrl = referralUrl || (me?.referral_url || '') as string;
     if (stateUrl) return stateUrl;
-    const resp = await fetch('/api/my-referral-link', { credentials: 'include', headers: { 'Cache-Control': 'no-store' } });
-    if (!resp.ok) throw new Error('Unable to fetch referral link');
-    const json = await resp.json();
-    const url = (json?.referral_url || '') as string;
-    if (!url) throw new Error('Referral link unavailable');
-    try { setReferralUrl(url); } catch {}
-    return url;
-  }, [referralUrl, me?.referral_url]);
+    // Prefer profile store only; avoid calling a separate endpoint
+    await refreshMe();
+    const refreshed = (me?.referral_url || '') as string;
+    if (refreshed) {
+      try { setReferralUrl(refreshed); } catch {}
+      return refreshed;
+    }
+    throw new Error('Referral link unavailable');
+  }, [referralUrl, me?.referral_url, refreshMe]);
 
   const handleShareClick = useCallback(async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -358,19 +358,17 @@ export default function BelowMap() {
       {/* Header inside site container; not sticky */}
       <div className="top-0 z-40 lg:sticky" style={{ ['--hdr' as unknown as string]: '40px' }}>
         <div className="relative" ref={headerRef}>
-          <div
-            className="min-h-12 py-2.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
-            style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
-          >
-            <div className="grid grid-cols-3 items-center gap-2 w-full lg:[grid-template-columns:1fr_4fr_1fr]">
-              <div className="justify-self-start lg:min-w-[176px]">
+          {/* Desktop unified header bar */}
+          <div className="hidden lg:block header-bar">
+            <div className="grid grid-cols-3 items-center w-full px-2">
+              <div className="cell justify-self-start lg:min-w-[176px]">
                 {!loading && (
                   user ? (
                     <button
                       ref={dashboardToggleRef}
                       type="button"
-                      className="inline-flex items-center justify-center h-11 w-11 min-w-[44px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] shadow-sm"
-                      style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
+                      className="inline-flex items-center justify-center h-10 px-4 min-w-[44px] rounded-[16px] border text-[color:var(--ink)]"
+                      style={{ background: 'rgba(42,167,181,0.15)', border: '1.5px solid rgba(255,255,255,0.25)' }}
                       aria-label="Dashboard"
                       aria-controls="panel-dashboard"
                       aria-expanded={dashboardOpen}
@@ -382,8 +380,8 @@ export default function BelowMap() {
                     <button
                       ref={dashboardToggleRef}
                       type="button"
-                      className="inline-flex items-center h-11 px-5 min-w-[176px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] text-sm whitespace-nowrap overflow-hidden self-center shadow-sm"
-                      style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
+                      className="inline-flex items-center h-10 px-5 min-w-[140px] rounded-[16px] border text-[color:var(--navy)] text-sm whitespace-nowrap overflow-hidden self-center"
+                      style={{ background: 'rgba(42,167,181,0.15)', border: '1.5px solid rgba(255,255,255,0.25)' }}
                       aria-label="Participate"
                       aria-controls="panel-dashboard"
                       aria-expanded={dashboardOpen}
@@ -394,32 +392,88 @@ export default function BelowMap() {
                   )
                 )}
               </div>
-              <div className="justify-self-center w-full max-w-[560px] mx-auto min-w-0 text-center hidden lg:block">
+              <div className="cell justify-self-center w-full max-w-[560px] mx-auto min-w-0 text-center">
                 <div
-                  className="inline-block rounded-full px-5 py-2.5 align-middle"
+                  className="inline-block rounded-full px-6 py-2.5 align-middle"
                   style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', marginTop: 2, marginBottom: 2 }}
                 >
                   <h1
-                    className="font-seasons text-sm sm:text-base md:text-lg"
-                    style={{ lineHeight: 1.2, textShadow: '0 1px 1px rgba(17,17,17,0.25)' }}
+                    className="font-seasons text-white text-lg"
+                    style={{ lineHeight: 1.2 }}
                   >
                     Dream River
                   </h1>
                 </div>
               </div>
-              <div className="col-start-3 col-end-4 justify-self-end lg:min-w-[176px] w-full flex justify-end">
+              <div className="cell col-start-3 col-end-4 justify-self-end lg:min-w-[176px] w-full flex justify-end">
                 <button
                   type="button"
-                  aria-label="Leaderboard"
+                  aria-label="Open leaderboard"
                   aria-controls="panel-leaderboard"
                   aria-expanded={leaderboardOpen}
-                  className="inline-flex items-center justify-center h-11 w-11 min-w-[44px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] self-center shadow-sm"
-                  style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
+                  className="inline-flex items-center h-10 px-4 min-w-[140px] rounded-[16px] border text-[color:var(--navy)]"
+                  style={{ background: 'rgba(42,167,181,0.15)', border: '1.5px solid rgba(255,255,255,0.25)' }}
                   onClick={() => setLeaderboardOpen(v => !v)}
                   onKeyDown={(e) => { if (e.key === 'Escape') setLeaderboardOpen(false); }}
                 >
-                  <img src="/logos/trophy.svg" alt="" width="18" height="18" aria-hidden="true" className="header-icon" />
+                  <img src="/logos/trophy.svg" alt="" width="18" height="18" aria-hidden="true" className="header-icon" style={{ filter: 'none' }} />
+                  <span className="ml-2">Leaderboard</span>
                 </button>
+              </div>
+            </div>
+          </div>
+          {/* Mobile header remains unchanged below */}
+          <div className="lg:hidden">
+            <div
+              className="min-h-12 py-2.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
+              style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+            >
+              <div className="grid grid-cols-3 items-center gap-2 w-full lg:[grid-template-columns:1fr_4fr_1fr]">
+                <div className="justify-self-start lg:min-w-[176px]">
+                  {!loading && (
+                    user ? (
+                      <button
+                        ref={dashboardToggleRef}
+                        type="button"
+                        className="inline-flex items-center justify-center h-11 w-11 min-w-[44px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] shadow-sm"
+                        style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
+                        aria-label="Dashboard"
+                        aria-controls="panel-dashboard"
+                        aria-expanded={dashboardOpen}
+                        onClick={() => { setDashboardMode('user'); setDashboardOpen(v => !v); }}
+                      >
+                        <img src="/logos/bars-3.svg" alt="" width="18" height="18" aria-hidden="true" className="header-icon" />
+                      </button>
+                    ) : (
+                      <button
+                        ref={dashboardToggleRef}
+                        type="button"
+                        className="inline-flex items-center h-11 px-5 min-w-[176px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] text-sm whitespace-nowrap overflow-hidden self-center shadow-sm"
+                        style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
+                        aria-label="Participate"
+                        aria-controls="panel-dashboard"
+                        aria-expanded={dashboardOpen}
+                        onClick={() => { setDashboardMode('guest'); setGuestStep('menu'); setDashboardOpen(true); }}
+                      >
+                        Participate
+                      </button>
+                    )
+                  )}
+                </div>
+                <div className="col-start-3 col-end-4 justify-self-end lg:min-w-[176px] w-full flex justify-end">
+                  <button
+                    type="button"
+                    aria-label="Leaderboard"
+                    aria-controls="panel-leaderboard"
+                    aria-expanded={leaderboardOpen}
+                    className="inline-flex items-center justify-center h-11 w-11 min-w-[44px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] self-center shadow-sm"
+                    style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
+                    onClick={() => setLeaderboardOpen(v => !v)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') setLeaderboardOpen(false); }}
+                  >
+                    <img src="/logos/trophy.svg" alt="" width="18" height="18" aria-hidden="true" className="header-icon" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -534,10 +588,10 @@ export default function BelowMap() {
         </div>
 
         {/* Desktop layout (≥1024px): 3 columns 1:2:1 over fluid container */}
-        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-start" style={{ gridTemplateColumns: '3fr 6fr 3fr', maxWidth: 'min(2048px, 92vw)', marginInline: 'auto', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
+        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-stretch page-container" style={{ gridTemplateColumns: '3fr 6fr 3fr', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
           <section aria-label="Bandcamp and YouTube" className="h-full min-h-0 min-w-0 overflow-hidden">
-            <div className="relative h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] flex flex-col p-4 frosted-panel overflow-x-hidden">
+            <div className="relative h-full min-h-0 flex flex-col p-4 frosted-panel overflow-hidden">
               <LeftPanelEmbeds />
               {/* Normalize ring across all panels for optical alignment */}
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.06)' }} />
@@ -546,10 +600,10 @@ export default function BelowMap() {
 
           {/* Globe (center) */}
           <section aria-label="Global participation" className="min-w-0 h-full overflow-hidden">
-            <div className="relative h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] overflow-hidden p-4 frosted-panel">
+            <div className="relative h-full min-h-0 overflow-hidden p-4 frosted-panel">
               {/* Frame centers canvas and provides equal inset */}
               <div className="absolute inset-0 min-h-0 grid place-items-center">
-                <div className="relative w-full" style={{ maxWidth: '100%', padding: 8, aspectRatio: '1 / 1', overflow: 'visible', height: 'auto' }}>
+                <div className="relative w-full" style={{ maxWidth: '100%', maxHeight: '100%', padding: 8, aspectRatio: '1 / 1', overflow: 'visible', height: 'auto' }}>
                   <div className="absolute inset-0">
                     <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
                   </div>
@@ -563,7 +617,7 @@ export default function BelowMap() {
           {/* Text block (right) */}
           <section aria-label="Project intro" className="min-w-0 h-full">
             <div
-              className="relative h-full shadow-[0_10px_30px_rgba(0,0,0,0.25)] pt-6 px-4 pb-4 overflow-y-auto overflow-x-hidden outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] leading-relaxed text-[color:var(--ink)] frosted-panel"
+              className="relative h-full min-h-0 pt-8 px-6 pb-6 overflow-y-auto overflow-x-hidden outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] leading-relaxed text-[color:var(--ink)] frosted-panel"
               tabIndex={0}
               role="region"
               aria-label="About Dream River"
@@ -575,10 +629,7 @@ export default function BelowMap() {
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.06)' }} />
               <Hero />
               {showBottomFade && (
-                <div aria-hidden="true" className="pointer-events-none bottom-0 z-50 lg:sticky">
-                  <div className="h-10" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 100%)' }} />
-                  <div className="text-center text-[color:var(--ink-2)] pb-1">…</div>
-                </div>
+                <div aria-hidden="true" className="pointer-events-none absolute left-0 right-0 bottom-0 h-10" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0) 100%)' }} />
               )}
             </div>
           </section>
@@ -1352,14 +1403,14 @@ export default function BelowMap() {
         .header-icon { width: 18px; height: 18px; filter: opacity(0.8) drop-shadow(0 0 2px rgba(0,0,0,0.35)) hue-rotate(160deg) saturate(120%); }
         /* Right column typography: clearer subheads and comfortable line height */
         #right-panel-content { --line-ch: 14ch; color: #0b0d1a; }
-        #right-panel-content p { color: #0b0d1a; line-height: 1.6; margin: 0 0 0.9rem 0; max-width: var(--line-ch); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Noto Sans", sans-serif; }
+        #right-panel-content p { color: #0b0d1a; line-height: 1.7; margin: 0 0 1rem 0; max-width: var(--line-ch); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Noto Sans", sans-serif; }
         #right-panel-content li { color: #0b0d1a; max-width: var(--line-ch); }
         #right-panel-content a { color: var(--teal); text-underline-offset: 2px; }
         #right-panel-content h1, #right-panel-content h2, #right-panel-content h3 {
           font-family: var(--font-seasons, 'Seasons', serif);
           color: #0a0c10;
           line-height: 1.35;
-          margin: 1.25rem 0 0.8rem 0; /* extra space around headings */
+          margin: 1.5rem 0 1rem 0; /* generous space around headings */
           font-weight: 600;
           letter-spacing: 0.01em;
         }

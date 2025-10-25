@@ -10,15 +10,17 @@ export default function LandingPage() {
       </main>
       <footer aria-label="Site footer" className="mt-6 lg:sticky bottom-0 z-30">
         <div
-          className="w-full rounded-[24px]"
+          className="w-full"
           style={{
             height: 40,
             background: 'rgba(210, 245, 250, 0.32)',
             backdropFilter: 'blur(10px)',
-            borderTop: '1px solid rgba(255,255,255,0.25)'
+            borderTop: '1px solid rgba(255,255,255,0.25)',
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16
           }}
         >
-          <div className="h-full flex items-center gap-2" style={{ paddingInline: '8px' }}>
+          <div className="h-full flex items-center justify-start gap-2" style={{ paddingInline: '8px' }}>
             {/* Left-aligned button row */}
             <a href="https://www.instagram.com/thejumpymonkey" aria-label="Instagram" className="footer-btn" target="_blank" rel="noopener noreferrer">
               <span className="footer-mask instagram" aria-hidden="true" />
@@ -41,15 +43,16 @@ export default function LandingPage() {
         <style jsx>{`
           .footer-btn {
             width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
-            border-radius: 6px; background: rgba(11,13,26,0.75); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.2);
+            border-radius: 6px; background: rgba(11,13,26,0.75);
           }
           .footer-icon { display: none; }
-          .footer-mask { display: inline-block; width: 18px; height: 18px; background-color: #135E66; -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; mask-size: contain; mask-repeat: no-repeat; mask-position: center; filter: drop-shadow(0 0 2px rgba(0,0,0,0.35)); }
-          .footer-mask.youtube { -webkit-mask-image: url('/Streaming/youtube.svg'); mask-image: url('/Streaming/youtube.svg'); }
+          .footer-mask { display: inline-block; width: 20px; height: 20px; background-color: var(--teal); -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
+          .footer-mask.youtube { -webkit-mask-image: url('/Streaming/youtube.svg.png'); mask-image: url('/Streaming/youtube.svg.png'); }
           .footer-mask.applemusic { -webkit-mask-image: url('/Streaming/applemusic.svg'); mask-image: url('/Streaming/applemusic.svg'); }
+          .footer-mask.bandcamp { -webkit-mask-image: url('/Streaming/bandcamp.svg.png'); mask-image: url('/Streaming/bandcamp.svg.png'); }
           .footer-mask.spotify { -webkit-mask-image: url('/Streaming/spotify.svg'); mask-image: url('/Streaming/spotify.svg'); }
           .footer-mask.instagram { -webkit-mask-image: url('/logos/Instagram.svg'); mask-image: url('/logos/Instagram.svg'); }
-          .footer-mask.mail { -webkit-mask-image: url('/logos/Mail.svg'); mask-image: url('/logos/Mail.svg'); }
+          .footer-mask.mail { -webkit-mask-image: url('/logos/email.png'); mask-image: url('/logos/email.png'); }
         `}</style>
       </footer>
     </div>

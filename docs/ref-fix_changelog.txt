@@ -1,3 +1,7 @@
+Profile now atomically returns referral alongside name/country/points.
+SWR/ReactQuery revalidates on auth state and OTP callback.
+Share reads only from profile store; no manual refresh.
+
 Referral Fix — Changelog
 
 - Unified read: name/country/referral from one profile payload (/api/me)

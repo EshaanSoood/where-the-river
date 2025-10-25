@@ -4,6 +4,7 @@
   /* Palette (original) */
   --ink: #111111;
   --ink-2: #444444;
+  --navy: #0b0d1a;
   --aqua: #2AA7B5;
   --teal: #135E66; /* deep teal from original palette */
   --mist: #8CA7B2; /* soft teal */
@@ -31,6 +32,94 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Helvetica, Arial, sans-serif;
+}
+
+/* Phase 0 – global look: soft rounded corners, light borders, no shadows, responsive gutters */
+* {
+  border-radius: 12px; /* soft everywhere by default; components can override */
+}
+
+/* Light border system-wide (optical, subtle) */
+.border, [class*="border"], .frosted-panel {
+  box-shadow: none !important;
+  border-color: rgba(0,0,0,0.08) !important;
+}
+
+/* Page gutters: ~32px on large, minimum 16px on small */
+.page-frame {
+  padding-left: clamp(16px, 4vw, 32px);
+  padding-right: clamp(16px, 4vw, 32px);
+}
+
+/* Desktop-only shared page width for header/main/footer containers */
+.page-container {
+  width: 100%;
+}
+@media (min-width: 1024px) {
+  .page-container {
+    max-width: min(1800px, 92vw);
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* Desktop-only: full-height viewport behavior with subtle top/bottom cushions */
+.page-viewport { }
+.viewport-cushion { display: none; }
+@media (min-width: 1024px) {
+  html, body { min-height: 100vh; }
+  .page-viewport {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Visual, non-layout cushions at very top and bottom */
+  .viewport-cushion {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    display: block;
+    background:
+      linear-gradient(to bottom, rgba(0,0,0,0.035), rgba(0,0,0,0) 24%),
+      linear-gradient(to top, rgba(0,0,0,0.035), rgba(0,0,0,0) 24%);
+    z-index: 1; /* below app content that uses z>1 */
+  }
+  /* Ensure header/footer flush — prevent accidental rounding at extremes */
+  html, body { border-radius: 0 !important; }
+}
+
+/* Desktop-only unified header bar */
+@media (min-width: 1024px) {
+  /* Desktop-only contrast polish: ensure dark text on light frosted panels is crisp */
+  .frosted-panel { color: #0b0d1a; }
+  .frosted-panel p, .frosted-panel li, .frosted-panel label, .frosted-panel span { color: #0b0d1a; }
+  .frosted-panel a { color: var(--teal); text-underline-offset: 2px; }
+  .header-bar { color: #0b0d1a; }
+  .header-bar h1 { color: #ffffff; }
+  /* Desktop-only: clip backgrounds to rounded shapes to avoid dark slivers */
+  .frosted-panel {
+    overflow: hidden;
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+            mask-image: radial-gradient(white, black);
+  }
+  .header-bar {
+    background: rgba(210, 245, 250, 0.35);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1.5px solid rgba(255,255,255,0.25);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+    box-shadow: none;
+  }
+  .header-bar .cell + .cell {
+    border-left: 1px solid rgba(255,255,255,0.25);
+  }
+  .header-bar .cell {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
 }
 
 /* Global link color (accent) */

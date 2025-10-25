@@ -18,9 +18,10 @@ export default function LeftPanelEmbeds() {
         const total = wrap.clientHeight;
         const headerH = header ? header.offsetHeight : 0;
         const dividerH = 1; // matches divider height
-        const paddingY = 0; // handled by outer container
+        const paddingY = 16; // inner container p-2 => 8px top + 8px bottom
         const remaining = Math.max(0, total - headerH - dividerH - paddingY);
-        setBcHeight(remaining);
+        // Ensure Bandcamp has enough room for controls
+        setBcHeight(Math.max(160, remaining));
       } catch {}
     };
     compute();

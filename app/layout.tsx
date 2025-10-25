@@ -29,9 +29,13 @@ export default function RootLayout({
       <head>
         <link rel="stylesheet" href="https://use.typekit.net/ezc4ghs.css" />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased page-frame page-viewport`}>
         <Background />
-        <Providers>{children}</Providers>
+        {/* Desktop-only top/bottom subtle cushions; hidden on mobile */}
+        <div className="viewport-cushion" aria-hidden="true" />
+        <div className="page-container">
+          <Providers>{children}</Providers>
+        </div>
       </body>
     </html>
   );

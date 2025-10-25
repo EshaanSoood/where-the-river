@@ -24,6 +24,10 @@ export default function ParticipatePage() {
   useEffect(() => {
     setCountries(getIsoCountries("en"));
   }, []);
+  // On mount, ensure profile store revalidates after OTP callback
+  useEffect(() => {
+    try { window.dispatchEvent(new CustomEvent('profile:revalidate')); } catch {}
+  }, []);
 
   function sanitizeName(raw: string): string {
     const collapsed = raw.replace(/\s+/g, " ").trim();

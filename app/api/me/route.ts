@@ -1,36 +1,38 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getCountryNameFromCode } from "@/lib/countryMap";
+import { cookies } from "next/headers";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
-export async function POST(req: Request) {
+export const dynamic = 'force-dynamic';
+
+async function handleProfile(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const { email } = (body || {}) as { email?: string };
-
-    // Source of truth: Supabase Auth Admin users (metadata)
-    // Try Authorization Bearer first (session-based), then fall back to email lookup
+    // Identify user from server session (cookies) first, then Authorization header as fallback
     let target: { id: string; email: string | null; user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null } | null = null;
-    const authz = req.headers.get('authorization') || req.headers.get('Authorization');
-    if (authz && authz.startsWith('Bearer ')) {
-      const token = authz.slice(7);
-      try {
-        const { data: userRes, error: userErr } = await supabaseServer.auth.getUser(token);
-        if (!userErr && userRes?.user) {
-          const u = userRes.user as { id: string; email: string | null; user_metadata?: Record<string, unknown> | null };
-          target = { id: u.id, email: u.email, user_metadata: (u.user_metadata || null), raw_user_meta_data: (u.user_metadata || null) };
-        }
-      } catch {}
-    }
+    try {
+      const supabase = createRouteHandlerClient({ cookies });
+      const { data: { user }, error: uerr } = await supabase.auth.getUser();
+      if (!uerr && user) {
+        const u = user as { id: string; email: string | null; user_metadata?: Record<string, unknown> | null };
+        target = { id: u.id, email: u.email, user_metadata: (u.user_metadata || null), raw_user_meta_data: (u.user_metadata || null) };
+      }
+    } catch {}
+
     if (!target) {
-      if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400, headers: { "Cache-Control": "no-store" } });
-      const { data: list, error: listErr } = await supabaseServer.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (listErr) return NextResponse.json({ error: listErr.message }, { status: 400, headers: { "Cache-Control": "no-store" } });
-      type AdminUser = { id: string; email: string | null; user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null };
-      const users = (list?.users || []) as AdminUser[];
-      const found = users.find((u) => (u.email || "").toLowerCase() === String(email).toLowerCase());
-      if (!found) return NextResponse.json({ exists: false }, { status: 404, headers: { "Cache-Control": "no-store" } });
-      target = found as { id: string; email: string | null; user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null };
+      const authz = req.headers.get('authorization') || req.headers.get('Authorization');
+      if (authz && authz.startsWith('Bearer ')) {
+        const token = authz.slice(7);
+        try {
+          const { data: userRes, error: userErr } = await supabaseServer.auth.getUser(token);
+          if (!userErr && userRes?.user) {
+            const u = userRes.user as { id: string; email: string | null; user_metadata?: Record<string, unknown> | null };
+            target = { id: u.id, email: u.email, user_metadata: (u.user_metadata || null), raw_user_meta_data: (u.user_metadata || null) };
+          }
+        } catch {}
+      }
     }
+    if (!target) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
 
     type AuthMeta = { name?: string | null; country_code?: string | null; message?: string | null; boat_color?: string | null; boats_total?: number | null; referral_id?: string | null };
     const meta = ((target.user_metadata || target.raw_user_meta_data) || {}) as AuthMeta;
@@ -103,7 +105,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       exists: true,
       me: {
-        email: target.email || email,
+        email: target.email,
         name,
         country_code,
         country_name,
@@ -120,6 +122,15 @@ export async function POST(req: Request) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
+}
+
+export async function GET(req: Request) {
+  return handleProfile(req);
+}
+
+export async function POST(req: Request) {
+  // Keep POST compatibility; ignore email gating and use session/authorization instead
+  return handleProfile(req);
 }
 
 

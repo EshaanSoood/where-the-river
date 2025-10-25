@@ -25,9 +25,8 @@ type UseMeResult = {
   refresh: () => Promise<void>;
 };
 
-export function useMe(emailOverride?: string | null): UseMeResult {
-  const { user, loading: authLoading } = useUser();
-  const email = (emailOverride ?? user?.email ?? null) || null;
+export function useMe(): UseMeResult {
+  const { loading: authLoading } = useUser();
 
   const [me, setMe] = useState<MeData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -46,7 +45,7 @@ export function useMe(emailOverride?: string | null): UseMeResult {
     setLoading(true);
     setError(null);
     try {
-      // Session-based unified server read; body optional
+      // Session-based unified server read (no email gating)
       let headers: Record<string, string> = { "Content-Type": "application/json" };
       try {
         const supabase = getSupabase();
@@ -54,7 +53,7 @@ export function useMe(emailOverride?: string | null): UseMeResult {
         const token = sess?.session?.access_token;
         if (token) headers.Authorization = `Bearer ${token}`;
       } catch {}
-      const resp = await fetch(`${baseUrl}/api/me`, { method: "POST", headers, body: JSON.stringify(email ? { email } : {}) });
+      const resp = await fetch(`${baseUrl}/api/me`, { method: "GET", headers, credentials: 'include' as RequestCredentials });
       if (!resp.ok) throw new Error(`Failed to fetch me: ${resp.status}`);
       const json = await resp.json();
       const m = json?.me as Partial<MeData> | undefined;
@@ -62,7 +61,7 @@ export function useMe(emailOverride?: string | null): UseMeResult {
       const referral_url = (m.referral_url ?? null) as string | null;
       const boats_total = typeof m.boats_total === "number" ? m.boats_total : 0;
       setMe({
-        email: String(m.email || email),
+        email: String(m.email || ''),
         name: (m.name ?? null) as string | null,
         country_code: (m.country_code ?? null) as string | null,
         country_name: (m.country_name ?? null) as string | null,
@@ -80,12 +79,22 @@ export function useMe(emailOverride?: string | null): UseMeResult {
     } finally {
       setLoading(false);
     }
-  }, [email, baseUrl]);
+  }, [baseUrl]);
 
   useEffect(() => {
     if (authLoading) return;
     fetchMe().catch(() => {});
   }, [authLoading, fetchMe]);
+
+  useEffect(() => {
+    const onRevalidate = () => { fetchMe().catch(() => {}); };
+    try {
+      window.addEventListener('profile:revalidate', onRevalidate as EventListener);
+    } catch {}
+    return () => {
+      try { window.removeEventListener('profile:revalidate', onRevalidate as EventListener); } catch {}
+    };
+  }, [fetchMe]);
 
   return { me, loading: authLoading || loading, error, refresh: fetchMe };
 }

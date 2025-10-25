@@ -6,7 +6,7 @@ export default function HowToPlayVideo({ onHeightChange }: Props) {
   return (
     <div className="px-0 pt-0 pb-0">
       <h2 className="mb-3 font-seasons" style={{ fontSize: '1.3rem', color: 'var(--ink)', fontWeight: 600 }}>How To Play</h2>
-      <div className="relative w-full rounded-[16px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] overflow-hidden p-2" style={{ aspectRatio: '16 / 9', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.25)' }}>
+      <div className="relative w-full rounded-[16px] overflow-hidden p-2 frosted-panel" style={{ aspectRatio: '16 / 9' }}>
         <iframe
           width="560"
           height="315"
