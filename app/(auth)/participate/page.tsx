@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 import { getIsoCountries, type IsoCountry } from "@/lib/countryList";
+import { getReferralSnapshot } from "@/lib/referral";
 
 export default function ParticipatePage() {
   const router = useRouter();
@@ -92,17 +93,25 @@ export default function ParticipatePage() {
         const headers: Record<string,string> = { "Content-Type": "application/json" };
         if (diagRun) headers['x-diag-run-id'] = `run-${stamp}`;
 
+        const snapshot = (typeof window !== 'undefined') ? getReferralSnapshot() : null;
+        const referralCode = snapshot && typeof snapshot.code === 'string' && snapshot.code.trim().length > 0
+          ? snapshot.code.trim()
+          : null;
+
         const payload = {
           name,
           email,
           country_code: countryCode,
           message: userMessage || null,
           photo_url: null,
-          referred_by: null,
+          referred_by: referralCode,
           boat_color: boatColor,
         };
         if (diagRun) {
           try { console.log('[diag] signup payload', payload); } catch {}
+        }
+        if (process.env.NEXT_PUBLIC_REF_DEBUG === "1") {
+          console.log("[REFTRACE-CLIENT] payload.referred_by =", referralCode);
         }
         await fetch("/api/users/upsert", {
           method: "POST",

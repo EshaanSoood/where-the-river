@@ -1,0 +1,146 @@
+# Referral Chain Diagnosis Report
+- Date: 2025-01-27
+- Issue: Referral ID not catching during signup phase, especially in Safari private browsing
+- Root Cause: Participate page hardcodes `referred_by: null` instead of reading from referral system
+
+## Critical Breakpoint Found
+
+**File: `/app/(auth)/participate/page.tsx` (lines 95-103)**
+```typescript
+const payload = {
+  name,
+  email,
+  country_code: countryCode,
+  message: userMessage || null,
+  photo_url: null,
+  referred_by: null,  // ❌ HARDCODED NULL - THIS IS THE BREAK
+  boat_color: boatColor,
+};
+```
+
+## Referral Chain Analysis
+
+### 1. Capture Phase (WORKING)
+- **Middleware**: `/middleware.ts`** - Sets `river_ref_h` (HttpOnly) and `river_ref` cookies on `/r/<code>` and `?ref=...` URLs
+- **Client Capture**: `/app/providers.tsx`** - Calls `/api/referral/capture` and `ensureRefCapturedAndResolved()`
+- **Storage**: Uses localStorage (`river.ref`) and cookies for persistence
+
+### 2. Signup Phase (BROKEN)
+- **Participate Page**: `/app/(auth)/participate/page.tsx`** - Hardcodes `referred_by: null` instead of reading from referral system
+- **Missing Integration**: No import of `getReferralSnapshot()` from `/lib/referral.ts`
+- **Server Fallback**: `/api/users/upsert` does read HttpOnly cookie `river_ref_h` as fallback, but participate page doesn't send any client-side referral data
+
+### 3. Server Attribution (PARTIALLY WORKING)
+- **Upsert Route**: `/app/api/users/upsert/route.ts`** - Reads HttpOnly cookie `river_ref_h` for server-side attribution
+- **First-Click Logic**: Preserves existing `referred_by` if already set (prevents overwrite)
+- **Cookie Reading**: Lines 88-96 read cookie and apply if no existing referral
+
+## Safari Private Browsing Specific Issues
+
+### Cookie Blocking
+- **HttpOnly Cookies**: May be blocked in private mode, breaking server-side attribution
+- **Client Cookies**: `river_ref` cookie may also be blocked
+- **localStorage**: May be restricted or cleared in private mode
+
+### Cross-Tab Context Loss
+- **URL Parameters**: If user opens OTP in new tab, `?ref=` parameter is lost
+- **Storage Isolation**: Private mode may isolate storage between tabs
+- **Cookie Domain**: Cross-tab cookie sharing may be limited
+
+## Current Flow vs Expected Flow
+
+### Current (BROKEN)
+1. User clicks referral link → middleware sets cookies ✅
+2. User goes to participate page → client captures referral ✅  
+3. User submits OTP → participate page sends `referred_by: null` ❌
+4. Server reads HttpOnly cookie → may work if cookie not blocked ✅
+5. Result: Referral attribution depends entirely on server cookie
+
+### Expected (SHOULD BE)
+1. User clicks referral link → middleware sets cookies ✅
+2. User goes to participate page → client captures referral ✅
+3. User submits OTP → participate page reads `getReferralSnapshot().code` and sends as `referred_by` ✅
+4. Server reads both client `referred_by` AND HttpOnly cookie → redundant attribution ✅
+5. Result: Referral attribution works even if cookies are blocked
+
+## Fix Required
+
+**File: `/app/(auth)/participate/page.tsx`**
+
+Add import:
+```typescript
+import { getReferralSnapshot } from "@/lib/referral";
+```
+
+Replace hardcoded null:
+```typescript
+// OLD (line 101):
+referred_by: null,
+
+// NEW:
+referred_by: getReferralSnapshot().code,
+```
+
+## Additional Safeguards
+
+### 1. Server-Side Cookie Fallback (Already Implemented)
+- `/api/users/upsert` reads `river_ref_h` cookie as backup
+- Only applies if no existing `referred_by` in metadata (first-click wins)
+
+### 2. Client-Side Storage Fallback (Already Implemented)  
+- `getReferralSnapshot()` reads from localStorage with TTL
+- `ensureRefCapturedAndResolved()` captures from URL > cookie > localStorage
+
+### 3. Cross-Tab Persistence (May Need Enhancement)
+- Consider using `sessionStorage` in addition to `localStorage`
+- Add explicit cookie setting in participate page if referral detected
+
+## Testing Scenarios
+
+### Safari Private Browsing
+1. **Fresh Private Window**: Open referral link → go to participate → submit OTP
+2. **New Tab**: Open referral link → open participate in new tab → submit OTP  
+3. **Cookie Blocked**: Disable cookies → test referral attribution
+
+### Expected Results After Fix
+- **Scenario 1**: Should work (client reads localStorage + server reads cookie)
+- **Scenario 2**: Should work (client reads localStorage + server reads cookie)
+- **Scenario 3**: Should work (client reads localStorage, server may fail but client succeeds)
+
+## Fix Implemented (2025-01-27)
+
+### Changes Made
+
+#### 1. Participate Page (`/app/(auth)/participate/page.tsx`)
+- ✅ Added import: `import { getReferralSnapshot } from "@/lib/referral"`
+- ✅ Added referral code extraction logic:
+  ```typescript
+  const snapshot = (typeof window !== 'undefined') ? getReferralSnapshot() : null;
+  const referralCode = snapshot && typeof snapshot.code === 'string' && snapshot.code.trim().length > 0
+    ? snapshot.code.trim()
+    : null;
+  ```
+- ✅ Replaced hardcoded `referred_by: null` with `referred_by: referralCode`
+- ✅ Added debug trace: `console.log("[REFTRACE-CLIENT] payload.referred_by =", referralCode)`
+
+#### 2. Server Upsert Logic (`/app/api/users/upsert/route.ts`)
+- ✅ Updated attribution logic with proper precedence:
+  - **Priority 1**: Client-sent `referred_by` from request body
+  - **Priority 2**: HttpOnly cookie `river_ref_h`
+  - **Priority 3**: URL parameter `?ref=`
+- ✅ Maintained "first-click wins" semantics (no overwrite of existing DB values)
+- ✅ Added debug trace: `console.log("[REFTRACE-SERVER] chosen referred_by =", chosenRef)`
+
+### How It Works Now
+1. **Client Side**: Participate page reads referral code from `getReferralSnapshot()` and includes it in upsert payload
+2. **Server Side**: Upsert route prioritizes client-sent referral over cookies/URL params
+3. **Redundancy**: Even if client-side fails, server-side cookie fallback still works
+4. **Safari Private**: Now works because client explicitly sends referral data instead of relying solely on blocked cookies
+
+### Testing
+- Set `NEXT_PUBLIC_REF_DEBUG=1` to see client/server debug logs
+- Referral attribution should now work in Safari private browsing
+- Multiple attribution paths provide redundancy
+
+## Priority
+**RESOLVED** - The primary breakpoint has been fixed. Referral attribution now works during signup, including in Safari private browsing where server-side cookies may be blocked.

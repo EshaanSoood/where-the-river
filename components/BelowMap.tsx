@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 import { getIsoCountries, type IsoCountry } from "@/lib/countryList";
@@ -401,7 +402,7 @@ export default function BelowMap() {
                     className="font-seasons text-white text-lg"
                     style={{ lineHeight: 1.2 }}
                   >
-                    Dream River
+                    <Link href="/" className="inline-block text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--teal)] rounded-[8px] px-1">Dream River</Link>
                   </h1>
                 </div>
               </div>

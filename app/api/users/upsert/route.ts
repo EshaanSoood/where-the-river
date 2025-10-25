@@ -7,7 +7,7 @@ import { resolveIso2, isIso2, toIso2Upper, normalizeInput } from "@/lib/countryM
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, email, country_code, message, photo_url, /* referred_by (ignored) */ boat_color } = body || {} as Record<string, unknown>;
+    const { name, email, country_code, message, photo_url, referred_by, boat_color } = body || {} as Record<string, unknown>;
     if (!email || !country_code) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
     // Diagnostics: prepare run folder when header present
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     }
 
     // 02 — upsert sanitized input
-    const sanitized = { name: cleanedName, email: String(email), country_code: cc, message: message ?? null, photo_url: photo_url ?? null, boat_color: boat_color ?? null };
+    const sanitized = { name: cleanedName, email: String(email), country_code: cc, message: message ?? null, photo_url: photo_url ?? null, boat_color: boat_color ?? null, referred_by: referred_by ?? null };
     await writeDiag("02-upsert-input.txt", [
       "Sanitized contains expected fields → " + ((sanitized.name && sanitized.email && sanitized.country_code) ? "PASS" : "FAIL"),
       JSON.stringify(sanitized, null, 2)
@@ -83,17 +83,25 @@ export async function POST(req: Request) {
       otp_verified: true,
     };
 
-    // Server-side attribution only (no client body): prefer HttpOnly cookie, then URL ?ref=, first-click wins
+    // Server-side attribution with client precedence: body.referred_by > HttpOnly cookie > URL ?ref=, first-click wins
     try {
+      const bodyRef = sanitized.referred_by;
       const cookie = (req.headers.get("cookie") || "");
       const m = cookie.match(/(?:^|; )river_ref_h=([^;]+)/);
       const v = m ? decodeURIComponent(m[1]) : "";
       const norm = (v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
       const hadRef = !!(prevMeta as { referred_by?: unknown }).referred_by;
-      let appliedFrom: 'cookie' | 'url' | 'none' = 'none';
-      if (norm && !hadRef && !(nextMeta as { referred_by?: unknown }).referred_by) {
-        (nextMeta as { referred_by?: string | null }).referred_by = norm; appliedFrom = 'cookie';
+      
+      // Choose the candidate ref in priority order (but do NOT overwrite an existing DB value)
+      const chosenRef = bodyRef || norm || null;
+      let appliedFrom: 'body' | 'cookie' | 'url' | 'none' = 'none';
+      
+      if (chosenRef && !hadRef && !(nextMeta as { referred_by?: unknown }).referred_by) {
+        (nextMeta as { referred_by?: string | null }).referred_by = chosenRef;
+        appliedFrom = bodyRef ? 'body' : 'cookie';
       }
+      
+      // Fallback to URL param if no other source found
       if (!((nextMeta as { referred_by?: unknown }).referred_by) && !hadRef) {
         try {
           const u = new URL(req.url);
@@ -101,8 +109,12 @@ export async function POST(req: Request) {
           if (qref) { (nextMeta as { referred_by?: string | null }).referred_by = qref; appliedFrom = 'url'; }
         } catch {}
       }
+      
       // Dev-only minimal telemetry (no PII)
-      try { console.log('[upsert] ref_attribution', { cookie_ref_present: !!norm, url_checked: true, applied_source: appliedFrom }); } catch {}
+      try { console.log('[upsert] ref_attribution', { body_ref_present: !!bodyRef, cookie_ref_present: !!norm, url_checked: true, applied_source: appliedFrom }); } catch {}
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[REFTRACE-SERVER] chosen referred_by =", chosenRef);
+      }
     } catch {}
 
     // Update auth user metadata via admin API (mirror canonical referral_id for dashboard convenience)
