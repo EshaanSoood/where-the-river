@@ -18,7 +18,7 @@
   /* Layout tokens - frozen to prevent regressions */
   --card-radius: 24px;
   --card-border: 1.5px solid rgba(255,255,255,0.25);
-  --card-frost: rgba(210, 245, 250, 0.35);
+  --card-frost: #135E6680;
   --card-blur: blur(12px);
   --header-border-radius: 0 0 24px 24px;
   --gutter-desktop: 32px;

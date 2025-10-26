@@ -23,7 +23,7 @@ import { refDebug } from "@/lib/refDebug";
 
   // Dashboard data bindings removed for overhaul; UI will use placeholders.
 
-type BelowMapProps = { initialInviter?: { id: string; fullName: string; firstName: string } | null };
+type BelowMapProps = { initialInviter?: { id: string; fullName: string | null; firstName: string | null } | null };
 
 export default function BelowMap({ initialInviter }: BelowMapProps) {
   const router = useRouter();
@@ -379,7 +379,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                     <button
                       ref={dashboardToggleRef}
                       type="button"
-                      className="inline-flex items-center h-10 px-5 rounded-[16px] border text-[color:var(--navy)] text-sm whitespace-nowrap"
+                      className="inline-flex items-center h-10 px-5 rounded-[24px] border text-[color:var(--navy)] text-sm whitespace-nowrap"
                       style={{ background: 'rgba(42,167,181,0.15)', border: '1.5px solid rgba(255,255,255,0.25)' }}
                       aria-label="Participate"
                       aria-controls="panel-dashboard"
@@ -406,7 +406,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                   aria-label="Open leaderboard"
                   aria-controls="panel-leaderboard"
                   aria-expanded={leaderboardOpen}
-                  className="inline-flex items-center h-10 px-5 rounded-[16px] border text-[color:var(--navy)] text-sm whitespace-nowrap"
+                  className="inline-flex items-center h-10 px-5 rounded-[24px] border text-[color:var(--navy)] text-sm whitespace-nowrap"
                   style={{ background: 'rgba(42,167,181,0.15)', border: '1.5px solid rgba(255,255,255,0.25)' }}
                   onClick={() => setLeaderboardOpen(v => !v)}
                   onKeyDown={(e) => { if (e.key === 'Escape') setLeaderboardOpen(false); }}
@@ -625,11 +625,11 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                 id="right-panel-content"
               >
                 <Hero />
-                {/* Gradient fade - only visible when content overflows */}
-                {showBottomFade && (
-                  <div aria-hidden="true" className="pointer-events-none absolute left-0 right-0 bottom-0 h-12 z-10" style={{ background: 'linear-gradient(to top, rgba(247, 240, 228, 0.95) 0%, rgba(247, 240, 228, 0) 100%)' }} />
-                )}
               </div>
+              {/* Gradient fade - only visible when content overflows; locked to container bottom */}
+              {showBottomFade && (
+                <div aria-hidden="true" className="pointer-events-none absolute left-0 right-0 bottom-0 h-12 z-10" style={{ background: 'linear-gradient(to top, rgba(247, 240, 228, 0.95) 0%, rgba(247, 240, 228, 0) 100%)' }} />
+              )}
               {/* Normalize ring across all panels for optical alignment */}
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.06)' }} />
             </div>

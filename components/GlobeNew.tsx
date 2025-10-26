@@ -627,9 +627,6 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
 
   return (
     <div ref={containerRef} style={containerStyle} onMouseMove={handleMouseMove} role="region" aria-label={ariaLabel} aria-describedby={describedById} tabIndex={tabIndex as number | undefined}>
-      <div style={{ position: 'absolute', top: '10px', left: '10px', color: 'white', backgroundColor: 'rgba(0,0,0,0.5)', padding: '5px 8px', borderRadius: '3px', fontFamily: "'Roboto Mono', monospace", fontSize: '12px', zIndex: 100 }}>
-        {fps} FPS
-      </div>
       {devHudEnabledRef.current && (
         <div ref={hudElRef} style={{ position: 'absolute', top: '28px', left: '10px', color: 'white', backgroundColor: 'rgba(0,0,0,0.5)', padding: '5px 8px', borderRadius: '3px', fontFamily: "'Roboto Mono', monospace", fontSize: '12px', zIndex: 100 }} />
       )}
