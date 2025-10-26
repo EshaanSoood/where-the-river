@@ -1,0 +1,28 @@
+Referral UI Wiring Report — 2025-10-26
+
+Summary
+- Inviter line renders at first paint from SSR using cookie-backed resolver.
+- Path matched: name (metadata-first): “sent their boat to your shore.”
+
+Files changed
+- server/referral/resolveInviter.ts
+  - Added `Inviter` type and helpers `resolveInviterFromCookie(headers)` and `resolveInviterFromCode(code)`.
+- app/(marketing)/page.tsx
+  - `export const dynamic = 'force-dynamic'`, `revalidate = 0`.
+  - SSR: `const inviter = await resolveInviterFromCookie(headers())`; passed to `BelowMap`.
+- app/(auth)/participate/layout.tsx
+  - `export const dynamic = 'force-dynamic'`, `revalidate = 0`.
+  - SSR banner now uses `(firstName || fullName) || code` guard to show line at first paint.
+
+Evidence
+- Hops/redirects: `.cursor-ref-uiwire/hops.txt` (302 to clean URL with cookies)
+- Landing HTML: `.cursor-ref-uiwire/ui/landing.html`
+- Grep result: `.cursor-ref-uiwire/ui/grep.txt` (contains inviter line)
+- Resolver JSON: `.cursor-ref-uiwire/http/resolve.json`
+
+If failing
+- Check SSR props:
+  - `app/(marketing)/page.tsx`: inviter prop wired via `resolveInviterFromCookie(headers())`.
+  - `app/(auth)/participate/layout.tsx`: SSR banner uses `(inviter.firstName || inviter.fullName || inviter.code)`.
+- Ensure `export const dynamic = 'force-dynamic'` and `revalidate = 0` are present on both server entries.
+- Confirm cookie name `river_ref_h` and normalization in `resolveInviterFromCookie`.

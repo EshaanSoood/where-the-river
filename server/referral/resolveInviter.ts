@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabaseServer";
+import { headers } from "next/headers";
 import { getDisplayNameByUserId } from "@/server/names/nameService";
 
 type Input = { code?: string | null; user_id?: string | null };
@@ -48,5 +49,25 @@ export async function resolveInviterServer(input: Input): Promise<Output> {
   }
 }
 
+
+export type Inviter = { code: string | null; fullName: string | null; firstName: string | null; userId: string | null };
+
+export async function resolveInviterFromCode(code: string | null | undefined): Promise<Inviter> {
+  const { inviterUserId, fullName, firstName } = await resolveInviterServer({ code: code || null });
+  return { code: (code || null) as string | null, fullName, firstName, userId: inviterUserId };
+}
+
+export async function resolveInviterFromCookie(): Promise<Inviter> {
+  try {
+    const hdrs = await headers();
+    const cookie = String(hdrs.get('cookie') || '');
+    const m = cookie.match(/(?:^|; )river_ref_h=([^;]+)/);
+    const raw = m ? decodeURIComponent(m[1]) : "";
+    const code = (raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return await resolveInviterFromCode(code || null);
+  } catch {
+    return { code: null, fullName: null, firstName: null, userId: null };
+  }
+}
 
 

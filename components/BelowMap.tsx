@@ -23,7 +23,8 @@ import { refDebug } from "@/lib/refDebug";
 
   // Dashboard data bindings removed for overhaul; UI will use placeholders.
 
-type BelowMapProps = { initialInviter?: { id: string; fullName: string | null; firstName: string | null } | null };
+type InitialInviter = { code: string | null; fullName: string | null; firstName: string | null; userId: string | null };
+type BelowMapProps = { initialInviter?: InitialInviter | null };
 
 export default function BelowMap({ initialInviter }: BelowMapProps) {
   const router = useRouter();
@@ -55,8 +56,8 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
   // Points modal state lives inside RewardsView now
   const [shareMessage, setShareMessage] = useState("Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I've been listening to Dream River by them lately and I think you'll enjoy it too.");
   // Removed client-generated referral_id; canonical is minted server-side via SoT
-  const [refInviterFirst, setRefInviterFirst] = useState<string | null>(initialInviter?.firstName || null);
-  const [refInviterId, setRefInviterId] = useState<string | null>(initialInviter?.id || null);
+  const [refInviterFirst, setRefInviterFirst] = useState<string | null>((initialInviter?.firstName || initialInviter?.fullName) || null);
+  const [refInviterId, setRefInviterId] = useState<string | null>(initialInviter?.userId || null);
   
   const [announce, setAnnounce] = useState("");
   const dashboardRef = useRef<HTMLDivElement | null>(null);
