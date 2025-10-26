@@ -473,13 +473,21 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const rafPendingRef = useRef<boolean>(false);
   const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => { tooltipRefPos.current = { x: event.clientX, y: event.clientY }; if (rafPendingRef.current) return; rafPendingRef.current = true; requestAnimationFrame(() => { rafPendingRef.current = false; setTooltipPosition(tooltipRefPos.current); }); };
 
-  const containerStyle: React.CSSProperties = { width: '100%', height: '100%', position: 'relative', overflow: 'hidden', backgroundColor: '#000010', backgroundImage: `
+  const containerStyle: React.CSSProperties = { 
+    width: '100%', 
+    height: '100%', 
+    position: 'relative', 
+    overflow: 'hidden', 
+    backgroundColor: '#000010', 
+    aspectRatio: '1 / 1',
+    backgroundImage: `
       radial-gradient(1.5px 1.5px at 20% 30%, white, transparent),
       radial-gradient(1px 1px at 80% 10%, white, transparent),
       radial-gradient(1.5px 1.5px at 50% 80%, white, transparent),
       radial-gradient(2px 2px at 75% 60%, white, transparent),
       radial-gradient(2.5px 2.5px at 10% 90%, white, transparent)
-    `.replace(/\s+/g, ' ') };
+    `.replace(/\s+/g, ' ')
+  };
 
   const tooltipStyle: React.CSSProperties = { position: 'absolute', left: `${tooltipPosition.x + 15}px`, top: `${tooltipPosition.y + 15}px`, backgroundColor: 'rgba(40, 40, 40, 0.85)', color: 'white', padding: '5px 10px', borderRadius: '5px', fontFamily: "'Roboto Mono', monospace", fontSize: '1rem', pointerEvents: 'none', zIndex: 10, whiteSpace: 'nowrap', transition: 'opacity 0.2s ease-in-out', opacity: isTooltipVisible ? 1 : 0 };
 

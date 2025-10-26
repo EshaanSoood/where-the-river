@@ -4,16 +4,30 @@ export default function BandcampEmbed({ height = 120, fill = false, computedHeig
   // Brand colors from globals: --parchment (bg), --aqua (link)
   const bg = "f7f0e4"; // var(--parchment)
   const link = "2aa7b5"; // var(--aqua)
+  
+  // Force minimum height to ensure controls are always visible
+  const minHeight = 300; // Bandcamp needs at least 300px height to show controls by default
+  
   return (
-    <div className={fill ? "p-0 h-full min-h-0" : "p-0"}>
+    <div className={fill ? "p-0 h-full min-h-0 flex flex-col" : "p-0"}>
       {/* Desktop: large branded player for ≥1024px */}
-      <div className={fill ? "hidden md:flex flex-col h-full min-h-0 overflow-hidden" : "hidden md:block overflow-hidden"}>
+      <div className={fill ? "hidden md:flex flex-col flex-1 min-h-0" : "hidden md:block overflow-hidden"}>
         <iframe
           title="Bandcamp player (large)"
-          style={{ width: '100%', height: fill ? (computedHeight ?? '100%') : (height || 200), display: 'block', borderRadius: 16, background: 'rgba(210, 245, 250, 0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.25)' }}
+          style={{ 
+            width: '100%', 
+            height: fill ? '100%' : (height || 200), 
+            minHeight: fill ? `${minHeight}px` : undefined,
+            display: 'block', 
+            borderRadius: 16, 
+            background: 'rgba(210, 245, 250, 0.35)', 
+            boxShadow: '0 10px 30px rgba(0,0,0,0.15)', 
+            border: '1px solid rgba(255,255,255,0.25)' 
+          }}
           src={`https://bandcamp.com/EmbeddedPlayer/album=672398703/size=large/bgcol=${bg}/linkcol=${link}/transparent=true/`}
           seamless
           loading="lazy"
+          scrolling="no"
         >
           <a href="https://eshaansood.bandcamp.com/album/the-sonic-alchemists-i-dream-river">
             The Sonic Alchemists I: Dream River by Eshaan Sood

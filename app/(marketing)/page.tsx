@@ -13,11 +13,13 @@ export default function LandingPage() {
           className="w-full"
           style={{
             height: 40,
-            background: 'rgba(210, 245, 250, 0.32)',
-            backdropFilter: 'blur(10px)',
-            borderTop: '1px solid rgba(255,255,255,0.25)',
-            borderTopLeftRadius: 16,
-            borderTopRightRadius: 16
+            background: 'rgba(210, 245, 250, 0.35)',
+            backdropFilter: 'blur(12px)',
+            borderTop: '1.5px solid rgba(255,255,255,0.25)',
+            borderBottom: 'none',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            borderRadius: '24px 24px 0 0'
           }}
         >
           <div className="h-full flex items-center justify-start gap-2" style={{ paddingInline: '8px' }}>

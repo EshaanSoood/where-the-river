@@ -14,6 +14,15 @@
 
   --background: var(--parchment);
   --foreground: var(--ink);
+  
+  /* Layout tokens - frozen to prevent regressions */
+  --card-radius: 24px;
+  --card-border: 1.5px solid rgba(255,255,255,0.25);
+  --card-frost: rgba(210, 245, 250, 0.35);
+  --card-blur: blur(12px);
+  --header-border-radius: 0 0 24px 24px;
+  --gutter-desktop: 32px;
+  --gutter-mobile: 16px;
 }
 
 @theme inline {
@@ -28,90 +37,106 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Remove all debug outlines and borders */
+html, body {
+  outline: none !important;
+  border: none !important;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Helvetica, Arial, sans-serif;
+  margin: 0;
+  padding: 0;
 }
 
-/* Phase 0 – global look: soft rounded corners, light borders, no shadows, responsive gutters */
+/* Soft rounded corners by default */
 * {
   border-radius: 12px; /* soft everywhere by default; components can override */
 }
 
-/* Light border system-wide (optical, subtle) */
-.border, [class*="border"], .frosted-panel {
+/* Remove debug borders from all elements */
+*, *::before, *::after {
+  outline: none !important;
   box-shadow: none !important;
-  border-color: rgba(0,0,0,0.08) !important;
 }
 
-/* Page gutters: ~32px on large, minimum 16px on small */
+/* Page gutters: consistent ~32px desktop / ≥16px mobile */
 .page-frame {
-  padding-left: clamp(16px, 4vw, 32px);
-  padding-right: clamp(16px, 4vw, 32px);
+  padding-left: clamp(var(--gutter-mobile), 4vw, var(--gutter-desktop));
+  padding-right: clamp(var(--gutter-mobile), 4vw, var(--gutter-desktop));
 }
 
 /* Desktop-only shared page width for header/main/footer containers */
 .page-container {
   width: 100%;
-}
-@media (min-width: 1024px) {
-  .page-container {
-    max-width: min(1800px, 92vw);
-    margin-left: auto;
-    margin-right: auto;
-  }
+  max-width: min(1800px, 92vw);
+  margin-left: auto;
+  margin-right: auto;
 }
 
-/* Desktop-only: full-height viewport behavior with subtle top/bottom cushions */
-.page-viewport { }
-.viewport-cushion { display: none; }
 @media (min-width: 1024px) {
-  html, body { min-height: 100vh; }
-  .page-viewport {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-  /* Visual, non-layout cushions at very top and bottom */
-  .viewport-cushion {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    display: block;
-    background:
-      linear-gradient(to bottom, rgba(0,0,0,0.035), rgba(0,0,0,0) 24%),
-      linear-gradient(to top, rgba(0,0,0,0.035), rgba(0,0,0,0) 24%);
-    z-index: 1; /* below app content that uses z>1 */
+  html, body { 
+    min-height: 100vh; 
+    margin: 0; 
+    padding: 0; 
   }
   /* Ensure header/footer flush — prevent accidental rounding at extremes */
   html, body { border-radius: 0 !important; }
 }
 
-/* Desktop-only unified header bar */
+/* Desktop-only unified header bar - FROZEN STYLE */
 @media (min-width: 1024px) {
   /* Desktop-only contrast polish: ensure dark text on light frosted panels is crisp */
-  .frosted-panel { color: #0b0d1a; }
-  .frosted-panel p, .frosted-panel li, .frosted-panel label, .frosted-panel span { color: #0b0d1a; }
+  .frosted-panel { 
+    color: #0b0d1a; 
+    background: rgba(210, 245, 250, 0.45);
+    backdrop-filter: var(--card-blur);
+    -webkit-backdrop-filter: var(--card-blur);
+    border: var(--card-border);
+  }
+  .frosted-panel p, .frosted-panel li, .frosted-panel label, .frosted-panel span { color: #0b0d1a; font-weight: 500; }
+  .frosted-panel h2 { color: #0b0d1a; font-weight: 600; }
   .frosted-panel a { color: var(--teal); text-underline-offset: 2px; }
   .header-bar { color: #0b0d1a; }
   .header-bar h1 { color: #ffffff; }
+  
   /* Desktop-only: clip backgrounds to rounded shapes to avoid dark slivers */
   .frosted-panel {
-    overflow: hidden;
-    -webkit-mask-image: -webkit-radial-gradient(white, black);
-            mask-image: radial-gradient(white, black);
+    overflow: hidden !important;
+    -webkit-mask-image: none;
+    mask-image: none;
+    clip-path: none;
+    border-radius: var(--card-radius);
   }
+  
+  /* FROZEN HEADER STYLE - flat top, rounded bottom */
   .header-bar {
-    background: rgba(210, 245, 250, 0.35);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1.5px solid rgba(255,255,255,0.25);
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
-    border-bottom-left-radius: 16px;
-    border-bottom-right-radius: 16px;
-    box-shadow: none;
+    background: var(--card-frost) !important;
+    backdrop-filter: var(--card-blur);
+    -webkit-backdrop-filter: var(--card-blur);
+    border: var(--card-border) !important;
+    border-top: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+    border-radius: var(--header-border-radius) !important;
+  }
+  
+  /* Prevent any child from overriding header rounding */
+  .header-bar *,
+  .header-bar > *,
+  .header-bar > * > * {
+    border-radius: 0 !important;
+  }
+  
+  .header-bar h1 {
+    background: none !important;
+    border: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
   }
   .header-bar .cell + .cell {
     border-left: 1px solid rgba(255,255,255,0.25);
@@ -143,15 +168,22 @@ button, .btn {
   background: linear-gradient(90deg, transparent, var(--amber), transparent);
 }
 
-/* Frosted panel utility — apply everywhere for consistency */
-.frosted-panel {
-  border-radius: 24px;
-  background: rgba(210, 245, 250, 0.35);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1.5px solid rgba(255,255,255,0.25);
-}
-
-/* Ensure common containers inherit 24px rounding */
-.rounded-global { border-radius: 24px; }
+  /* Ensure common containers inherit 24px rounding */
+  .rounded-global { border-radius: var(--card-radius); }
+  
+  /* FROZEN FOOTER STYLE - rounded top, straight bottom */
+  footer {
+    border-top-left-radius: var(--card-radius) !important;
+    border-top-right-radius: var(--card-radius) !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
+  
+  /* Prevent any child from overriding footer rounding */
+  footer *,
+  footer > *,
+  footer > * > * {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabaseClient";
 import { getIsoCountries, type IsoCountry } from "@/lib/countryList";
@@ -355,20 +354,21 @@ export default function BelowMap() {
   }
 
   return (
-    <div className="py-4 flex flex-col min-h-0 h-full">
+    <div className="pb-4 flex flex-col min-h-0 h-full">
       {/* Header inside site container; not sticky */}
       <div className="top-0 z-40 lg:sticky" style={{ ['--hdr' as unknown as string]: '40px' }}>
-        <div className="relative" ref={headerRef}>
+        <div className="relative page-container" ref={headerRef}>
           {/* Desktop unified header bar */}
           <div className="hidden lg:block header-bar">
-            <div className="grid grid-cols-3 items-center w-full px-2">
-              <div className="cell justify-self-start lg:min-w-[176px]">
+            <div className="grid grid-cols-3 items-center w-full px-4 py-1 gap-4">
+              {/* Left: Participate button */}
+              <div className="justify-self-start pr-2 border-r" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
                 {!loading && (
                   user ? (
                     <button
                       ref={dashboardToggleRef}
                       type="button"
-                      className="inline-flex items-center justify-center h-10 px-4 min-w-[44px] rounded-[16px] border text-[color:var(--ink)]"
+                      className="inline-flex items-center justify-center h-10 w-10 rounded-[16px] border text-[color:var(--ink)]"
                       style={{ background: 'rgba(42,167,181,0.15)', border: '1.5px solid rgba(255,255,255,0.25)' }}
                       aria-label="Dashboard"
                       aria-controls="panel-dashboard"
@@ -381,7 +381,7 @@ export default function BelowMap() {
                     <button
                       ref={dashboardToggleRef}
                       type="button"
-                      className="inline-flex items-center h-10 px-5 min-w-[140px] rounded-[16px] border text-[color:var(--navy)] text-sm whitespace-nowrap overflow-hidden self-center"
+                      className="inline-flex items-center h-10 px-5 rounded-[16px] border text-[color:var(--navy)] text-sm whitespace-nowrap"
                       style={{ background: 'rgba(42,167,181,0.15)', border: '1.5px solid rgba(255,255,255,0.25)' }}
                       aria-label="Participate"
                       aria-controls="panel-dashboard"
@@ -393,32 +393,27 @@ export default function BelowMap() {
                   )
                 )}
               </div>
-              <div className="cell justify-self-center w-full max-w-[560px] mx-auto min-w-0 text-center">
-                <div
-                  className="inline-block rounded-full px-6 py-2.5 align-middle"
-                  style={{ background: 'rgba(11,13,26,0.80)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', marginTop: 2, marginBottom: 2 }}
-                >
-                  <h1
-                    className="font-seasons text-white text-lg"
-                    style={{ lineHeight: 1.2 }}
-                  >
-                    <Link href="/" className="inline-block text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--teal)] rounded-[8px] px-1">Dream River</Link>
-                  </h1>
-                </div>
+              
+              {/* Center: True H1 (non-clickable semantic heading, no pill) */}
+              <div className="justify-self-center w-full max-w-[560px] min-w-0 text-center px-2 border-x" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                <h1 className="font-seasons text-white text-2xl font-semibold" style={{ lineHeight: 1.2, margin: 0 }} tabIndex={-1}>
+                  Dream River
+                </h1>
               </div>
-              <div className="cell col-start-3 col-end-4 justify-self-end lg:min-w-[176px] w-full flex justify-end">
+              
+              {/* Right: Leaderboard button */}
+              <div className="justify-self-end pl-2 border-l" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
                 <button
                   type="button"
                   aria-label="Open leaderboard"
                   aria-controls="panel-leaderboard"
                   aria-expanded={leaderboardOpen}
-                  className="inline-flex items-center h-10 px-4 min-w-[140px] rounded-[16px] border text-[color:var(--navy)]"
+                  className="inline-flex items-center h-10 px-5 rounded-[16px] border text-[color:var(--navy)] text-sm whitespace-nowrap"
                   style={{ background: 'rgba(42,167,181,0.15)', border: '1.5px solid rgba(255,255,255,0.25)' }}
                   onClick={() => setLeaderboardOpen(v => !v)}
                   onKeyDown={(e) => { if (e.key === 'Escape') setLeaderboardOpen(false); }}
                 >
-                  <img src="/logos/trophy.svg" alt="" width="18" height="18" aria-hidden="true" className="header-icon" style={{ filter: 'none' }} />
-                  <span className="ml-2">Leaderboard</span>
+                  Leaderboard
                 </button>
               </div>
             </div>
@@ -484,14 +479,14 @@ export default function BelowMap() {
       {/* Margin handled by --section-gap on panels */}
 
       {/* Content Wrapper (fills leftover space between sticky header and footer) */}
-      <div className="w-full flex-1 min-h-0 mt-0" ref={contentRef}>
+      <div className="w-full mt-0" style={{ flex: '1 1 auto', minHeight: 0 }} ref={contentRef}>
         {/* Single SR summary for both layouts (avoid duplicate IDs across breakpoints) */}
         <GlobeSummarySR id="globe-sr-summary" />
         {/* Mobile / small-screen layout (<1024px) */}
         <div className="lg:hidden space-y-4">
           {/* Slim Bandcamp player directly under the header, same horizontal space */}
           <section aria-label="Bandcamp player (mobile)">
-            <div className="rounded-[16px] shadow p-2" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.25)' }}>
+            <div className="rounded-[16px] shadow p-2 overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.25)' }}>
               <iframe
                 title="Bandcamp player (slim)"
                 aria-label="Bandcamp player for Dream River"
@@ -510,8 +505,8 @@ export default function BelowMap() {
             <div className="relative rounded-[24px] shadow-md overflow-hidden" style={{ background: '#0b0d1a' }}>
               <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(6px)' }} />
               {/* Square globe container */}
-              <div className="relative w-full" style={{ aspectRatio: '1 / 1' }}>
-                <div className="absolute inset-0">
+              <div className="relative w-full grid place-items-center" style={{ aspectRatio: '1 / 1', padding: '16px' }}>
+                <div className="relative w-full h-full max-w-full max-h-full" style={{ aspectRatio: '1 / 1' }}>
                   <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
                 </div>
               </div>
@@ -520,21 +515,21 @@ export default function BelowMap() {
 
           {/* How to play (YouTube) comes before text block on mobile */}
           <section aria-label="How to Play (mobile)">
-            <div className="rounded-[24px] shadow-md p-3" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div className="rounded-[24px] shadow-md p-3 overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <HowToPlayVideo />
             </div>
           </section>
 
           {/* Intro text block */}
           <section aria-label="Project intro (mobile)">
-            <div id="mobile-intro" className="rounded-[24px] shadow-md p-4" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div id="mobile-intro" className="rounded-[24px] shadow-md p-4 overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <Hero />
             </div>
           </section>
 
           {/* Accordions for remaining sections */}
           <div className="space-y-3">
-            <div className="rounded-[24px] border" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <button
                 className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
                 aria-expanded={accOpen.how}
@@ -551,7 +546,7 @@ export default function BelowMap() {
                 </div>
               )}
             </div>
-            <div className="rounded-[24px] border" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <button
                 className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
                 aria-expanded={accOpen.why}
@@ -568,7 +563,7 @@ export default function BelowMap() {
                 </div>
               )}
             </div>
-            <div className="rounded-[24px] border" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <button
                 className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
                 aria-expanded={accOpen.who}
@@ -589,49 +584,56 @@ export default function BelowMap() {
         </div>
 
         {/* Desktop layout (≥1024px): 3 columns 1:2:1 over fluid container */}
-        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden items-stretch page-container" style={{ gridTemplateColumns: '3fr 6fr 3fr', marginTop: 'var(--section-gap, 16px)', marginBottom: 'var(--section-gap, 16px)' }}>
+        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden page-container" style={{ gridTemplateColumns: '3fr 6fr 3fr', marginTop: 'var(--section-gap, 16px)', marginBottom: '0', alignItems: 'stretch' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
-          <section aria-label="Bandcamp and YouTube" className="h-full min-h-0 min-w-0 overflow-hidden">
-            <div className="relative h-full min-h-0 flex flex-col p-4 frosted-panel overflow-hidden">
-              <LeftPanelEmbeds />
+          <section aria-label="Bandcamp and YouTube" className="min-w-0 flex" style={{ alignSelf: 'stretch' }}>
+            <div className="relative w-full flex flex-col frosted-panel overflow-hidden" style={{ borderRadius: 'var(--card-radius)', height: '100%' }}>
+              <div className="flex-1 flex flex-col px-4 py-3 min-h-0">
+                <LeftPanelEmbeds />
+              </div>
               {/* Normalize ring across all panels for optical alignment */}
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.06)' }} />
             </div>
           </section>
 
           {/* Globe (center) */}
-          <section aria-label="Global participation" className="min-w-0 h-full overflow-hidden">
-            <div className="relative h-full min-h-0 overflow-hidden p-4 frosted-panel">
-              {/* Frame centers canvas and provides equal inset */}
-              <div className="absolute inset-0 min-h-0 grid place-items-center">
-                <div className="relative w-full" style={{ maxWidth: '100%', maxHeight: '100%', padding: 8, aspectRatio: '1 / 1', overflow: 'visible', height: 'auto' }}>
-                  <div className="absolute inset-0">
-                    <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
-                  </div>
-                </div>
+          <section aria-label="Global participation" className="min-w-0 flex" style={{ alignSelf: 'stretch' }}>
+            <div className="relative w-full rounded-[24px] overflow-hidden flex items-center justify-center" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', height: '100%' }}>
+              {/* Globe container - square, centered, with equal inset */}
+              <div className="relative" style={{ 
+                width: 'min(100%, 100vh - 200px)',
+                height: 'min(100%, 100vh - 200px)',
+                aspectRatio: '1 / 1',
+                maxWidth: 'calc(100% - 32px)',
+                maxHeight: 'calc(100% - 32px)'
+              }}>
+                <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
               </div>
               {/* Subtle inner glow ring to keep globe away from edges */}
-              <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.08)' }} />
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.08)', zIndex: 0 }} />
             </div>
           </section>
 
           {/* Text block (right) */}
-          <section aria-label="Project intro" className="min-w-0 h-full">
-            <div
-              className="relative h-full min-h-0 pt-8 px-6 pb-6 overflow-y-auto overflow-x-hidden outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] leading-relaxed text-[color:var(--ink)] frosted-panel"
-              tabIndex={0}
-              role="region"
-              aria-label="About Dream River"
-              style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth' }}
-              ref={rightPanelRef}
-              id="right-panel-content"
-            >
+          <section aria-label="Project intro" className="min-w-0 flex" style={{ alignSelf: 'stretch' }}>
+            <div className="relative w-full frosted-panel overflow-hidden flex flex-col" style={{ borderRadius: '24px', height: '100%' }}>
+              <div
+                className="absolute inset-0 py-3 px-4 overflow-y-auto overflow-x-hidden outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--teal)] leading-relaxed text-[color:var(--ink)]"
+                tabIndex={0}
+                role="region"
+                aria-label="About Dream River"
+                style={{ scrollBehavior: (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth' }}
+                ref={rightPanelRef}
+                id="right-panel-content"
+              >
+                <Hero />
+                {/* Gradient fade - only visible when content overflows */}
+                {showBottomFade && (
+                  <div aria-hidden="true" className="pointer-events-none absolute left-0 right-0 bottom-0 h-12 z-10" style={{ background: 'linear-gradient(to top, rgba(247, 240, 228, 0.95) 0%, rgba(247, 240, 228, 0) 100%)' }} />
+                )}
+              </div>
               {/* Normalize ring across all panels for optical alignment */}
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.06)' }} />
-              <Hero />
-              {showBottomFade && (
-                <div aria-hidden="true" className="pointer-events-none absolute left-0 right-0 bottom-0 h-10" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0) 100%)' }} />
-              )}
             </div>
           </section>
         </div>
