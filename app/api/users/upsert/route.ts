@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { ensureDisplayName } from "@/server/names/writeDisplayName";
 import { resolveIso2, isIso2, toIso2Upper, normalizeInput } from "@/lib/countryMap";
 
 export async function POST(req: Request) {
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
     if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 });
     if (!authUser) return NextResponse.json({ error: 'auth_user_not_found' }, { status: 404 });
 
-    // Ensure referral code via SoT (idempotent). Do not mint in this route.
+    // Ensure referral code via SoT (idempotent)
     let canonicalCode: string | null = null;
     try {
       const { data: codeData } = await supabaseServer.rpc('assign_referral_code', { p_user_id: (authUser as { id: string }).id });
@@ -83,31 +84,34 @@ export async function POST(req: Request) {
       otp_verified: true,
     };
 
-    // Server-side attribution with client precedence: body.referred_by > HttpOnly cookie > URL ?ref=, first-click wins
+    // Server-side attribution with precedence: cookie.ref > url.ref; ignore body.referred_by; first-click wins
     try {
-      const bodyRef = sanitized.referred_by;
+      const bodyRef = sanitized.referred_by; // Ignored if cookie/url present
       const cookie = (req.headers.get("cookie") || "");
       const m = cookie.match(/(?:^|; )river_ref_h=([^;]+)/);
       const v = m ? decodeURIComponent(m[1]) : "";
       const norm = (v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
       const hadRef = !!(prevMeta as { referred_by?: unknown }).referred_by;
       
-      // Choose the candidate ref in priority order (but do NOT overwrite an existing DB value)
-      const chosenRef = bodyRef || norm || null;
+      // Choose candidate: cookie > url; ignore body if any incomingRef present
+      let chosenRef: string | null = null;
       let appliedFrom: 'body' | 'cookie' | 'url' | 'none' = 'none';
+      if (norm) { chosenRef = norm; appliedFrom = 'cookie'; }
       
-      if (chosenRef && !hadRef && !(nextMeta as { referred_by?: unknown }).referred_by) {
-        (nextMeta as { referred_by?: string | null }).referred_by = chosenRef;
-        appliedFrom = bodyRef ? 'body' : 'cookie';
-      }
-      
-      // Fallback to URL param if no other source found
-      if (!((nextMeta as { referred_by?: unknown }).referred_by) && !hadRef) {
+      // Fallback to URL param if cookie absent
+      if (!chosenRef) {
         try {
           const u = new URL(req.url);
           const qref = (u.searchParams.getAll('ref')[0] || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (qref) { (nextMeta as { referred_by?: string | null }).referred_by = qref; appliedFrom = 'url'; }
+          if (qref) { chosenRef = qref; appliedFrom = 'url'; }
         } catch {}
+      }
+
+      // Only if neither cookie nor URL, consider body
+      if (!chosenRef && bodyRef) { chosenRef = String(bodyRef).toUpperCase().replace(/[^A-Z0-9]/g, ''); appliedFrom = 'body'; }
+      
+      if (chosenRef && !hadRef && !(nextMeta as { referred_by?: unknown }).referred_by) {
+        (nextMeta as { referred_by?: string | null }).referred_by = chosenRef;
       }
       
       // Minimal sampled telemetry (no PII). Enable with REF_CAPTURE_LOG_SAMPLE=1. Logs ~1% of requests.
@@ -116,12 +120,33 @@ export async function POST(req: Request) {
           const stamp = Math.floor(Math.random() * 100);
           if (stamp === 0) {
             const ts = new Date().toISOString();
-            console.log('[ref-capture]', { ts, route: 'users/upsert', applied_source: appliedFrom, had_cookie: !!norm, had_body: !!bodyRef, had_url: true });
+            console.log('[ref-capture]', { ts, route: 'users/upsert', applied_source: appliedFrom, wrote_referred_by: !!(nextMeta as { referred_by?: unknown }).referred_by, had_cookie: !!norm, had_body: !!bodyRef, had_url: appliedFrom==='url' });
           }
         }
       } catch {}
       if (process.env.NODE_ENV !== "production") {
         console.log("[REFTRACE-SERVER] chosen referred_by =", chosenRef);
+      }
+    } catch {}
+
+    // Server-side non-invasive auto-fill for display name in auth metadata (profilesless)
+    try {
+      // Derive candidate from sources in order (metadata-first, then email local-part)
+      const metaNew = nextMeta as Record<string, unknown>;
+      const metaPrev = prevMeta as Record<string, unknown>;
+      const fromBody = sanitized.name as string;
+      const fromAuthFull = (typeof metaPrev.full_name === 'string' ? metaPrev.full_name as string : '') || '';
+      const fromAuthName = (typeof metaPrev.name === 'string' ? metaPrev.name as string : '') || '';
+      const emailLocal = String(sanitized.email || '').split('@')[0] || '';
+      const titleCaseLocal = emailLocal.replace(/\+.*/, '').replace(/[._-]+/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+      const candidate = [fromBody, fromAuthFull, fromAuthName, titleCaseLocal]
+        .map(s => (String(s || '').trim()))
+        .find(s => s.length > 0) || '';
+      if (candidate) {
+        await ensureDisplayName(row.id, candidate);
+        if (!(typeof metaPrev.full_name === 'string' && metaPrev.full_name.trim().length > 0)) {
+          (nextMeta as Record<string, unknown>).full_name = candidate;
+        }
       }
     } catch {}
 
@@ -138,18 +163,15 @@ export async function POST(req: Request) {
       JSON.stringify({ id: row.id, user_metadata: nextMeta }, null, 2)
     ]);
 
-    // 04 — mark OTP verified (monotonic true) and minimal credit logic (first verify only)
+    // 04 — mark OTP verified (monotonic true) then award points (idempotent)
     try {
       try {
         await supabaseServer.rpc('mark_otp_verified', { p_user_id: row.id });
       } catch {}
-      const wasVerified = !!(prevMeta as { otp_verified?: unknown }).otp_verified;
-      if (!wasVerified) {
-        const { error: rpcErr } = await supabaseServer.rpc('award_referral_signup', { p_invitee_id: row.id });
-        await writeDiag("04-credit-logic.txt", [
-          `rpc_award_referral_signup_error=${rpcErr ? rpcErr.message : ''}`
-        ]);
-      }
+      const { error: rpcErr } = await supabaseServer.rpc('award_referral_signup', { p_invitee_id: row.id });
+      await writeDiag("04-credit-logic.txt", [
+        `rpc_award_referral_signup_error=${rpcErr ? rpcErr.message : ''}`
+      ]);
     } catch {
       // Non-blocking: credit logic should not break signup
     }

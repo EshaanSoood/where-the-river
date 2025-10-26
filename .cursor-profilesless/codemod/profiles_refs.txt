@@ -1,0 +1,5 @@
+Remaining references to profiles (non-runtime or scripts/migrations only):
+- web/scripts/backfill-inviter-name.mjs
+- web/supabase/migrations/20251012_referrals_profiles_awards.sql
+- web/supabase/migrations/20251012_seed_test_profiles.sql
+- web/docs/* (various)

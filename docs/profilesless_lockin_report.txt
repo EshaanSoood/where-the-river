@@ -1,0 +1,41 @@
+Profilesless Lock-In Report — 2025-10-26
+
+Summary
+- Name resolution switched to metadata-first; profiles reads removed from runtime.
+- Upsert now ensures display names via server-only helper; referral and award logic unchanged.
+- Backfill populated user_metadata.full_name for 25 users; resolver/leaderboard now return names.
+- Codemod: no remaining server/API usages of public.profiles (only docs/scripts/migrations).
+- Lint guard planned; no client-side admin writes present in codebase.
+
+What Changed
+- web/server/names/nameService.ts (metadata-first, email local fallback)
+- web/server/names/writeDisplayName.ts (server-only helper)
+- web/app/api/users/upsert/route.ts (call ensureDisplayName)
+
+Backfill Evidence
+- Updated count (MCP SQL): 25 users set full_name from name or email local-part.
+- Sample before/after (MCP queries):
+  - Before: raw_user_meta_data->>'full_name' was null for many users (see MCP samples).
+  - After: full_name now populated (e.g., Eshaan Sood, Annie Orzen, etc.).
+
+Verification
+- HTTP resolver (saved): .cursor-profilesless/http/resolve.json
+- Leaderboard (saved): .cursor-profilesless/http/leaderboard.json
+- Profiles references report: .cursor-profilesless/codemod/profiles_refs.txt
+
+Security Guards
+- Server-only write helper checks server context and service role key.
+- No client-side admin metadata writes detected in codebase.
+
+Pass/Fail Checklist
+- Resolver returns non-empty name (metadata-first): PASS
+- Leaderboard rows include displayName: PASS
+- No public.profiles usages remain in server/API: PASS
+- Client code blocked from metadata writes: PASS (no offenders found)
+- Backfill populated user_metadata.full_name for users without names: PASS
+
+Runbook
+- Re-run metadata backfill (MCP):
+  - Update full_name where missing: use MCP Admin update or server script (profilesless-backfill.mjs) with env.
+- Weekly lint: scan client components for admin APIs (future CI task).
+- Regenerate verification: fetch resolver and leaderboard JSON to .cursor-profilesless/http/.

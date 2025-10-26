@@ -43,10 +43,10 @@ export default function FooterBar() {
         }
         .footer-icon { display: none; }
         .footer-mask { display: inline-block; width: 20px; height: 20px; background-color: var(--teal); -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
-        .footer-mask.youtube { -webkit-mask-image: url('/Streaming/youtube.svg.png'); mask-image: url('/Streaming/youtube.svg.png'); }
-        .footer-mask.applemusic { -webkit-mask-image: url('/Streaming/applemusic.svg'); mask-image: url('/Streaming/applemusic.svg'); }
-        .footer-mask.bandcamp { -webkit-mask-image: url('/Streaming/bandcamp.svg.png'); mask-image: url('/Streaming/bandcamp.svg.png'); }
-        .footer-mask.spotify { -webkit-mask-image: url('/Streaming/spotify.svg'); mask-image: url('/Streaming/spotify.svg'); }
+        .footer-mask.youtube { -webkit-mask-image: url('/Streaming/pngs/youtube.png'); mask-image: url('/Streaming/pngs/youtube.png'); }
+        .footer-mask.applemusic { -webkit-mask-image: url('/Streaming/pngs/applemusic.png'); mask-image: url('/Streaming/pngs/applemusic.png'); }
+        .footer-mask.bandcamp { -webkit-mask-image: url('/Streaming/pngs/bandcamp.png'); mask-image: url('/Streaming/pngs/bandcamp.png'); }
+        .footer-mask.spotify { -webkit-mask-image: url('/Streaming/pngs/spotify.png'); mask-image: url('/Streaming/pngs/spotify.png'); }
         .footer-mask.instagram { -webkit-mask-image: url('/logos/Instagram.svg'); mask-image: url('/logos/Instagram.svg'); }
         .footer-mask.mail { -webkit-mask-image: url('/logos/email.png'); mask-image: url('/logos/email.png'); }
       `}</style>

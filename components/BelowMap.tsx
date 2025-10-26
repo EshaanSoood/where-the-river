@@ -676,8 +676,18 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                 <div className="flex flex-col items-center justify-center gap-3 py-4">
                   {/* Invite hint (non-blocking), reserved space to avoid layout shift */}
                   <div role="status" aria-live="polite" className="min-h-5 leading-5 text-center font-sans" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
-                    {!!refInviterFirst && (!user || (refInviterId && user && (user as { id?: string | null }).id !== refInviterId)) && (
-                      <p><strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{refInviterFirst}</strong> sent their boat to your shore.</p>
+                    {(!user || (refInviterId && user && (user as { id?: string | null }).id !== refInviterId)) && (
+                      (() => {
+                        const name = (refInviterFirst && String(refInviterFirst)) || (initialInviter?.fullName || null);
+                        const codeSnap = getReferralSnapshot().code;
+                        if (name) {
+                          return (<p><strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{name}</strong> sent their boat to your shore.</p>);
+                        }
+                        if (codeSnap) {
+                          return (<p>Someone invited you (code {codeSnap}).</p>);
+                        }
+                        return null;
+                      })()
                     )}
                   </div>
                   {/* Optional consent if cookie not set but we have a ref context */}
@@ -716,8 +726,18 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                 <div className="space-y-3">
                   {/* Invite hint (non-blocking) above form */}
                   <div aria-live="polite" className="min-h-5 leading-5 font-sans" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
-                    {!!refInviterFirst && (!user || (refInviterId && user && (user as { id?: string | null }).id !== refInviterId)) && (
-                      <span>Join <strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{refInviterFirst}</strong>&apos;s river and start your own.</span>
+                    {(!user || (refInviterId && user && (user as { id?: string | null }).id !== refInviterId)) && (
+                      (() => {
+                        const name = (refInviterFirst && String(refInviterFirst)) || (initialInviter?.fullName || null);
+                        const codeSnap = getReferralSnapshot().code;
+                        if (name) {
+                          return (<span>Join <strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{name}</strong>&apos;s river and start your own.</span>);
+                        }
+                        if (codeSnap) {
+                          return (<span>Someone invited you (code {codeSnap}).</span>);
+                        }
+                        return null;
+                      })()
                     )}
                   </div>
                   {/* Consent (if needed) */}
@@ -1435,10 +1455,10 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
         /* Streaming icons: uniform size, teal tint @ 80% */
         .stream-btn { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; border-radius: 12px; background: rgba(42,167,181,0.08); }
         .stream-icon { display: inline-block; width: 28px; height: 28px; background-color: #135E66; -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
-        .stream-icon.spotify { -webkit-mask-image: url('/Streaming/spotify.svg'); mask-image: url('/Streaming/spotify.svg'); }
-        .stream-icon.applemusic { -webkit-mask-image: url('/Streaming/applemusic.svg'); mask-image: url('/Streaming/applemusic.svg'); }
-        .stream-icon.youtube { -webkit-mask-image: url('/Streaming/youtube.svg'); mask-image: url('/Streaming/youtube.svg'); }
-        .stream-icon.bandcamp { -webkit-mask-image: url('/Streaming/bandcamp.svg'); mask-image: url('/Streaming/bandcamp.svg'); }
+        .stream-icon.spotify { -webkit-mask-image: url('/Streaming/pngs/spotify.png'); mask-image: url('/Streaming/pngs/spotify.png'); }
+        .stream-icon.applemusic { -webkit-mask-image: url('/Streaming/pngs/applemusic.png'); mask-image: url('/Streaming/pngs/applemusic.png'); }
+        .stream-icon.youtube { -webkit-mask-image: url('/Streaming/pngs/youtube.png'); mask-image: url('/Streaming/pngs/youtube.png'); }
+        .stream-icon.bandcamp { -webkit-mask-image: url('/Streaming/pngs/bandcamp.png'); mask-image: url('/Streaming/pngs/bandcamp.png'); }
       `}</style>
       {/* Privacy Policy Modal */}
       {privacyOpen && (

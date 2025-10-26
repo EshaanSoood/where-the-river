@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { getCountryNameFromCode } from "@/lib/countryMap";
 import { cookies } from "next/headers";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { getDisplayNameByUserId } from "@/server/names/nameService";
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +37,6 @@ async function handleProfile(req: Request) {
 
     type AuthMeta = { name?: string | null; country_code?: string | null; message?: string | null; boat_color?: string | null; boats_total?: number | null; referral_id?: string | null };
     const meta = ((target.user_metadata || target.raw_user_meta_data) || {}) as AuthMeta;
-    const name = (meta.name ? String(meta.name).trim() : null) as string | null;
     const country_code = (meta.country_code ? String(meta.country_code).trim().toUpperCase() : null) as string | null;
     const country_name = country_code ? getCountryNameFromCode(country_code) : null;
     const message = (meta.message ?? null) as string | null;
@@ -101,6 +101,10 @@ async function handleProfile(req: Request) {
         await supabaseServer.auth.admin.updateUserById(target.id, { user_metadata: { ...(meta as Record<string, unknown>), referral_id: referral_code } });
       }
     } catch {}
+
+    // Profiles-first display name via nameService
+    const nameRes = await getDisplayNameByUserId(target.id);
+    const name = nameRes.fullName || nameRes.firstName || null;
 
     return NextResponse.json({
       exists: true,

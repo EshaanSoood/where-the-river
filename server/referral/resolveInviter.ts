@@ -1,0 +1,52 @@
+import { supabaseServer } from "@/lib/supabaseServer";
+import { getDisplayNameByUserId } from "@/server/names/nameService";
+
+type Input = { code?: string | null; user_id?: string | null };
+type Output = { inviterUserId: string | null; fullName: string | null; firstName: string | null };
+
+function normalizeCode(raw: unknown): string | null {
+  if (!raw) return null;
+  try {
+    const once = decodeURIComponent(String(raw));
+    const upper = once.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return upper || null;
+  } catch {
+    const upper = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return upper || null;
+  }
+}
+
+export async function resolveInviterServer(input: Input): Promise<Output> {
+  try {
+    let userId = (input.user_id || null) as string | null;
+    const code = normalizeCode(input.code || null);
+    if (!userId && code) {
+      // Lookup via SoT referral tables
+      const { data: codeRow } = await supabaseServer
+        .from('referral_codes')
+        .select('user_id')
+        .eq('code', code)
+        .maybeSingle();
+      if (codeRow && (codeRow as { user_id?: string | null }).user_id) {
+        userId = (codeRow as { user_id?: string | null }).user_id || null;
+      } else {
+        const { data: aliasRow } = await supabaseServer
+          .from('referral_code_aliases')
+          .select('user_id')
+          .eq('code', code)
+          .maybeSingle();
+        userId = aliasRow ? (aliasRow as { user_id?: string | null }).user_id || null : null;
+      }
+    }
+
+    if (!userId) return { inviterUserId: null, fullName: null, firstName: null };
+
+    const res = await getDisplayNameByUserId(userId);
+    return { inviterUserId: userId, fullName: res.fullName, firstName: res.firstName };
+  } catch {
+    return { inviterUserId: null, fullName: null, firstName: null };
+  }
+}
+
+
+

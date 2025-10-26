@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { getDisplayNameByUserId } from "@/server/names/nameService";
 
 export async function GET(req: Request) {
   try {
@@ -19,10 +20,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ code, first_name: null, user_id: null }, { headers: { "Cache-Control": "no-store" } });
 
     const userId = (row as { user_id: string }).user_id;
-    const { data: users } = await supabaseServer.auth.admin.listUsers({ page: 1, perPage: 1 });
-    // Minimal: we won’t round-trip name by ID here (Admin list filtering limitations);
-    // return code + userId; client can show code and generic text.
-    return NextResponse.json({ code, first_name: null, user_id: userId }, { headers: { "Cache-Control": "no-store" } });
+    const nameRes = await getDisplayNameByUserId(userId);
+    const firstName = (nameRes.firstName || (nameRes.fullName ? nameRes.fullName.split(/\s+/)[0] : null) || null);
+    return NextResponse.json({ code, first_name: firstName, user_id: userId }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: unknown) {
     return NextResponse.json({ code: null, first_name: null, user_id: null }, { headers: { "Cache-Control": "no-store" } });
   }

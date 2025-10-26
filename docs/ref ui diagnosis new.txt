@@ -1,0 +1,42 @@
+Referral UI Diagnosis — 2025-10-26
+
+Scenario
+- Opened in a private window: https://riverflowseshaan.vercel.app/?ref=79434756
+- Goal: Understand why referral UI visuals (inviter hint) did not appear on landing or after opening Participate → Sign up.
+
+What Works (Confirmed)
+- Middleware capture and redirect are correct.
+  - Visiting with ?ref triggers a 307 to "/" and sets both cookies.
+  - Set-Cookie headers observed:
+    - river_ref_h=79434756; Path=/; Max-Age=604800; Secure; HttpOnly; SameSite=Lax
+    - river_ref=79434756; Path=/; Max-Age=604800; Secure; SameSite=Lax
+
+- SoT resolver maps code → user_id.
+  - GET /api/referral/resolve?code=79434756 → { first_name: null, full_name: null, user_id: "2596cba8-5265-4906-8bed-4de9104e23cb" }
+  - GET /api/invite-context (with Cookie: river_ref_h=79434756) → { code: "79434756", first_name: null, user_id: "2596cba8-5265-4906-8bed-4de9104e23cb" }
+
+Why The UI Hint Didn’t Render
+- The overlay hint only renders when a truthy inviter first name is available.
+  - SSR passes initialInviter from cookie → resolver.
+  - BelowMap’s invite hint condition checks `!!refInviterFirst`; when null, the hint is not shown in Menu or Signup screens.
+- Name service returned null for this inviter across all sources:
+  - profiles.full_name / profiles.first_name
+  - auth.user_metadata.full_name / auth.user_metadata.name
+  - email local-part fallback
+
+Conclusion (Root Cause)
+- Referral code is valid and attributed (cookies + SoT user_id), but there is no display name for inviter user_id=2596cba8-5265-4906-8bed-4de9104e23cb. With first_name null, the UI’s guarded hint does not render.
+
+Non-Code Validation Steps (Repro)
+1) Load https://riverflowseshaan.vercel.app/?ref=79434756 in a new private window.
+2) Observe 307 redirect to "/" and presence of cookies river_ref_h and river_ref.
+3) GET /api/invite-context in the same session: expect first_name: null.
+4) Open Participate → (Menu / Signup): no inviter hint appears because first_name is null.
+
+Options (If we choose to address later)
+- Data backfill: set profiles.full_name or profiles.first_name (or mirror into auth.users.user_metadata) for inviter.
+- UI fallback: when name is null but code is present, show a neutral hint (e.g., “Someone invited you (79434756)”).
+- Service fallback: enhance nameService to derive from email local-part more defensively or add an additional source.
+
+Notes
+- No code changes were made during this diagnosis; verified via production endpoints and cookies.

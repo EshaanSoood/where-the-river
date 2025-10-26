@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { getDisplayNameByUserId } from "@/server/names/nameService";
 
 export async function GET() {
   try {
@@ -23,18 +24,21 @@ export async function GET() {
       totalsById.set(id, total);
     });
 
-    const entries = users.map((u) => {
+    const entries = await Promise.all(users.map(async (u) => {
       const meta = ((u.user_metadata || u.raw_user_meta_data) || {}) as AuthMeta;
       const boats = totalsById.get(u.id) || 0;
+      const nameRes = await getDisplayNameByUserId(u.id);
+      const displayName = (nameRes.fullName || nameRes.firstName || '').trim();
       return {
         id: u.id,
-        first_name: String(meta.name || '').split(' ')[0] || '',
+        first_name: (nameRes.firstName || '').trim(),
+        displayName,
         country_code: meta.country_code || null,
         boat_color: meta.boat_color || null,
         otp_verified: Boolean(meta.otp_verified),
         boats_total: boats,
       };
-    });
+    }));
 
     const filtered = entries.filter((e) => e.otp_verified && !!e.boat_color);
     const totalBoats = filtered.reduce((acc, e) => acc + (e.boats_total || 0), 0);
@@ -42,7 +46,7 @@ export async function GET() {
       .slice()
       .sort((a, b) => (b.boats_total || 0) - (a.boats_total || 0))
       .slice(0, 5)
-      .map((e) => ({ first_name: e.first_name, country_code: e.country_code, boats_total: e.boats_total || 0 }));
+      .map((e) => ({ first_name: e.first_name, displayName: e.displayName, country_code: e.country_code, boats_total: e.boats_total || 0 }));
 
     return NextResponse.json({ totalBoats, top }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: unknown) {
