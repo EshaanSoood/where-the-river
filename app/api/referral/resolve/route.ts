@@ -64,11 +64,13 @@ export async function GET(req: NextRequest) {
     // Resolve first name from auth metadata (best-effort)
     const { data: authRow } = await supabaseServer
       .from('auth.users')
-      .select('raw_user_meta_data')
+      .select('user_metadata, raw_user_meta_data')
       .eq('id', userId)
       .maybeSingle();
-    const meta = (authRow ? (authRow as { raw_user_meta_data?: Record<string, unknown> | null }).raw_user_meta_data || {} : {}) as Record<string, unknown>;
-    const fullName = typeof meta.name === 'string' ? meta.name.trim() : '';
+    const metaNew = (authRow ? (authRow as { user_metadata?: Record<string, unknown> | null }).user_metadata || {} : {}) as Record<string, unknown>;
+    const metaRaw = (authRow ? (authRow as { raw_user_meta_data?: Record<string, unknown> | null }).raw_user_meta_data || {} : {}) as Record<string, unknown>;
+    const nameCandidate = (typeof metaNew.name === 'string' && metaNew.name.trim()) ? String(metaNew.name).trim() : (typeof metaRaw.name === 'string' ? String(metaRaw.name).trim() : '');
+    const fullName = nameCandidate;
     const firstName = fullName ? (fullName.split(/\s+/)[0] || '') : '';
 
     return new NextResponse(JSON.stringify({ first_name: firstName || null, user_id: userId }), { status: 200, headers: { "Cache-Control": "no-store" } });
