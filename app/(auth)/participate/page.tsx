@@ -97,6 +97,9 @@ export default function ParticipatePage() {
         const referralCode = snapshot && typeof snapshot.code === 'string' && snapshot.code.trim().length > 0
           ? snapshot.code.trim()
           : null;
+        
+        console.log('[PARTICIPATE-DEBUG] Referral snapshot:', snapshot);
+        console.log('[PARTICIPATE-DEBUG] Referral code being sent:', referralCode);
 
         const payload = {
           name,

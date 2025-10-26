@@ -17,15 +17,18 @@ export function middleware(req: NextRequest) {
   const url = req.nextUrl;
   const { pathname, searchParams } = url;
 
+  // Determine if we're on HTTPS
+  const isSecure = url.protocol === 'https:';
+
   // Case 1: /r/<code> deep link
   if (pathname.startsWith("/r/")) {
     const code = normalizeCode(pathname.slice(3));
     if (code) {
       const res = NextResponse.redirect(new URL("/", req.url));
       // HttpOnly cookie for server attribution
-      res.cookies.set("river_ref_h", code, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: true });
+      res.cookies.set("river_ref_h", code, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: isSecure });
       // Non-HttpOnly for client cues (best-effort)
-      res.cookies.set("river_ref", code, { httpOnly: false, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: true });
+      res.cookies.set("river_ref", code, { httpOnly: false, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: isSecure });
       return res;
     }
   }
@@ -37,8 +40,8 @@ export function middleware(req: NextRequest) {
     const clean = new URL(req.url);
     clean.searchParams.delete("ref");
     const res = NextResponse.redirect(clean);
-    res.cookies.set("river_ref_h", refParam, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: true });
-    res.cookies.set("river_ref", refParam, { httpOnly: false, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: true });
+    res.cookies.set("river_ref_h", refParam, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: isSecure });
+    res.cookies.set("river_ref", refParam, { httpOnly: false, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: isSecure });
     return res;
   }
 
