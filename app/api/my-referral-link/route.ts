@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { createClient } from "@supabase/supabase-js";
 
+// Lightweight in-memory rate limiter (per process). For prod multi-instance, replace with shared store.
+type Bucket = { count: number; resetAt: number };
+const minuteBuckets = new Map<string, Bucket>();
+const dayBuckets = new Map<string, Bucket>();
+function rlKey(req: NextRequest, userId: string | null): string {
+  const xf = req.headers.get("x-forwarded-for") || "";
+  const ip = (xf.split(",")[0] || req.headers.get("x-real-ip") || "0.0.0.0").trim();
+  return userId ? `u:${userId}` : `ip:${ip}`;
+}
+function hitLimit(key: string, now: number, limit: number, windowMs: number, map: Map<string, Bucket>): boolean {
+  const b = map.get(key);
+  if (!b || now > b.resetAt) {
+    map.set(key, { count: 1, resetAt: now + windowMs });
+    return false;
+  }
+  b.count++;
+  return b.count > limit;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const authz = req.headers.get("authorization") || "";
@@ -23,6 +42,17 @@ export async function GET(req: NextRequest) {
     }
 
     const userId = userRes.user.id;
+
+    // Rate limits: 20/min and 200/day keyed by user id when available; fallback to IP.
+    try {
+      const key = rlKey(req, userId || null);
+      const now = Date.now();
+      const overMinute = hitLimit(key+":m", now, 20, 60_000, minuteBuckets);
+      const overDay = hitLimit(key+":d", now, 200, 86_400_000, dayBuckets);
+      if (overMinute || overDay) {
+        return new NextResponse(JSON.stringify({ referral_url: null, referral_code: null, otp_verified: false }), { status: 200, headers: { "Cache-Control": "no-store" } });
+      }
+    } catch {}
 
     const { data: codeData, error: codeErr } = await supabaseServer.rpc("assign_referral_code", { p_user_id: userId });
     if (codeErr) throw codeErr;

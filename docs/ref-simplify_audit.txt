@@ -53,3 +53,4 @@ Notes:
 - /api/me already mints on read if absent, mirrors to auth metadata, returns { name, country, referral_id/referral_code, referral_url }, and sends Cache-Control: no-store.
 - Client still uses localStorage to prewarm and to build a fallback referral_url from cached code; to be removed in Phase 2.
 
+

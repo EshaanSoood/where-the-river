@@ -110,8 +110,16 @@ export async function POST(req: Request) {
         } catch {}
       }
       
-      // Dev-only minimal telemetry (no PII)
-      try { console.log('[upsert] ref_attribution', { body_ref_present: !!bodyRef, cookie_ref_present: !!norm, url_checked: true, applied_source: appliedFrom }); } catch {}
+      // Minimal sampled telemetry (no PII). Enable with REF_CAPTURE_LOG_SAMPLE=1. Logs ~1% of requests.
+      try {
+        if (process.env.REF_CAPTURE_LOG_SAMPLE === '1') {
+          const stamp = Math.floor(Math.random() * 100);
+          if (stamp === 0) {
+            const ts = new Date().toISOString();
+            console.log('[ref-capture]', { ts, route: 'users/upsert', applied_source: appliedFrom, had_cookie: !!norm, had_body: !!bodyRef, had_url: true });
+          }
+        }
+      } catch {}
       if (process.env.NODE_ENV !== "production") {
         console.log("[REFTRACE-SERVER] chosen referred_by =", chosenRef);
       }

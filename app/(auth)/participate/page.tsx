@@ -53,7 +53,11 @@ export default function ParticipatePage() {
     setNameError(null);
     try {
       const supabase = getSupabase();
-      const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+      // Thread ?ref=<code> into OTP redirect for Safari Private/new-tab resilience
+      const snap = (typeof window !== 'undefined') ? getReferralSnapshot() : null;
+      const codeParam = snap && snap.code ? `?ref=${encodeURIComponent(snap.code)}` : '';
+      const redirectTo = (typeof window !== 'undefined') ? `${window.location.origin}/${codeParam}` : undefined;
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: redirectTo } });
       if (error) throw error;
       setStep("code");
       setMessage("We emailed you a 6-digit code. Enter it below.");
@@ -136,6 +140,9 @@ export default function ParticipatePage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-8">
+      {/* Server-rendered inviter banner (SSR via landing page; sign-up page itself does not fetch server data) */}
+      {/* A11y: live status region for SR announcement; visible paragraph; no duplication */}
+      <div role="status" aria-live="polite" className="sr-only" aria-hidden="false"></div>
       {step === "email" && (
         <form onSubmit={handleSendOtp} className="w-full max-w-md space-y-4">
           <h1 className="text-2xl font-semibold">Participate</h1>

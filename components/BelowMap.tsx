@@ -23,7 +23,9 @@ import { refDebug } from "@/lib/refDebug";
 
   // Dashboard data bindings removed for overhaul; UI will use placeholders.
 
-export default function BelowMap() {
+type BelowMapProps = { initialInviter?: { id: string; fullName: string; firstName: string } | null };
+
+export default function BelowMap({ initialInviter }: BelowMapProps) {
   const router = useRouter();
   const [guestStep, setGuestStep] = useState<"menu" | "signup_email" | "signup_code" | "login_email" | "login_code">("menu");
   const [firstName, setFirstName] = useState("");
@@ -53,8 +55,8 @@ export default function BelowMap() {
   // Points modal state lives inside RewardsView now
   const [shareMessage, setShareMessage] = useState("Hey! I found this band called The Sonic Alchemists led by Eshaan Sood, a guitarist from India. They just put out an album and made a game for it. I've been listening to Dream River by them lately and I think you'll enjoy it too.");
   // Removed client-generated referral_id; canonical is minted server-side via SoT
-  const [refInviterFirst, setRefInviterFirst] = useState<string | null>(null);
-  const [refInviterId, setRefInviterId] = useState<string | null>(null);
+  const [refInviterFirst, setRefInviterFirst] = useState<string | null>(initialInviter?.firstName || null);
+  const [refInviterId, setRefInviterId] = useState<string | null>(initialInviter?.id || null);
   
   const [announce, setAnnounce] = useState("");
   const dashboardRef = useRef<HTMLDivElement | null>(null);
@@ -135,11 +137,7 @@ export default function BelowMap() {
 
   // Referral hint state: initialize from snapshot and subscribe for background resolve
   useEffect(() => {
-    try {
-      const snap = getReferralSnapshot();
-      setRefInviterFirst(snap.firstName || null);
-      setRefInviterId(snap.userId || null);
-    } catch {}
+    // Backstop only: keep client resolver subscription, but SSR value is authoritative at first paint
     const off = onReferralUpdate((d) => {
       try {
         if (typeof d?.firstName === 'string') setRefInviterFirst(d.firstName || null);
@@ -677,9 +675,9 @@ export default function BelowMap() {
               {guestStep === 'menu' && (
                 <div className="flex flex-col items-center justify-center gap-3 py-4">
                   {/* Invite hint (non-blocking), reserved space to avoid layout shift */}
-                  <div aria-live="polite" className="min-h-5 leading-5 text-center font-sans" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
+                  <div role="status" aria-live="polite" className="min-h-5 leading-5 text-center font-sans" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
                     {!!refInviterFirst && (!user || (refInviterId && user && (user as { id?: string | null }).id !== refInviterId)) && (
-                      <span><strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{refInviterFirst}</strong> sent their boat to your shore.</span>
+                      <p><strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{refInviterFirst}</strong> sent their boat to your shore.</p>
                     )}
                   </div>
                   {/* Optional consent if cookie not set but we have a ref context */}
