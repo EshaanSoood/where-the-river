@@ -126,19 +126,9 @@ export async function POST(req: Request) {
     try {
       // Mark OTP verified (idempotent)
       try { await supabaseServer.rpc('mark_otp_verified', { p_user_id: row.id }); } catch {}
-      // Re-read to confirm referred_by and otp before awarding
-      let okToAward = false;
-      try {
-        const { data: checkRow } = await supabaseServer
-          .from('auth.users')
-          .select('raw_user_meta_data')
-          .eq('id', row.id)
-          .maybeSingle();
-        const m = ((checkRow as { raw_user_meta_data?: Record<string, unknown> | null })?.raw_user_meta_data) || {};
-        const refVal = String((m as { referred_by?: unknown }).referred_by || '').trim();
-        okToAward = refVal.length > 0;
-      } catch {}
-      if (okToAward) {
+      // Gate award off authoritative user_metadata we just wrote
+      const refVal = String((nextMeta as { referred_by?: unknown }).referred_by || '').trim();
+      if (refVal.length > 0) {
         await supabaseServer.rpc('award_referral_signup', { p_invitee_id: row.id });
       }
     } catch {

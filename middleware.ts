@@ -1,56 +1,78 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-function normalizeCode(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  try {
-    const s = decodeURIComponent(String(raw)).trim();
-    const digits = s.replace(/\D+/g, "");
-    return digits.length > 0 ? digits : null;
-  } catch {
-    const s = String(raw).trim();
-    const digits = s.replace(/\D+/g, "");
-    return digits.length > 0 ? digits : null;
-  }
+function normalizeReferralCode(input: unknown): string | null {
+  if (!input) return null;
+  const s = String(input).trim();
+  const digits = s.replace(/\D+/g, "");
+  return digits.length ? digits : null;
 }
 
 export function middleware(req: NextRequest) {
-  const url = req.nextUrl;
-  const { pathname, searchParams } = url;
+  const { pathname, searchParams } = req.nextUrl;
+  let rawCode: string | null = null;
 
-  // Determine if we're on HTTPS
-  const isSecure = url.protocol === 'https:';
+  // Accept /r/<code>
+  const rMatch = pathname.match(/^\/r\/([^\/?#]+)/);
+  if (rMatch?.[1]) rawCode = rMatch[1];
 
-  // Case 1: /r/<code> deep link
-  if (pathname.startsWith("/r/")) {
-    const code = normalizeCode(pathname.slice(3));
-    if (code) {
-      const res = NextResponse.redirect(new URL("/", req.url));
-      // HttpOnly cookie for server attribution
-      res.cookies.set("river_ref_h", code, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: isSecure });
-      // Non-HttpOnly for client cues (best-effort)
-      res.cookies.set("river_ref", code, { httpOnly: false, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: isSecure });
-      return res;
+  // OR ?ref=<code>
+  if (!rawCode) {
+    const q = req.nextUrl.searchParams.get("ref");
+    if (q) rawCode = q;
+  }
+
+  const norm = normalizeReferralCode(rawCode);
+  const res = NextResponse.next();
+
+  if (norm) {
+    // IMPORTANT: set cookie on the RESPONSE, not the request
+    const isHttps = req.nextUrl.protocol === "https:";
+    res.cookies.set("river_ref_h", norm, {
+      httpOnly: true,
+      secure: isHttps,
+      sameSite: "lax",
+      path: "/",
+      // do NOT set Domain: default to current host so it matches API routes
+    });
+
+    // Optional: strip ?ref=… and /r/<code> from the URL after setting cookie
+    if (rMatch) {
+      const url = new URL(req.nextUrl.origin);
+      const redirect = NextResponse.redirect(url);
+      // Preserve cookie on redirect response
+      redirect.cookies.set("river_ref_h", norm, {
+        httpOnly: true,
+        secure: isHttps,
+        sameSite: "lax",
+        path: "/",
+      });
+      return redirect;
+    } else if (searchParams.has("ref")) {
+      const url = new URL(req.url);
+      url.searchParams.delete("ref");
+      const redirect = NextResponse.redirect(url);
+      // Preserve cookie on redirect response
+      redirect.cookies.set("river_ref_h", norm, {
+        httpOnly: true,
+        secure: isHttps,
+        sameSite: "lax",
+        path: "/",
+      });
+      return redirect;
     }
   }
 
-  // Case 2: ?ref=... present → set cookies then strip param to stabilize URL
-  const refParam = normalizeCode(searchParams.getAll("ref")[0] || "");
-  if (refParam) {
-    // Build a clean URL without ?ref
-    const clean = new URL(req.url);
-    clean.searchParams.delete("ref");
-    const res = NextResponse.redirect(clean);
-    res.cookies.set("river_ref_h", refParam, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: isSecure });
-    res.cookies.set("river_ref", refParam, { httpOnly: false, sameSite: "lax", path: "/", maxAge: 7 * 24 * 60 * 60, secure: isSecure });
-    return res;
-  }
-
-  return NextResponse.next();
+  return res;
 }
 
 export const config = {
-  matcher: ["/((?!_next/|api/referral/capture).*)"],
+  // Ensure middleware actually runs on your pages and /r/*, while skipping static assets and _next
+  matcher: [
+    "/",
+    "/r/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
+  ],
 };
 
 
