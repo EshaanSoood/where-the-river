@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { readReferralFromHttpOnlyCookie, normalizeReferralCode } from '@/server/referral/refCookies';
-import { chooseReferral } from '@/server/referral/attrSource';
+// Ref attribution is now body-first and creation-only; cookies are not used for attribution here
 import { ensureDisplayName } from "@/server/names/writeDisplayName";
 import { resolveIso2, isIso2, toIso2Upper, normalizeInput } from "@/lib/countryMap";
 
@@ -35,8 +34,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "invalid_country" }, { status: 400 });
     }
 
-    // 02 — upsert sanitized input
-    const sanitized = { name: cleanedName, email: String(email), country_code: cc, message: message ?? null, photo_url: photo_url ?? null, boat_color: boat_color ?? null, referred_by: referred_by ?? null };
+    // 02 — upsert sanitized input (body-first referred_by)
+    const bodyRefRaw = (referred_by ?? null) as string | null;
+    const bodyRef = (typeof bodyRefRaw === 'string' ? bodyRefRaw.replace(/\D+/g, '') : '').trim();
+    const normalizedBodyRef = bodyRef.length > 0 ? bodyRef : null;
+    const sanitized = { name: cleanedName, email: String(email), country_code: cc, message: message ?? null, photo_url: photo_url ?? null, boat_color: boat_color ?? null, referred_by: normalizedBodyRef };
     // Diagnostics removed
 
     // Lookup auth user by email
@@ -68,27 +70,43 @@ export async function POST(req: Request) {
       otp_verified: true,
     };
 
-    // Server-side attribution with precedence: cookie.ref > url.ref > body.referred_by; first-click wins
+    // Body-first referral attribution (creation-only). Validate inviter code and write only if user has none yet.
     try {
-      const cookieRef = await readReferralFromHttpOnlyCookie();
-      let urlRef: string | null = null;
-      try {
-        const u = new URL(req.url);
-        urlRef = normalizeReferralCode(u.searchParams.get('ref'));
-      } catch {}
-      const bodyRef = normalizeReferralCode(sanitized.referred_by as string | null);
-
-      const { code: incomingRef, source: applied_source } = chooseReferral({ cookieCode: cookieRef, urlCode: urlRef, bodyCode: bodyRef });
+      const bodyRefCode = normalizedBodyRef;
       const hadRef = !!(prevMeta as { referred_by?: unknown }).referred_by && String((prevMeta as { referred_by?: unknown }).referred_by || '').trim().length > 0;
-      const alreadySet = !!(nextMeta as { referred_by?: unknown }).referred_by && String((nextMeta as { referred_by?: unknown }).referred_by || '').trim().length > 0;
-      if (!hadRef && !alreadySet && incomingRef) {
-        (nextMeta as { referred_by?: string | null }).referred_by = incomingRef;
+      let validated = false;
+      let inviterUserId: string | null = null;
+      if (bodyRefCode) {
+        // Validate via SoT (referral_codes table): code -> user_id
+        const { data: refRow } = await supabaseServer
+          .from('public.referral_codes')
+          .select('user_id, code')
+          .eq('code', bodyRefCode)
+          .maybeSingle();
+        if (refRow && (refRow as { user_id?: string | null }).user_id) {
+          inviterUserId = (refRow as { user_id: string }).user_id;
+          // Avoid self-referral
+          if (inviterUserId !== (row.id)) {
+            validated = true;
+          }
+        }
       }
-      
-      // Minimal sampled telemetry (no PII). Enable with REF_CAPTURE_LOG_SAMPLE=1. Logs ~1% of requests.
-      // Structured logs kept
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[REFTRACE-SERVER] chosen referred_by =", incomingRef);
+      console.info('[upsert] ref.input', { raw: bodyRefRaw || null, normalized: bodyRefCode || null, validated });
+
+      // Creation-only: if user has no ref yet and body provided a validated code, write it to metadata
+      if (!hadRef && validated && bodyRefCode) {
+        const { error: updRefErr } = await supabaseServer.auth.admin.updateUserById(
+          row.id,
+          { user_metadata: { ...nextMeta, referred_by: bodyRefCode, ...(canonicalCode ? { referral_id: canonicalCode } : {}) } }
+        );
+        if (updRefErr) {
+          console.info('[upsert] ref.write', { attempted: true, outcome: 'error', error: updRefErr.message });
+        } else {
+          (nextMeta as { referred_by?: string | null }).referred_by = bodyRefCode;
+          console.info('[upsert] ref.write', { attempted: true, outcome: 'ok' });
+        }
+      } else {
+        console.info('[upsert] ref.write', { attempted: false, reason: hadRef ? 'already_set' : (validated ? 'not_creation' : 'invalid_code') });
       }
     } catch {}
 
@@ -126,10 +144,13 @@ export async function POST(req: Request) {
     try {
       // Mark OTP verified (idempotent)
       try { await supabaseServer.rpc('mark_otp_verified', { p_user_id: row.id }); } catch {}
-      // Gate award off authoritative user_metadata we just wrote
+      // Award idempotently if verified and referred_by exists now
       const refVal = String((nextMeta as { referred_by?: unknown }).referred_by || '').trim();
       if (refVal.length > 0) {
         await supabaseServer.rpc('award_referral_signup', { p_invitee_id: row.id });
+        console.info('[upsert] award', { decision: 'granted' });
+      } else {
+        console.info('[upsert] award', { decision: 'skipped', reason: 'no_ref' });
       }
     } catch {
       // Non-blocking

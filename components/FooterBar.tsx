@@ -2,7 +2,7 @@
 
 export default function FooterBar() {
   return (
-    <footer aria-label="Site footer" className="mt-6 lg:sticky bottom-0 z-30">
+    <footer aria-label="Site footer" className="lg:sticky bottom-0 z-30">
       <div
         className="w-full"
         style={{
