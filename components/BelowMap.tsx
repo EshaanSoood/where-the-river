@@ -15,7 +15,7 @@ import ColorChips from "@/components/ColorChips";
 import LeftPanelEmbeds from "@/components/LeftPanelEmbeds";
 import HowToPlayVideo from "@/components/HowToPlayVideo";
 // DashboardSheet is not used directly; inline overlay below owns the layout
-import { getReferralSnapshot } from "@/lib/referral";
+// Client snapshot removed; use server-latched inviter only
 import { refDebug } from "@/lib/refDebug";
 
   const Globe = dynamic(() => import("@/components/GlobeNew"), { ssr: false });
@@ -754,6 +754,8 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                       <option>Sailing Through Dream River</option>
                     </select>
                   </div>
+                  {/* Hidden referred_by, server-latched */}
+                  <input type="hidden" name="referred_by" value={(codeSnapSSRFirst || '').replace(/\D+/g, '')} readOnly />
                   <section aria-label="Choose your boat" className="mt-2">
                     <h3 className="font-seasons text-lg mb-2" style={{ color: "var(--teal)" }}>Choose your boat</h3>
                     <div className="rounded-full size-16 mb-3 flex items-center justify-center border" style={{ background: "var(--white-soft)", borderColor: "var(--mist)" }} aria-label="Boat preview">
@@ -791,8 +793,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           } else {
                             // New user → send signup OTP with metadata and go to Screen C
                           const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-                          const snap = getReferralSnapshot();
-                          const codeParam = snap.code ? `?ref=${encodeURIComponent(snap.code)}` : '';
+                          const codeParam = codeSnapSSRFirst ? `?ref=${encodeURIComponent(codeSnapSSRFirst)}` : '';
                           const redirectTo = (typeof window !== 'undefined') ? `${window.location.origin}/${codeParam}` : undefined;
                             const { error: signUpErr } = await supabase.auth.signInWithOtp({
                               email: emailNorm,
@@ -871,7 +872,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           if (error) throw error;
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
-                            const referredByCode = (getReferralSnapshot().code || null);
+                            const referredByCode = (codeSnapSSRFirst || null);
                             await fetch('/api/users/upsert', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
@@ -903,6 +904,8 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                       }
                     }}
                   />
+                  {/* Hidden referred_by, server-latched */}
+                  <input type="hidden" name="referred_by" value={(codeSnapSSRFirst || '').replace(/\D+/g, '')} readOnly />
                   <div className="flex items-center gap-3">
                     <button
                       className="rounded-md px-4 py-3 btn flex-1"
@@ -916,7 +919,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           if (error) throw error;
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
-                            const referredByCode = (getReferralSnapshot().code || null);
+                            const referredByCode = (codeSnapSSRFirst || null);
                             await fetch('/api/users/upsert', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
@@ -962,8 +965,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                         try {
                           const supabase = getSupabase();
                           const emailNorm = email.trim().toLowerCase();
-                          const snap2 = getReferralSnapshot();
-                          const codeParam2 = snap2.code ? `?ref=${encodeURIComponent(snap2.code)}` : '';
+                          const codeParam2 = codeSnapSSRFirst ? `?ref=${encodeURIComponent(codeSnapSSRFirst)}` : '';
                           const redirectTo2 = (typeof window !== 'undefined') ? `${window.location.origin}/${codeParam2}` : undefined;
                           const { error: signUpErr } = await supabase.auth.signInWithOtp({
                             email: emailNorm,
