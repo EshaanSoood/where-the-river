@@ -1,0 +1,29 @@
+Phase 5 — Display-only ref + scrub null settlers (no UI/API shape changes) — 2025-10-27
+
+Changes
+- Hidden inviter field remains for UI only:
+  - In components/BelowMap.tsx, renamed hidden field to data_inviter_code_display and left it read-only.
+  - Server remains authoritative (cookie→body precedence from Phase 3).
+- Scrubbed client posts of referred_by null/undefined/empty:
+  - BelowMap POST now builds payload dynamically and only includes referred_by when a digits-only value is present; otherwise omits the key.
+  - DashboardSheet already omits referred_by entirely (server authoritative); kept as-is.
+- SSR inviter is display-only:
+  - SSR paths continue to read cookies for copy only; no writes performed via SSR.
+- Removed legacy capture artifacts:
+  - No usages of localStorage/query-param attribution in runtime code paths.
+- Share link correctness (read-only):
+  - Share UI continues to use server-provided referral_url (SoT) rather than UI fields.
+- Telemetry hygiene:
+  - participate_opened event contains no referral code values.
+- Security & a11y:
+  - river_ref (non-HttpOnly) is used only for on-page copy, not logged or sent externally.
+  - No auto-open/focus changes introduced.
+
+Acceptance
+- Hidden field present and marked/display-only; server is SoT.
+- No client code sends referred_by: null/undefined/''; key omitted when absent.
+- No localStorage/query-param attribution remains in runtime code.
+- Share links sourced from SoT (helper/endpoint), not UI.
+- SSR inviter remains visual only; no writes occur.
+- Telemetry carries no referral code values.
+- App builds cleanly; no route/middleware changes beyond Phase 5 scope.

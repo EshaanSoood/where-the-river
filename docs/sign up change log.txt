@@ -1,0 +1,15 @@
+Sign up change log — 2025-10-27
+
+- Removed the legacy Participate client and layout files and kept app/(auth)/participate/page.tsx as a minimal redirect with a LEGACY comment.
+- Added components/participate/openParticipate.ts exporting openParticipateOverlay() with debounce and a lightweight telemetry call.
+- Wired components/BelowMap.tsx to listen for the global participate:open event and open the overlay in guest mode; no auto-open retained.
+- Updated app/(app)/r/[referral]/page.tsx to a client component with a button calling openParticipateOverlay() instead of navigating to /participate.
+- Removed any client referred_by: null posting by updating components/DashboardSheet.tsx to omit that field.
+- Verified no remaining href="/participate" and no hash-based auto-open logic.
+
+Acceptance checks
+- No references to ParticipateClient.tsx or participate/layout.tsx remain.
+- /participate still redirects to / and does not auto-open.
+- All “Participate” CTAs call openParticipateOverlay() and do not navigate.
+- No hash/route auto-open remains.
+- No client code sends referred_by: null.

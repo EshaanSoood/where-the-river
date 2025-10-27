@@ -42,24 +42,40 @@ export async function getServerInviter(): Promise<{ inviter: Inviter | null }> {
     const code = cookieRef || urlRef;
     if (!code) return { inviter: null };
 
-    // 3) Resolve via SoT tables
-    const { data: codeRow } = await supabaseServer
-      .from('referral_codes')
-      .select('user_id')
-      .eq('code', code)
-      .maybeSingle();
-
+    // 3) Resolve via SoT tables, helper behind flag with legacy fallback
     let userId: string | null = null;
-    if (codeRow && (codeRow as { user_id?: string | null }).user_id) {
-      userId = (codeRow as { user_id?: string | null }).user_id || null;
-    } else {
-      const { data: aliasRow } = await supabaseServer
-        .from('referral_code_aliases')
-        .select('user_id')
-        .eq('code', code)
-        .maybeSingle();
-      userId = aliasRow ? (aliasRow as { user_id?: string | null }).user_id || null : null;
-    }
+    try {
+      const { USE_REFERRAL_HELPERS } = await import('@/server/config/flags');
+      if (USE_REFERRAL_HELPERS) {
+        const { getInviterByCode } = await import('@/server/db/referrals');
+        const hit = await getInviterByCode(code);
+        userId = hit?.user_id || null;
+        if (!userId) {
+          const { data: aliasRow } = await supabaseServer
+            .from('referral_code_aliases')
+            .select('user_id')
+            .eq('code', code)
+            .maybeSingle();
+          userId = aliasRow ? (aliasRow as { user_id?: string | null }).user_id || null : null;
+        }
+      } else {
+        const { data: codeRow } = await supabaseServer
+          .from('referral_codes')
+          .select('user_id')
+          .eq('code', code)
+          .maybeSingle();
+        if (codeRow && (codeRow as { user_id?: string | null }).user_id) {
+          userId = (codeRow as { user_id?: string | null }).user_id || null;
+        } else {
+          const { data: aliasRow } = await supabaseServer
+            .from('referral_code_aliases')
+            .select('user_id')
+            .eq('code', code)
+            .maybeSingle();
+          userId = aliasRow ? (aliasRow as { user_id?: string | null }).user_id || null : null;
+        }
+      }
+    } catch {}
     if (!userId) return { inviter: null };
 
     // 4) Read auth.users metadata for name

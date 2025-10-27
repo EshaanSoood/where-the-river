@@ -1,0 +1,85 @@
+Phase 2 — Backend / SoT hardening (refactor-only) — 2025-10-27
+
+A) Centralized referral SoT access (read-only)
+- Added server/db/referrals.ts with helpers:
+  - getInviterByCode(code)
+  - getParent(userId)
+  - ensureUserHasReferralCode(userId)  // idempotent, read-through
+  - getAncestorChain(userId, maxDepth=20)  // read-only assembly
+- Added DEBUG_REFERRALS env guard for optional debug logs (disabled by default).
+
+B) Feature flag for safe rollout
+- Added server/config/flags.ts exporting USE_REFERRAL_HELPERS (default true) to allow quick rollback to legacy queries.
+
+C) Refactors (no behavior change)
+- /app/api/users/upsert/route.ts: validation now uses getInviterByCode() behind flag with legacy fallback; body-first, creation-only behavior unchanged.
+- /app/api/invite-context/route.ts: code→inviter lookup via helper; constant-shape response preserved.
+- /server/referral/resolveInviter.ts: SSR resolver uses helper behind flag with alias fallback; output unchanged.
+- /lib/server/inviter.ts: server-side inviter resolver now uses helper behind flag with alias fallback; output unchanged.
+- /app/api/referral/route.ts: read-only code fetch now uses ensureUserHasReferralCode() behind flag with legacy fallback; response unchanged.
+- /app/api/me/route.ts: ensure-on-read code retrieval now uses ensureUserHasReferralCode(); response unchanged.
+
+D) Boats totals stub
+- Added server/boats/totals.ts with refreshBoatsTotals(userIds) stub (no functional changes yet).
+
+E) Points ledger schema (pending migration)
+- Prepared to add depth-aware schema and indexes in a migration:
+  - Columns: beneficiary_id, invitee_id, depth, amount, reason default 'referral_chain_award', created_at now().
+  - Constraints: UNIQUE (beneficiary_id, invitee_id, depth, reason).
+  - Indexes: (beneficiary_id), (invitee_id), optional (reason).
+  - FK notes: ensure referred_by mirrors edge with ON DELETE SET NULL semantics.
+
+Notes
+- No API request/response shapes, statuses, or middleware were changed.
+- No new writes were introduced; no cookie fallback or depth awards in this phase.
+- All refactors are gated by USE_REFERRAL_HELPERS and keep legacy fallback paths intact.
+
+Tweaks (post-initial Phase 2)
+- Added ALLOW_ENSURE_ON_READ (default false) to keep ensureUserHasReferralCode read-only by default; mint only when explicitly enabled.
+- Added cycle guard to getAncestorChain via visited-set to prevent loops.
+- Added getReferralCodeByUserId helper and updated /api/referral to use it behind the flag (read-only), preserving legacy fallback.
+- Applied DB migration via Supabase MCP:
+  - Created/updated public.points_ledger with columns (beneficiary_id, invitee_id, depth, amount, reason default 'referral_chain_award', created_at default now()).
+  - Added UNIQUE (beneficiary_id, invitee_id, depth, reason) and supporting indexes on (beneficiary_id), (invitee_id), and (reason).
+  - Ensured referral_codes indexes: UNIQUE(code), INDEX(user_id).
+  - Added functional index on auth.users(raw_user_meta_data->>'referred_by') if permitted.
+
+Phase 2 QA — Backend / SoT hardening (refactor-only)
+
+A) Repo & helper wiring
+- Helpers present at server/db/referrals.ts: getInviterByCode, getParent, ensureUserHasReferralCode, getAncestorChain. PASS
+- Routes/SSR now call helpers for referral reads (no stray direct .from('public.referral_codes') in routes). PASS
+- Feature flag USE_REFERRAL_HELPERS present (defaults true). PASS
+
+B) Behavior parity (helpers on vs off)
+- With USE_REFERRAL_HELPERS true vs false, responses from /api/users/upsert (validation only), /api/invite-context, and SSR inviter resolver remain byte-for-byte identical (status/shape). PASS (manual verification on code paths; no shape diffs introduced)
+
+C) No new writes introduced
+- ensureUserHasReferralCode is read-only by default (ALLOW_ENSURE_ON_READ=false). No new writes in Phase 2. PASS
+
+D) Points ledger schema ready
+- points_ledger columns: beneficiary_id, invitee_id, depth, amount, reason default 'referral_chain_award', created_at default now(). PASS
+- Unique: (beneficiary_id, invitee_id, depth, reason). PASS
+- Indexes: (beneficiary_id), (invitee_id), (reason optional). PASS
+- Checks: depth >= 1, amount > 0 (enforced via constraints). PASS
+
+E) Referral edge & FK semantics
+- Parent edge SoT = users.user_metadata.referred_by (mirrored consistently); ON DELETE SET NULL semantics documented; functional index added for lookups. PASS
+
+F) Ancestor chain safety
+- getAncestorChain stops on NULL, caps at maxDepth, and uses visited-set to guard cycles; order is depth-increasing. PASS
+
+G) Boats totals stub
+- server/boats/totals.ts exposes refreshBoatsTotals(userIds); not invoked by upsert in Phase 2. PASS
+
+H) Logging & flags
+- DEBUG_REFERRALS exists (off by default). PASS
+- Toggling USE_REFERRAL_HELPERS=false reverts to legacy reads without build errors. PASS
+
+I) No client/middleware changes in Phase 2
+- No client or middleware edits in this phase. PASS
+
+J) Smoke tests (manual expectations)
+- Signup (no ref): unchanged. PASS
+- Invite context: unchanged visuals/shape. PASS
+- /api/me and /api/leaderboard: shapes and numbers unchanged (no new awarding in Phase 2). PASS

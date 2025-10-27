@@ -57,31 +57,20 @@ async function handleProfile(req: Request) {
     } catch {
       boats_total = typeof meta.boats_total === 'number' ? meta.boats_total : 0;
     }
-    // Prefer SoT for referral code; fall back to metadata if absent
+    // Prefer SoT for referral code via centralized helper; fall back to metadata if absent
     let referral_code = (meta.referral_id ?? null) as string | null;
     try {
-      const { data: codeRow } = await supabaseServer
-        .from('referral_codes')
-        .select('code')
-        .eq('user_id', target.id)
-        .maybeSingle();
-      if (codeRow && (codeRow as { code?: string | null }).code) {
-        referral_code = (codeRow as { code: string }).code;
-      }
+      const { ensureUserHasReferralCode } = await import('@/server/db/referrals');
+      const { code: existing } = await ensureUserHasReferralCode(target.id);
+      if (existing) referral_code = existing;
     } catch {}
 
     // Ensure-on-read for signed-in users: if no SoT code yet, mint via RPC (idempotent) and re-read
     if (!referral_code) {
       try {
-        await supabaseServer.rpc('assign_referral_code', { p_user_id: target.id });
-        const { data: codeRow2 } = await supabaseServer
-          .from('referral_codes')
-          .select('code')
-          .eq('user_id', target.id)
-          .maybeSingle();
-        if (codeRow2 && (codeRow2 as { code?: string | null }).code) {
-          referral_code = (codeRow2 as { code: string }).code;
-        }
+        const { ensureUserHasReferralCode } = await import('@/server/db/referrals');
+        const { code: minted } = await ensureUserHasReferralCode(target.id);
+        if (minted) referral_code = minted;
       } catch {}
     }
     // Build absolute base URL from env or request headers (works behind proxies)

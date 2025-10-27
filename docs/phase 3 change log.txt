@@ -1,0 +1,24 @@
+Phase 3 — Atomic upsert + cookie→body fallback + chain awards (10/5/2) — 2025-10-27
+
+Scope
+- Kept request/response shapes identical. No client or middleware changes.
+- Main updates in app/api/users/upsert/route.ts.
+
+Key changes
+- Inputs & precedence: read HttpOnly cookie river_ref_h and body referred_by (digits). Cookie wins if both validate.
+- Validation: use getInviterByCode (helper). Self-ref guarded.
+- Atomic path: call DB function apply_referral_and_awards(invitee_id, inviter_id) to:
+  - ensure referral code (idempotent),
+  - set referred_by once if null,
+  - insert idempotent points_ledger rows per ancestor depth (10/5/2),
+  - return applied flag.
+- Totals: refreshBoatsTotals called for beneficiaries (best-effort, no shape change).
+- Cookie clearing: if applied via cookie, clear river_ref_h in response with immediate expiry.
+- Logging: one guarded DEV log when DEBUG_REFERRALS is true; no PII.
+
+Acceptance
+- New referred signup: referred_by set once; points ledger rows at 10/5/2; totals reflect immediately; river_ref_h cleared.
+- Cookie vs body precedence: cookie wins.
+- Retries: no duplicate ledger rows; totals unchanged on retry.
+- Self-ref: no parent set, no ledger writes; reason logged when debugging enabled.
+- Responses remain identical in shape/status.

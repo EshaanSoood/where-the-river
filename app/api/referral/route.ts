@@ -12,11 +12,26 @@ export async function POST(req: NextRequest) {
     }
 
     // Read-only: fetch existing canonical code from SoT; do not mint here
-    const { data: row, error: codeErr } = await supabaseServer
-      .from('referral_codes')
-      .select('code')
-      .eq('user_id', inviterId)
-      .maybeSingle();
+    const { USE_REFERRAL_HELPERS } = await import('@/server/config/flags');
+    let row: unknown = null;
+    let codeErr: Error | null = null;
+    if (USE_REFERRAL_HELPERS) {
+      try {
+        const { getReferralCodeByUserId } = await import('@/server/db/referrals');
+        const code = await getReferralCodeByUserId(inviterId);
+        row = code ? { code } : null;
+      } catch (e: unknown) {
+        codeErr = e as Error;
+      }
+    } else {
+      const res = await supabaseServer
+        .from('referral_codes')
+        .select('code')
+        .eq('user_id', inviterId)
+        .maybeSingle();
+      row = res.data;
+      codeErr = (res as unknown as { error?: Error | null }).error ?? null;
+    }
     if (codeErr) {
       return new NextResponse(JSON.stringify({ referral: null, error: codeErr.message }), { status: 500, headers: { "Cache-Control": "no-store" } });
     }

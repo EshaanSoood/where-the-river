@@ -161,16 +161,16 @@ export default function DashboardSheet({ open, onClose, mode = "guest" }: Props)
       if (step === "signup_code") {
         // Create or update profile with captured fields
         const name = `${firstName} ${lastName}`.trim();
-        const body = {
+        const body: Record<string, unknown> = {
           name,
           email: verifiedEmail,
           country_code: country,
           message: favoriteSong,
           photo_url: null as unknown as string | null,
           referral_id: randomToken(8),
-          referred_by: null as unknown as string | null,
           boat_color: boatColor,
         };
+        // Display-only: do not add referred_by when absent; server is authoritative
         try {
           const res = await fetch("/api/users/upsert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
           const json = await res.json();

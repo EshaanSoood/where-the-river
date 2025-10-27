@@ -22,48 +22,45 @@ export function middleware(req: NextRequest) {
     if (q) rawCode = q;
   }
 
-  const norm = normalizeReferralCode(rawCode);
-  const res = NextResponse.next();
+  const digitsOnly = normalizeReferralCode(rawCode);
+  const codeValid = !!(digitsOnly && digitsOnly.length >= 6 && digitsOnly.length <= 12);
+  const sawRef = Boolean(rawCode);
+  const pathKind = rMatch ? '/r' : (searchParams.has('ref') ? 'query' : null);
 
-  if (norm) {
-    // IMPORTANT: set cookie on the RESPONSE, not the request
-    const isHttps = req.nextUrl.protocol === "https:";
-    res.cookies.set("river_ref_h", norm, {
-      httpOnly: true,
-      secure: isHttps,
-      sameSite: "lax",
-      path: "/",
-      // do NOT set Domain: default to current host so it matches API routes
-    });
+  const isHttps = req.nextUrl.protocol === "https:";
 
-    // Optional: strip ?ref=… and /r/<code> from the URL after setting cookie
-    if (rMatch) {
-      const url = new URL(req.nextUrl.origin);
-      const redirect = NextResponse.redirect(url);
-      // Preserve cookie on redirect response
-      redirect.cookies.set("river_ref_h", norm, {
-        httpOnly: true,
-        secure: isHttps,
-        sameSite: "lax",
-        path: "/",
-      });
-      return redirect;
-    } else if (searchParams.has("ref")) {
-      const url = new URL(req.url);
-      url.searchParams.delete("ref");
-      const redirect = NextResponse.redirect(url);
-      // Preserve cookie on redirect response
-      redirect.cookies.set("river_ref_h", norm, {
-        httpOnly: true,
-        secure: isHttps,
-        sameSite: "lax",
-        path: "/",
-      });
-      return redirect;
-    }
+  // Log (guarded)
+  if (process.env.DEBUG_REFERRALS) {
+    try { console.info('[mw:ref]', { saw_ref: sawRef, path: pathKind, valid: codeValid }); } catch {}
   }
 
-  return res;
+  // Always produce a response (either redirect or next)
+  if (sawRef) {
+    // Build redirect target
+    let redirectUrl: URL;
+    if (rMatch) {
+      redirectUrl = new URL(req.nextUrl.origin);
+    } else {
+      redirectUrl = new URL(req.url);
+      redirectUrl.searchParams.delete('ref');
+    }
+    const redirect = NextResponse.redirect(redirectUrl);
+
+    // Set or clear cookies on redirect response
+    if (codeValid && digitsOnly) {
+      // Overwrite both cookies to the normalized digits-only value
+      redirect.cookies.set('river_ref_h', digitsOnly, { httpOnly: true, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 7 * 24 * 60 * 60 });
+      redirect.cookies.set('river_ref', digitsOnly, { httpOnly: false, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 7 * 24 * 60 * 60 });
+    } else {
+      // Clear both on invalid
+      redirect.cookies.set('river_ref_h', '', { httpOnly: true, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 0 });
+      redirect.cookies.set('river_ref', '', { httpOnly: false, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 0 });
+    }
+    return redirect;
+  }
+
+  // No ref seen → just continue without modifying cookies
+  return NextResponse.next();
 }
 
 export const config = {

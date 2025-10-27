@@ -1,0 +1,103 @@
+Duplicate signup and referral attribution – Audit Report (2025‑10‑27)
+
+Scope
+- Deep scan of web app for duplicate signup surfaces and overlay unification
+- End‑to‑end review of referral attribution (capture, threading, API write)
+- Findings, root causes, and prioritized fixes
+
+Summary (executive)
+- Signup surface: Unified to the overlay on "/". However, remnants of the old Participate page still exist (client + layout files) and some links still point to "/participate" (they currently hard‑redirect to "/"). Recommend removing dead code and updating CTAs to strictly open the overlay.
+- Referral not attributed: The upsert API validates the inviter code using a table path that is inconsistent with the rest of the codebase. This likely causes validation to “miss,” so referred_by is never written even when the client sends it. Additionally, the upsert API no longer falls back to the HttpOnly cookie, making attribution brittle when the hidden input is missing.
+
+Part 1 — Duplicate signup flow audit
+Observed signup surfaces
+- Overlay: components/BelowMap.tsx — canonical flow in an overlay with steps “menu → signup_email → signup_code” and the OTP verify + POST /api/users/upsert.
+- Participate page (legacy):
+  - app/(auth)/participate/page.tsx → now a hard redirect to "/".
+  - app/(auth)/participate/ParticipateClient.tsx → full client flow code still present but unreachable due to redirect.
+  - app/(auth)/participate/layout.tsx → SSR banner still present but unused given the redirect.
+- Links to participate:
+  - app/(app)/r/[referral]/page.tsx includes an anchor to "/participate" (user is redirected to "/").
+
+Risk and impact
+- Confusion during debugging and product QA: two code paths appear to exist; only one actually runs. Dead code can drift and mislead investigation of attribution bugs.
+- CTA to "/participate" works (redirect), but it does not open the overlay; users must then click Participate again. Minor UX friction and metrics ambiguity.
+
+Unification recommendations
+- Keep only the overlay flow in components/BelowMap.tsx.
+- Remove or archive:
+  - app/(auth)/participate/ParticipateClient.tsx
+  - app/(auth)/participate/layout.tsx
+  - Keep page.tsx as an explicit redirect or remove the entire route; if kept, add a tracking note that it’s legacy.
+- Update all CTAs pointing to "/participate":
+  - In app/(app)/r/[referral]/page.tsx, replace the link with a button or link to "/#participate" and programmatically open the overlay on page load when that hash is present.
+  - Grep shows remaining references to Participate in UI copy/buttons; keep the label, but ensure all internal navigations just open the overlay.
+
+Part 2 — Referral attribution audit
+Architecture in code (now)
+- Capture: middleware.ts captures "/r/<code>" and "?ref=<code>" and sets HttpOnly cookie river_ref_h (SameSite=Lax; secure per protocol). It strips the query or rewrites "/r/…" to "/".
+- SSR invitor resolution: resolveInviterFromCookie() reads river_ref_h and resolves inviter user_id/name from SoT (referral_codes, then aliases). app/(marketing)/page.tsx injects this as initialInviter into BelowMap.
+- UI threading: BelowMap SSR‑latches inviter and injects a hidden input referred_by on the email and verify screens. Client POSTs referred_by to /api/users/upsert.
+- Upsert: app/api/users/upsert/route.ts performs body‑first attribution (creation‑only). It validates the provided code via SoT, writes referred_by into auth.users.user_metadata via Admin only if the user has no ref yet, then awards points.
+
+Failure reproduction (likely)
+- User lands on "/?ref=79434756" → cookie set, SSR inviter latched → user completes OTP → client POSTs referred_by: "79434756".
+- In upsert, validation queries referral_codes using an inconsistent table path. Validation fails, so referred_by is not set and no points are awarded.
+
+Evidence (key files)
+- BelowMap overlay, hidden field and POST body:
+  - components/BelowMap.tsx (hidden inputs and JSON body use inviter.code):
+    - 757–759: <input type="hidden" name="referred_by" value={(codeSnapSSRFirst || '').replace(/\D+/g, '')} readOnly />
+    - 875–886: JSON body includes referred_by: referredByCode
+- Middleware capture (river_ref_h cookie set, redirects strip ref):
+  - 31–37 in web/middleware.ts: sets river_ref_h cookie on response with Lax, secure by protocol
+- Upsert route — inconsistent SoT table usage during validation:
+  - 81–86 in app/api/users/upsert/route.ts: .from('public.referral_codes') instead of .from('referral_codes')
+- Elsewhere, the same SoT is accessed consistently without the “public.” prefix:
+  - 26–31 in server/referral/resolveInviter.ts: .from('referral_codes')
+  - 15–20 in app/api/invite-context/route.ts: .from('referral_codes')
+
+Root causes and risks
+- Inconsistent table path during validation: Using "public.referral_codes" with Supabase JS is non‑standard in this codebase (every other place uses .from('referral_codes') with default schema). If this yields no row, validated remains false and referred_by is never written.
+- No server‑side fallback: Upsert removed cookie‑based attribution. If the hidden input is missing (e.g., SSR didn’t see the cookie, atypical navigation, future refactor), attribution silently fails.
+- Link to "/participate": While harmless due to redirect, it doesn’t open the overlay; minor UX and potential metrics anomalies.
+
+Prioritized fixes (actionable)
+1) Fix SoT validation in upsert
+- Change .from('public.referral_codes') to .from('referral_codes') or use .schema('public').
+- Keep numeric normalization and self‑ref guard.
+
+2) Add server‑side fallback in /api/users/upsert
+- Read river_ref_h from the request cookie and use it when body.referred_by is missing/invalid.
+- Attribution precedence: cookie > body. Keep creation‑only semantics (never overwrite once set).
+- Optionally accept x-ref-code header for diagnostics.
+
+3) Remove duplicate signup remnants and align CTAs
+- Delete or archive app/(auth)/participate/ParticipateClient.tsx and app/(auth)/participate/layout.tsx.
+- Update app/(app)/r/[referral]/page.tsx CTA to open the overlay directly (or link to "/#participate" and auto‑open overlay on load when hash present).
+- Grep and replace any remaining "/participate" navigations with overlay open logic.
+
+4) Instrument and test
+- Add structured logs in upsert: { received_ref_body, cookie_ref_present, validated, applied, reason_skipped, user_id }.
+- E2E: visit /?ref=<code> → complete signup; assert referred_by is set and inviter gets points.
+- Include cases: new tab after email, Safari private, and direct /r/<code>.
+
+Why the reported production miss happened
+- The code path strongly suggests the SoT validation mismatch is the reason the inviter code was not recognized, leaving referred_by null.
+- Even if SSR didn’t latch the code into the hidden input in some edge cases, the lack of cookie fallback in upsert guarantees attribution loss for those users.
+
+Verification plan post‑fix
+- Re‑run a live signup via /?ref=<known‑code> and confirm:
+  - auth.users.user_metadata.referred_by == <code>
+  - referral_codes has inviter row for <code>
+  - award_referral_signup increments inviter’s boats_total (visible in /api/leaderboard and /api/me)
+- Inspect upsert logs for “applied: true” and validated: true.
+- Confirm redirects preserve cookies and the overlay UI displays inviter hint.
+
+Appendix (file pointers)
+- Signup overlay: /Users/eshaansood/Where-the-river/web/components/BelowMap.tsx
+- Participate remnants: /Users/eshaansood/Where-the-river/web/app/(auth)/participate/*
+- Middleware capture: /Users/eshaansood/Where-the-river/web/middleware.ts
+- Upsert API: /Users/eshaansood/Where-the-river/web/app/api/users/upsert/route.ts
+- Inviter resolver (SSR): /Users/eshaansood/Where-the-river/web/server/referral/resolveInviter.ts
+- Invite context API: /Users/eshaansood/Where-the-river/web/app/api/invite-context/route.ts

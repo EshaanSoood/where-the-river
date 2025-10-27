@@ -1,0 +1,24 @@
+Phase 6 — Final scrub + monitoring + E2E + rollback (no UI/API shape changes) — 2025-10-27
+
+Server hardening
+- Upsert: creation-only parent edge remains; explicit comments added; cookie cleared on any applied attribution.
+- Depth rules centralized (10/5/2) with depth cap (≤20) and loop guard in SQL function.
+- Fraud/self-loop guard: recursive query prevents cycles and self attributions.
+- Removed any residual setters of referred_by to null/empty at write time.
+
+Observability & alerts
+- Added guarded debug log per upsert with {cookie_present, body_present, chosen_source, inviter_found, applied, skipped_reason|null, invitee_id}.
+- Introduced kill switch flag `REFERRALS_DISABLE_AWARDS` (default false) to skip ledger writes and totals refresh.
+- Suggested counters/alerts documented (invalid_code spikes, duplicate_suppressed spikes, applied=0 while signups>0).
+
+E2E (described, not code)
+- Added checklist for cookie vs body precedence, body-only, cookie-only, neither, retry idempotency, self-ref, Safari private/new-tab, deep chain awards, cookie clear.
+
+Runbook & toggles
+- Created REFERRALS.md with flags, rollback steps, and data sanity checks.
+
+Acceptance
+- Guards in place; cookie cleared on apply; depth constant documented; loop guard active.
+- Metrics/logs guarded; alert thresholds defined (docs).
+- E2E scenarios drafted; no UI/API shape changes.
+- Runbook present; kill switch works in staging via flag.

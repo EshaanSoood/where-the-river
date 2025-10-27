@@ -71,6 +71,19 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
 
   // No client snapshot merge: SSR-only for inviter UI
   
+  // Listen for global participate open requests (single source of truth)
+  useEffect(() => {
+    const onOpen = () => {
+      try {
+        setDashboardMode('guest');
+        setGuestStep('menu');
+        setDashboardOpen(true);
+      } catch {}
+    };
+    try { window.addEventListener('participate:open', onOpen as EventListener); } catch {}
+    return () => { try { window.removeEventListener('participate:open', onOpen as EventListener); } catch {} };
+  }, []);
+
   const [announce, setAnnounce] = useState("");
   const dashboardRef = useRef<HTMLDivElement | null>(null);
   const leaderboardRef = useRef<HTMLDivElement | null>(null);
@@ -754,8 +767,8 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                       <option>Sailing Through Dream River</option>
                     </select>
                   </div>
-                  {/* Hidden referred_by, server-latched */}
-                  <input type="hidden" name="referred_by" value={(codeSnapSSRFirst || '').replace(/\D+/g, '')} readOnly />
+                  {/* Display-only inviter code (server remains authoritative; cookie→body precedence) */}
+                  <input type="hidden" name="data_inviter_code_display" value={(codeSnapSSRFirst || '').replace(/\D+/g, '')} readOnly />
                   <section aria-label="Choose your boat" className="mt-2">
                     <h3 className="font-seasons text-lg mb-2" style={{ color: "var(--teal)" }}>Choose your boat</h3>
                     <div className="rounded-full size-16 mb-3 flex items-center justify-center border" style={{ background: "var(--white-soft)", borderColor: "var(--mist)" }} aria-label="Boat preview">
@@ -873,18 +886,19 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
                             const referredByCode = (codeSnapSSRFirst || null);
+                            const payload: Record<string, unknown> = {
+                              name,
+                              email,
+                              country_code: country,
+                              message: favoriteSong,
+                              photo_url: null,
+                              boat_color: boatColor,
+                            };
+                            if (referredByCode && /\d+/.test(referredByCode)) { payload.referred_by = referredByCode; }
                             await fetch('/api/users/upsert', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                name,
-                                email,
-                                country_code: country,
-                                message: favoriteSong,
-                                photo_url: null,
-                                referred_by: referredByCode,
-                                boat_color: boatColor,
-                              }),
+                              body: JSON.stringify(payload),
                             });
                             try { await refreshMe(); } catch {}
                             setDashboardMode('user');
@@ -904,8 +918,8 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                       }
                     }}
                   />
-                  {/* Hidden referred_by, server-latched */}
-                  <input type="hidden" name="referred_by" value={(codeSnapSSRFirst || '').replace(/\D+/g, '')} readOnly />
+                  {/* Display-only inviter code (server remains authoritative; cookie→body precedence) */}
+                  <input type="hidden" name="data_inviter_code_display" value={(codeSnapSSRFirst || '').replace(/\D+/g, '')} readOnly />
                   <div className="flex items-center gap-3">
                     <button
                       className="rounded-md px-4 py-3 btn flex-1"
@@ -920,18 +934,19 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
                             const referredByCode = (codeSnapSSRFirst || null);
+                            const payload2: Record<string, unknown> = {
+                              name,
+                              email,
+                              country_code: country,
+                              message: favoriteSong,
+                              photo_url: null,
+                              boat_color: boatColor,
+                            };
+                            if (referredByCode && /\d+/.test(referredByCode)) { (payload2 as Record<string, unknown>).referred_by = referredByCode; }
                             await fetch('/api/users/upsert', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                name,
-                                email,
-                                country_code: country,
-                                message: favoriteSong,
-                                photo_url: null,
-                                referred_by: referredByCode,
-                                boat_color: boatColor,
-                              }),
+                              body: JSON.stringify(payload2),
                             });
                             try { await refreshMe(); } catch {}
                             setDashboardMode('user');

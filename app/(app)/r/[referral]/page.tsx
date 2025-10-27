@@ -1,3 +1,7 @@
+"use client";
+
+import openParticipateOverlay from "@/components/participate/openParticipate";
+
 export default async function ReferralLanding({ params }: { params: Promise<{ referral: string }> }) {
   const p = await params;
   return (
@@ -7,12 +11,14 @@ export default async function ReferralLanding({ params }: { params: Promise<{ re
         <p className="text-muted-foreground">
           Referral ID: <span className="font-mono">{p.referral}</span>
         </p>
-        <a
+        <button
+          type="button"
           className="inline-flex items-center justify-center rounded-md bg-foreground text-background px-4 py-2"
-          href="/participate"
+          onClick={() => openParticipateOverlay()}
+          aria-label="Participate"
         >
           Participate
-        </a>
+        </button>
       </div>
     </main>
   );

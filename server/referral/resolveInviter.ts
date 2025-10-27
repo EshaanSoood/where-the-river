@@ -22,21 +22,36 @@ export async function resolveInviterServer(input: Input): Promise<Output> {
     let userId = (input.user_id || null) as string | null;
     const code = normalizeCode(input.code || null);
     if (!userId && code) {
-      // Lookup via SoT referral tables
-      const { data: codeRow } = await supabaseServer
-        .from('referral_codes')
-        .select('user_id')
-        .eq('code', code)
-        .maybeSingle();
-      if (codeRow && (codeRow as { user_id?: string | null }).user_id) {
-        userId = (codeRow as { user_id?: string | null }).user_id || null;
+      // Feature-flagged helper with legacy fallback (read-only)
+      const { USE_REFERRAL_HELPERS } = await import('@/server/config/flags');
+      if (USE_REFERRAL_HELPERS) {
+        const { getInviterByCode } = await import('@/server/db/referrals');
+        const hit = await getInviterByCode(code);
+        userId = hit?.user_id || null;
+        if (!userId) {
+          const { data: aliasRow } = await supabaseServer
+            .from('referral_code_aliases')
+            .select('user_id')
+            .eq('code', code)
+            .maybeSingle();
+          userId = aliasRow ? (aliasRow as { user_id?: string | null }).user_id || null : null;
+        }
       } else {
-        const { data: aliasRow } = await supabaseServer
-          .from('referral_code_aliases')
+        const { data: codeRow } = await supabaseServer
+          .from('referral_codes')
           .select('user_id')
           .eq('code', code)
           .maybeSingle();
-        userId = aliasRow ? (aliasRow as { user_id?: string | null }).user_id || null : null;
+        if (codeRow && (codeRow as { user_id?: string | null }).user_id) {
+          userId = (codeRow as { user_id?: string | null }).user_id || null;
+        } else {
+          const { data: aliasRow } = await supabaseServer
+            .from('referral_code_aliases')
+            .select('user_id')
+            .eq('code', code)
+            .maybeSingle();
+          userId = aliasRow ? (aliasRow as { user_id?: string | null }).user_id || null : null;
+        }
       }
     }
 

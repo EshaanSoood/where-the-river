@@ -1,0 +1,18 @@
+Phase 4 — Middleware capture hardening (no UI/API shape changes) — 2025-10-27
+
+Changes
+- Capture any request with ?ref=... or /r/:code.
+- Normalize to digits-only; valid range 6–12 digits; otherwise treat as invalid.
+- Set both cookies on valid (overwrite if different):
+  - river_ref_h (HttpOnly, Secure per protocol, SameSite=Lax, Path=/, Max-Age=7d)
+  - river_ref (non-HttpOnly, same flags except HttpOnly=false)
+- Clear both cookies on invalid (empty + immediate expiry).
+- Redirect canonically: strip ?ref from same path; /r/:code → /.
+- Debug log behind DEBUG_REFERRALS with { saw_ref, path: '/r'|'query'|null, valid }.
+- No overlay auto-open; capture-only.
+
+Acceptance
+- Valid capture sets both cookies and redirects; invalid clears and redirects.
+- Overwrite behavior works (11111111 → 22222222).
+- Flags correct: river_ref_h not readable by document.cookie; river_ref is.
+- No auto-open; compatible with Phase 3 server-side precedence; cookies cleared after attribution.
