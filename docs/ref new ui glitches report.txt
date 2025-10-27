@@ -1,0 +1,38 @@
+Referral UI – New UI Glitches Report
+
+Scope
+- Check visual layering (z-index) and containment for inviter text in the Participate modal and signup pages.
+- No API or logic changes performed; observation only.
+
+Findings
+1) Layering (z-index) is correct
+   - Modal container uses class "z-50" and is fixed over the scrim (which uses "z-40").
+   - The scrim sits behind the modal; nothing higher than z-50 covers the modal content.
+   - Evidence:
+     - Modal root: id="panel-dashboard", class includes: "fixed inset-y-0 left-0 z-50 ..."
+     - Scrim: class="fixed inset-0 z-40 bg-black/40"
+
+2) Inviter text is rendered inside the modal structure
+   - Guest menu (first modal screen): inviter hint is inside the modal content area.
+   - Signup email step: inviter hint sits above the form inside the modal content area.
+   - Both locations use aria-live and role="status" for SR-friendly announcements.
+   - Paths:
+     - web/components/BelowMap.tsx (guest menu inviter block)
+     - web/components/BelowMap.tsx (signup email inviter block)
+
+3) Likely reason text doesn’t appear (no wiring changes assumed)
+   - Guard condition hides the hint for signed-in users unless refInviterId is present and different from user.id:
+     - Condition: (!user || (refInviterId && user && user.id !== refInviterId))
+     - If SSR provided initialInviter but client has not yet resolved refInviterId, the block won’t render for logged-in users.
+   - Fallback code path relies on getReferralSnapshot().code (client snapshot). If snapshot not populated yet at first paint, even with SSR inviter.code, fallback may not render.
+
+4) Not a visual overlay problem
+   - No absolute overlays or higher z-index elements inside the modal that would cover the inviter hint.
+   - The gradient fade and inner rings are confined to other panels/containers and do not overlap the modal content region where the hint is placed.
+
+Recommendations (no changes applied here)
+- Consider relaxing the guard to allow SSR inviter name/code to render for logged-in users when refInviterId is currently null/unknown, keeping self-invite suppression only when refInviterId is known to equal user.id.
+- Optionally, prefer SSR inviter.code over client snapshot for the first paint fallback so the hint appears deterministically.
+
+Notes
+- All checks were limited to markup structure, containment, and z-index relationships. No API or data wiring was altered.

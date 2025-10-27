@@ -4,12 +4,13 @@ import type { NextRequest } from "next/server";
 function normalizeCode(raw: string | null | undefined): string | null {
   if (!raw) return null;
   try {
-    const once = decodeURIComponent(String(raw));
-    const upper = once.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    return upper || null;
+    const s = decodeURIComponent(String(raw)).trim();
+    const digits = s.replace(/\D+/g, "");
+    return digits.length > 0 ? digits : null;
   } catch {
-    const upper = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, "");
-    return upper || null;
+    const s = String(raw).trim();
+    const digits = s.replace(/\D+/g, "");
+    return digits.length > 0 ? digits : null;
   }
 }
 

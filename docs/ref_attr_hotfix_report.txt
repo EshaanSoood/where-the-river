@@ -1,0 +1,24 @@
+Referral Attribution Hotfix + Proof
+
+Summary
+- Implemented server-only helpers and cookie-first precedence for /api/users/upsert.
+- Build: PASS
+- After hotfix deploy, live check still shows no invitees using code 79434756 yet and no recent referral_signup points.
+- Next step: live signup with ref and re-check DB to confirm referred_by is set and inviter gets points.
+
+What changed
+- web/server/referral/refCookies.ts: read HttpOnly cookie river_ref_h via next/headers (server-only).
+- web/server/referral/attrSource.ts: chooseReferral(cookie > url > body) with normalization.
+- web/app/api/users/upsert/route.ts: gather cookie/url/body; apply first-click-wins only if not set; keep OTP verify then award order.
+
+DB evidence (.cursor-ref-attr/db/)
+- users snapshot (email → referred_by): shows null for tested emails.
+- invitees_using_code (79434756): 0 (post-deploy)
+- recent_referral_points (inviter): 0 (post-deploy)
+- inviter_boats: 10
+ - specific invitee check: eshaan@eshaansood.in → referred_by = null
+
+If FAIL after live test
+- Confirm POST sends cookie river_ref_h (SameSite=Lax, same-origin POST).
+- Ensure POST URL includes ?ref= when possible; else body.referred_by is allowed as last fallback.
+- Check that reporting reads user_metadata as well if you write referred_by there.

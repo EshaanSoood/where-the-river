@@ -1,0 +1,17 @@
+Vercel CLI 48.6.0
+Retrieving project…
+Deploying eshaans-projects-d91d58e1/riverflows
+Uploading [--------------------] (0.0B/4.5MB)
+Uploading [=====---------------] (1.1MB/4.5MB)
+Uploading [==========----------] (2.2MB/4.5MB)
+Uploading [===============-----] (3.4MB/4.5MB)
+Uploading [====================] (4.5MB/4.5MB)
+Inspect: https://vercel.com/eshaans-projects-d91d58e1/riverflows/7SYKj3GMuk9njLG7kEB54M5skD21 [5s]
+Production: https://riverflows-p15uoivz1-eshaans-projects-d91d58e1.vercel.app [5s]
+Queued
+Building
+Completing
+
+Common next commands:
+- `vercel inspect riverflows-p15uoivz1-eshaans-projects-d91d58e1.vercel.app --logs`
+- `vercel redeploy riverflows-p15uoivz1-eshaans-projects-d91d58e1.vercel.app`

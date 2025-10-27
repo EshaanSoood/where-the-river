@@ -1,0 +1,13 @@
+Vercel CLI 48.6.0
+Retrieving project…
+> Overwriting existing .vercel/.env.production.local file
+> Downloading `production` Environment Variables for eshaans-projects-d91d58e1/riverflows
+Downloading
+
+Changes:
++ VERCEL_OIDC_TOKEN (Updated)
+
+Updated .vercel/.env.production.local file  [155ms]
+
+> Downloading project settings
+Downloaded project settings to ~/Where-the-river/web/.vercel/project.json [0ms]

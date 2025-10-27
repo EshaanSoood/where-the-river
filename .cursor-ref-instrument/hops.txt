@@ -1,0 +1,25 @@
+HTTP/2 307 
+cache-control: public, max-age=0, must-revalidate
+content-type: text/plain
+date: Sun, 26 Oct 2025 22:44:02 GMT
+location: /
+server: Vercel
+set-cookie: river_ref_h=79434756; Path=/; Expires=Sun, 02 Nov 2025 22:44:02 GMT; Max-Age=604800; Secure; HttpOnly; SameSite=lax
+set-cookie: river_ref=79434756; Path=/; Expires=Sun, 02 Nov 2025 22:44:02 GMT; Max-Age=604800; Secure; SameSite=lax
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-vercel-id: iad1::rkkdk-1761518642095-f4d2534d68a2
+
+HTTP/2 200 
+age: 0
+cache-control: private, no-cache, no-store, max-age=0, must-revalidate
+content-type: text/html; charset=utf-8
+date: Sun, 26 Oct 2025 22:44:03 GMT
+link: </_next/static/media/797e433ab948586e-s.p.dbea232f.woff2>; rel=preload; as="font"; crossorigin=""; type="font/woff2", </_next/static/media/caa3a2e1cccd8315-s.p.853070df.woff2>; rel=preload; as="font"; crossorigin=""; type="font/woff2", </_next/static/chunks/25889312eb0f2901.css>; rel=preload; as="style"
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+x-matched-path: /
+x-powered-by: Next.js
+x-vercel-cache: MISS
+x-vercel-id: iad1::iad1::7s8b5-1761518642170-dde1f4a9dac1
+

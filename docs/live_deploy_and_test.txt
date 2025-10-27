@@ -1,0 +1,7 @@
+Build: OK
+Deploy URL: https://riverflows-p15uoivz1-eshaans-projects-d91d58e1.vercel.app
+Prod inviter line: PASS
+Deploy inviter line: PASS
+Evidence:
+ - Prod: /Users/eshaansood/Where-the-river/web/.cursor-live/prod_hops.txt, /Users/eshaansood/Where-the-river/web/.cursor-live/prod_landing.html, /Users/eshaansood/Where-the-river/web/.cursor-live/prod_grep.txt, /Users/eshaansood/Where-the-river/web/.cursor-live/prod_resolve.json
+ - Deploy: /Users/eshaansood/Where-the-river/web/.cursor-live/deploy_hops.txt, /Users/eshaansood/Where-the-river/web/.cursor-live/deploy_landing.html, /Users/eshaansood/Where-the-river/web/.cursor-live/deploy_grep.txt, /Users/eshaansood/Where-the-river/web/.cursor-live/deploy_resolve.json

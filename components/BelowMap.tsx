@@ -15,7 +15,7 @@ import ColorChips from "@/components/ColorChips";
 import LeftPanelEmbeds from "@/components/LeftPanelEmbeds";
 import HowToPlayVideo from "@/components/HowToPlayVideo";
 // DashboardSheet is not used directly; inline overlay below owns the layout
-import { getReferralSnapshot, onReferralUpdate, hasCookieRef, trySetCookieRef } from "@/lib/referral";
+import { getReferralSnapshot } from "@/lib/referral";
 import { refDebug } from "@/lib/refDebug";
 
   const Globe = dynamic(() => import("@/components/GlobeNew"), { ssr: false });
@@ -25,6 +25,8 @@ import { refDebug } from "@/lib/refDebug";
 
 type InitialInviter = { code: string | null; fullName: string | null; firstName: string | null; userId: string | null };
 type BelowMapProps = { initialInviter?: InitialInviter | null };
+
+// Removed client snapshot merging for server-only inviter UI
 
 export default function BelowMap({ initialInviter }: BelowMapProps) {
   const router = useRouter();
@@ -58,6 +60,16 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
   // Removed client-generated referral_id; canonical is minted server-side via SoT
   const [refInviterFirst, setRefInviterFirst] = useState<string | null>((initialInviter?.firstName || initialInviter?.fullName) || null);
   const [refInviterId, setRefInviterId] = useState<string | null>(initialInviter?.userId || null);
+
+  // 1) Latch SSR inviter so hydration cannot clear it
+  const [inviter, setInviter] = useState<InitialInviter>({
+    code: initialInviter?.code ?? null,
+    firstName: initialInviter?.firstName ?? null,
+    fullName: initialInviter?.fullName ?? null,
+    userId: initialInviter?.userId ?? null,
+  });
+
+  // No client snapshot merge: SSR-only for inviter UI
   
   const [announce, setAnnounce] = useState("");
   const dashboardRef = useRef<HTMLDivElement | null>(null);
@@ -136,17 +148,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
 
   // Remove separate session fetch; rely on useMe unified payload
 
-  // Referral hint state: initialize from snapshot and subscribe for background resolve
-  useEffect(() => {
-    // Backstop only: keep client resolver subscription, but SSR value is authoritative at first paint
-    const off = onReferralUpdate((d) => {
-      try {
-        if (typeof d?.firstName === 'string') setRefInviterFirst(d.firstName || null);
-        if (typeof d?.userId === 'string') setRefInviterId(d.userId || null);
-      } catch {}
-    });
-    return () => { try { off(); } catch {} };
-  }, []);
+  // Removed client referral update subscription for server-only inviter UI
   useEffect(() => {
     try {
       const update = () => {
@@ -338,6 +340,13 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
       }
     }
   };
+
+  // Compute display + guard once, prefer SSR values
+  const name = inviter.firstName ?? inviter.fullName ?? null;
+  const codeSnapSSRFirst = inviter.code ?? null;
+  const showForGuest = Boolean(name || codeSnapSSRFirst);
+  const showForSignedIn = Boolean(name || codeSnapSSRFirst) && (!user || (inviter.userId ? (user as { id?: string | null })?.id !== inviter.userId : true));
+  const showHint = user ? showForSignedIn : showForGuest;
 
   function DashboardContent({ mode, onAuthenticated }: { mode: "guest" | "user"; onAuthenticated: () => void }) {
     // Placeholder wrapper for future content integration; DashboardSheet handles flows
@@ -654,6 +663,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="dashboard-heading"
+          aria-describedby={showHint ? "inviter-line" : undefined}
           className={`fixed inset-y-0 left-0 z-50 w-[88vw] max-w-sm lg:max-w-[520px] bg-white border-r border-purple-200 shadow-2xl overflow-y-auto focus:outline-none transform transition-transform duration-300 ease-out`}
           style={{ transform: "translateX(0)" }}
           tabIndex={-1}
@@ -664,7 +674,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
           }}
         >
           {dashboardMode === "guest" ? (
-            <div className="relative px-4 py-5" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
+              <div className="relative px-4 py-5" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
               <button
                 aria-label="Close dashboard"
                 onClick={() => setDashboardOpen(false)}
@@ -676,37 +686,18 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
               {guestStep === 'menu' && (
                 <div className="flex flex-col items-center justify-center gap-3 py-4">
                   {/* Invite hint (non-blocking), reserved space to avoid layout shift */}
-                  <div role="status" aria-live="polite" className="min-h-5 leading-5 text-center font-sans" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
-                    {(!user || (refInviterId && user && (user as { id?: string | null }).id !== refInviterId)) && (
-                      (() => {
-                        const name = (refInviterFirst && String(refInviterFirst)) || (initialInviter?.fullName || null);
-                        const codeSnap = getReferralSnapshot().code;
-                        if (name) {
-                          return (<p><strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{name}</strong> sent their boat to your shore.</p>);
-                        }
-                        if (codeSnap) {
-                          return (<p>Someone invited you (code {codeSnap}).</p>);
-                        }
-                        return null;
-                      })()
+                  <div className="min-h-5 leading-5 text-center font-sans" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
+                    {showHint && (
+                      <p id="inviter-line" role="status" aria-live="polite" aria-atomic="true">
+                        {name ? (<>
+                          <strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{name}</strong> sent their boat to your shore.
+                        </>) : (
+                          <>Someone invited you{codeSnapSSRFirst ? ` (code ${codeSnapSSRFirst})` : ''}.</>
+                        )}
+                      </p>
                     )}
                   </div>
-                  {/* Optional consent if cookie not set but we have a ref context */}
-                  {(!hasCookieRef() && !!refInviterFirst) && (
-                    <div className="flex items-center justify-center gap-2 text-sm" aria-live="polite">
-                      <span>
-                        <strong>{refInviterFirst}</strong> invited you.
-                      </span>
-                      <button
-                        type="button"
-                        className="underline"
-                        aria-label="Accept referral cookie"
-                        onClick={() => { const snap = getReferralSnapshot(); if (snap.code) trySetCookieRef(snap.code); }}
-                      >
-                        Accept
-                      </button>
-                    </div>
-                  )}
+                  {/* Consent UI removed: inviter UI is SSR-only */}
                   <button
                     className="font-seasons rounded-md px-4 py-3 w-3/4"
                     style={{ background: "var(--teal)", color: "var(--parchment)", boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
@@ -726,37 +717,18 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
               {guestStep === 'signup_email' && (
                 <div className="space-y-3">
                   {/* Invite hint (non-blocking) above form */}
-                  <div aria-live="polite" className="min-h-5 leading-5 font-sans" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
-                    {(!user || (refInviterId && user && (user as { id?: string | null }).id !== refInviterId)) && (
-                      (() => {
-                        const name = (refInviterFirst && String(refInviterFirst)) || (initialInviter?.fullName || null);
-                        const codeSnap = getReferralSnapshot().code;
-                        if (name) {
-                          return (<span>Join <strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{name}</strong>&apos;s river and start your own.</span>);
-                        }
-                        if (codeSnap) {
-                          return (<span>Someone invited you (code {codeSnap}).</span>);
-                        }
-                        return null;
-                      })()
+                  <div className="min-h-5 leading-5 font-sans" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
+                    {showHint && (
+                      <p id="inviter-line" role="status" aria-live="polite" aria-atomic="true">
+                        {name ? (
+                          <>Join <strong className="font-bold" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>{name}</strong>&apos;s river and start your own.</>
+                        ) : (
+                          <>Someone invited you{codeSnapSSRFirst ? ` (code ${codeSnapSSRFirst})` : ''}.</>
+                        )}
+                      </p>
                     )}
                   </div>
-                  {/* Consent (if needed) */}
-                  {(!hasCookieRef() && !!refInviterFirst) && (
-                    <div className="flex items-center gap-2 text-sm" aria-live="polite">
-                      <span>
-                        <strong>{refInviterFirst}</strong> invited you.
-                      </span>
-                      <button
-                        type="button"
-                        className="underline"
-                        aria-label="Accept referral cookie"
-                        onClick={() => { const snap = getReferralSnapshot(); if (snap.code) trySetCookieRef(snap.code); }}
-                      >
-                        Accept
-                      </button>
-                    </div>
-                  )}
+                  {/* Consent UI removed: inviter UI is SSR-only */}
                   <h2 className="font-seasons text-xl" style={{ color: "var(--teal)" }}>Start Your River</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <input id="firstNameField" className="border rounded-md px-3 py-2" style={{ background: "var(--white-soft)", color: "var(--ink)" }} placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />

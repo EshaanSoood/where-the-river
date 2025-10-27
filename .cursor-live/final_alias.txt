@@ -1,0 +1,4 @@
+Vercel CLI 48.6.0
+> Assigning alias riverflowseshaan.vercel.app to deployment riverflows-l901e7jcu-eshaans-projects-d91d58e1.vercel.app
+Creating alias
+> Success! https://riverflowseshaan.vercel.app now points to https://riverflows-l901e7jcu-eshaans-projects-d91d58e1.vercel.app [1s]

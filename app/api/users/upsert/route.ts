@@ -1,32 +1,19 @@
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { readReferralFromHttpOnlyCookie, normalizeReferralCode } from '@/server/referral/refCookies';
+import { chooseReferral } from '@/server/referral/attrSource';
 import { ensureDisplayName } from "@/server/names/writeDisplayName";
 import { resolveIso2, isIso2, toIso2Upper, normalizeInput } from "@/lib/countryMap";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { name, email, country_code, message, photo_url, referred_by, boat_color } = body || {} as Record<string, unknown>;
+    // Gather referral inputs early
+    let parsedBody: Record<string, unknown> = {};
+    try { parsedBody = await req.json(); } catch { parsedBody = {}; }
+    const { name, email, country_code, message, photo_url, referred_by, boat_color } = parsedBody || {} as Record<string, unknown>;
     if (!email || !country_code) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
-    // Diagnostics: prepare run folder when header present
-    const hdr = req.headers.get("x-diag-run-id");
-    const now = new Date();
-    const runId = hdr || `run-${now.toISOString().slice(0,16).replace(/[-:T]/g, "").replace(/(\d{8})(\d{4}).*/, "$1-$2")}`;
-    const diagBase = path.join(process.cwd(), "docs", "_diagnostics", runId);
-    const writeDiag = async (file: string, lines: string[]) => {
-      try {
-        await fs.mkdir(diagBase, { recursive: true });
-        await fs.writeFile(path.join(diagBase, file), lines.join("\n"), "utf8");
-      } catch {}
-    };
-    // 01 — signup payload (as received)
-    await writeDiag("01-signup-payload.txt", [
-      "Payload included name,email,country_code,boat_color → " + ((name && email && country_code && boat_color) ? "PASS" : "FAIL"),
-      JSON.stringify({ name, email, country_code, boat_color, message, photo_url }, null, 2)
-    ]);
+    // Diagnostics removed (previous hotfix)
 
     // Name validation: trim, collapse spaces, length 2..80, must contain a letter or digit
     const cleanedName = String(name || "").replace(/\s+/g, " ").trim().slice(0, 80);
@@ -50,10 +37,7 @@ export async function POST(req: Request) {
 
     // 02 — upsert sanitized input
     const sanitized = { name: cleanedName, email: String(email), country_code: cc, message: message ?? null, photo_url: photo_url ?? null, boat_color: boat_color ?? null, referred_by: referred_by ?? null };
-    await writeDiag("02-upsert-input.txt", [
-      "Sanitized contains expected fields → " + ((sanitized.name && sanitized.email && sanitized.country_code) ? "PASS" : "FAIL"),
-      JSON.stringify(sanitized, null, 2)
-    ]);
+    // Diagnostics removed
 
     // Lookup auth user by email
     type AuthMeta = Record<string, unknown>;
@@ -84,48 +68,27 @@ export async function POST(req: Request) {
       otp_verified: true,
     };
 
-    // Server-side attribution with precedence: cookie.ref > url.ref; ignore body.referred_by; first-click wins
+    // Server-side attribution with precedence: cookie.ref > url.ref > body.referred_by; first-click wins
     try {
-      const bodyRef = sanitized.referred_by; // Ignored if cookie/url present
-      const cookie = (req.headers.get("cookie") || "");
-      const m = cookie.match(/(?:^|; )river_ref_h=([^;]+)/);
-      const v = m ? decodeURIComponent(m[1]) : "";
-      const norm = (v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      const hadRef = !!(prevMeta as { referred_by?: unknown }).referred_by;
-      
-      // Choose candidate: cookie > url; ignore body if any incomingRef present
-      let chosenRef: string | null = null;
-      let appliedFrom: 'body' | 'cookie' | 'url' | 'none' = 'none';
-      if (norm) { chosenRef = norm; appliedFrom = 'cookie'; }
-      
-      // Fallback to URL param if cookie absent
-      if (!chosenRef) {
-        try {
-          const u = new URL(req.url);
-          const qref = (u.searchParams.getAll('ref')[0] || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (qref) { chosenRef = qref; appliedFrom = 'url'; }
-        } catch {}
-      }
+      const cookieRef = await readReferralFromHttpOnlyCookie();
+      let urlRef: string | null = null;
+      try {
+        const u = new URL(req.url);
+        urlRef = normalizeReferralCode(u.searchParams.get('ref'));
+      } catch {}
+      const bodyRef = normalizeReferralCode(sanitized.referred_by as string | null);
 
-      // Only if neither cookie nor URL, consider body
-      if (!chosenRef && bodyRef) { chosenRef = String(bodyRef).toUpperCase().replace(/[^A-Z0-9]/g, ''); appliedFrom = 'body'; }
-      
-      if (chosenRef && !hadRef && !(nextMeta as { referred_by?: unknown }).referred_by) {
-        (nextMeta as { referred_by?: string | null }).referred_by = chosenRef;
+      const { code: incomingRef, source: applied_source } = chooseReferral({ cookieCode: cookieRef, urlCode: urlRef, bodyCode: bodyRef });
+      const hadRef = !!(prevMeta as { referred_by?: unknown }).referred_by && String((prevMeta as { referred_by?: unknown }).referred_by || '').trim().length > 0;
+      const alreadySet = !!(nextMeta as { referred_by?: unknown }).referred_by && String((nextMeta as { referred_by?: unknown }).referred_by || '').trim().length > 0;
+      if (!hadRef && !alreadySet && incomingRef) {
+        (nextMeta as { referred_by?: string | null }).referred_by = incomingRef;
       }
       
       // Minimal sampled telemetry (no PII). Enable with REF_CAPTURE_LOG_SAMPLE=1. Logs ~1% of requests.
-      try {
-        if (process.env.REF_CAPTURE_LOG_SAMPLE === '1') {
-          const stamp = Math.floor(Math.random() * 100);
-          if (stamp === 0) {
-            const ts = new Date().toISOString();
-            console.log('[ref-capture]', { ts, route: 'users/upsert', applied_source: appliedFrom, wrote_referred_by: !!(nextMeta as { referred_by?: unknown }).referred_by, had_cookie: !!norm, had_body: !!bodyRef, had_url: appliedFrom==='url' });
-          }
-        }
-      } catch {}
+      // Structured logs kept
       if (process.env.NODE_ENV !== "production") {
-        console.log("[REFTRACE-SERVER] chosen referred_by =", chosenRef);
+        console.log("[REFTRACE-SERVER] chosen referred_by =", incomingRef);
       }
     } catch {}
 
@@ -157,26 +120,32 @@ export async function POST(req: Request) {
     );
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 400 });
 
-    // 03 — db probe (updated auth user metadata)
-    await writeDiag("03-db-probe.txt", [
-      "Updated auth.users user_metadata contains expected fields → " + ((nextMeta as { name?: unknown; country_code?: unknown }).name && (nextMeta as { name?: unknown; country_code?: unknown }).country_code ? "PASS" : "FAIL"),
-      JSON.stringify({ id: row.id, user_metadata: nextMeta }, null, 2)
-    ]);
+    // 03 — db probe removed
 
     // 04 — mark OTP verified (monotonic true) then award points (idempotent)
     try {
+      // Mark OTP verified (idempotent)
+      try { await supabaseServer.rpc('mark_otp_verified', { p_user_id: row.id }); } catch {}
+      // Re-read to confirm referred_by and otp before awarding
+      let okToAward = false;
       try {
-        await supabaseServer.rpc('mark_otp_verified', { p_user_id: row.id });
+        const { data: checkRow } = await supabaseServer
+          .from('auth.users')
+          .select('raw_user_meta_data')
+          .eq('id', row.id)
+          .maybeSingle();
+        const m = ((checkRow as { raw_user_meta_data?: Record<string, unknown> | null })?.raw_user_meta_data) || {};
+        const refVal = String((m as { referred_by?: unknown }).referred_by || '').trim();
+        okToAward = refVal.length > 0;
       } catch {}
-      const { error: rpcErr } = await supabaseServer.rpc('award_referral_signup', { p_invitee_id: row.id });
-      await writeDiag("04-credit-logic.txt", [
-        `rpc_award_referral_signup_error=${rpcErr ? rpcErr.message : ''}`
-      ]);
+      if (okToAward) {
+        await supabaseServer.rpc('award_referral_signup', { p_invitee_id: row.id });
+      }
     } catch {
-      // Non-blocking: credit logic should not break signup
+      // Non-blocking
     }
 
-    return NextResponse.json({ user: { email: row.email, name: sanitized.name, country_code: sanitized.country_code, message: sanitized.message, referral_id: (nextMeta as { referral_id?: string | null }).referral_id ?? null, boat_color: sanitized.boat_color } });
+    return NextResponse.json({ user: { email: row.email, name: sanitized.name, country_code: sanitized.country_code, message: sanitized.message, referral_id: (nextMeta as { referral_id?: string | null }).referral_id ?? null, boat_color: sanitized.boat_color } }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });

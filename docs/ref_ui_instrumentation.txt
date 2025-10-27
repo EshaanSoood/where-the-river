@@ -1,0 +1,34 @@
+Referral UI Live Instrumentation (zero behavior change)
+
+A) Summary
+- SSR comment: NOT FOUND in live HTML (0 matches)
+- Debug ribbon marker: NOT FOUND in live HTML (0 matches)
+- Debug endpoint: 404 HTML returned (endpoint not present on current deploy)
+
+B) Artifacts (saved under .cursor-ref-instrument/)
+- landing.html: fetched with fresh cookies from https://riverflowseshaan.vercel.app/?ref=79434756
+- grep_ssr.txt: 0 lines (no "INVITER-SSR" comment present)
+- grep_ribbon.txt: 0 lines (no data-test="invite-ribbon" present)
+- invite_debug.json: contains a 404 HTML document (route not deployed)
+
+C) Cookies seen by server (from invite_debug.json)
+- Unavailable: endpoint returned 404, so no JSON with cookie_seen
+
+D) Resolver values (from invite_debug.json)
+- Unavailable: endpoint returned 404, so no inviter payload
+
+E) Checklist — which conditions are true?
+- SSR comment shows correct values: FALSE (comment missing)
+- Debug endpoint sees cookies and inviter: FALSE (endpoint 404)
+- Ribbon markup exists in HTML: FALSE (marker missing)
+
+F) Interpretation
+- The instrumentation code hasn’t been deployed to production yet, so live capture cannot observe the SSR comment/ribbon/endpoint.
+- Once deployed, re-run the capture to confirm values (expect SSR comment with firstName/fullName/code and ribbon present when name||code is truthy).
+
+G) Next steps (one-liners)
+- Deploy current main to Vercel, then re-run:
+  1) curl -iL -c .cursor-ref-instrument/cookies.txt -D .cursor-ref-instrument/hops.txt "https://riverflowseshaan.vercel.app/?ref=79434756" -o .cursor-ref-instrument/landing.html
+  2) curl -b .cursor-ref-instrument/cookies.txt "https://riverflowseshaan.vercel.app/api/__invite-debug" -o .cursor-ref-instrument/invite_debug.json
+  3) grep -n "INVITER-SSR" .cursor-ref-instrument/landing.html > .cursor-ref-instrument/grep_ssr.txt || true
+  4) grep -n 'data-test="invite-ribbon"' .cursor-ref-instrument/landing.html > .cursor-ref-instrument/grep_ribbon.txt || true
