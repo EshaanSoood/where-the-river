@@ -1,0 +1,25 @@
+Diagnosis — Referral attribution not applying (2025-10-27)
+
+Summary
+- New user `eshaansoodwork@gmail.com` shows empty referred_by and no points_ledger rows.
+- Referral code 79434756 resolves to a valid inviter (SoT ok), so validation wasn’t the issue.
+
+Root cause
+- The parent-edge write moved into the SQL function `public.apply_referral_and_awards()` attempts `UPDATE auth.users ...`.
+- Supabase prevents direct DML against `auth.users` from database functions (even with security definer), so the UPDATE did not apply.
+- Outcome: referred_by remained unset; the function treated the attribution as not applied; downstream award inserts (10/5/2) did not run.
+
+Evidence
+- Invitee lookup: `raw_user_meta_data->>'referred_by'` empty and no matching `points_ledger` rows for the invitee.
+- Code 79434756 exists and maps to a user_id, confirming SoT validation succeeded.
+
+Why cookie/body didn’t help
+- Cookie→body precedence and validation worked, but because the write lives in SQL (not via Auth Admin API), attribution could not persist.
+
+Fix direction (Phase 7 hotfix)
+- Move parent-edge write back into the server route using `supabaseServer.auth.admin.updateUserById` (creation-only guard intact).
+- Keep SQL only for ledger idempotent inserts (depth 10/5/2) or pass both edge+awards back to the route to apply via server role.
+- Alternatively, store the parent edge in a server-owned table (e.g., `public.user_edges(parent_id, child_id)`) with server-only writes, and read that as SoT instead of `auth.users`.
+
+Notes
+- After fixing, re-test attribution: `/?ref=<code>` → signup → referred_by set once; ledger rows present; cookie cleared.

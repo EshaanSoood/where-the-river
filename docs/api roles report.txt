@@ -1,0 +1,30 @@
+API Roles Report — Runtime Writes & Required Privileges (2025-10-27)
+
+Summary
+- All elevated writes are performed via the Supabase Admin API (service-role) or server-only RPCs. No remaining SQL writes to auth.users are present.
+
+Routes & server modules
+- app/api/users/upsert/route.ts
+  - Uses auth.admin.updateUserById(...) to set creation-only parent edge (referred_by = inviter UUID) and mirror referral_id.
+  - Uses RPCs: assign_referral_code, mark_otp_verified, award_referral_chain (server role required).
+- app/api/me/route.ts
+  - Mirrors referral_id via auth.admin.updateUserById(...). Service-role only; safe server-side.
+- app/api/my-referral-link/route.ts
+  - RPC assign_referral_code and mirror referral_id via auth.admin.updateUserById(...). Server-only.
+- app/api/globe/route.ts and app/api/leaderboard/route.ts
+  - Read-only Admin API: auth.admin.listUsers(...) (service-role). No writes.
+- server/names/writeDisplayName.ts
+  - auth.admin.updateUserById(...) to set full_name in metadata. Server-only helper.
+
+SQL changes
+- apply_referral_and_awards: superseded for edge write; no longer used for updating auth.users.
+- award_referral_chain(invitee_id): inserts idempotent rows into points_ledger only; no auth.users writes.
+
+Risk Assessment
+- No client paths can invoke Admin API; all calls are server routes.
+- Service-role key is used only in server context; anon client never performs writes listed above.
+- RLS and function privileges restrict points_ledger inserts to server-side RPC.
+
+Action Items
+- Keep Admin API writes limited to server routes.
+- Maintain REFERRALS_DISABLE_AWARDS flag for safe rollback of awards without impacting attribution.

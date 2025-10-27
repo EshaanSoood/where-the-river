@@ -94,15 +94,30 @@ export async function POST(req: Request) {
           if (hit2?.user_id && hit2.user_id !== row.id) { inviterUserId = hit2.user_id; chosenSource = 'body'; }
         }
 
-        // Atomic DB-side application (ensures code, sets parent if null, writes ledger idempotently)
-        const { REFERRALS_DISABLE_AWARDS } = await import('@/server/config/flags');
-        // Kill switch propagated via PostgreSQL GUC if needed
-        try { await supabaseServer.rpc('set_config', { p_name: 'app.referrals_disable_awards', p_value: String(REFERRALS_DISABLE_AWARDS), p_is_local: true } as unknown as Record<string, unknown>); } catch {}
-        const { data: applyRes } = await supabaseServer.rpc('apply_referral_and_awards', {
-          p_invitee_id: row.id,
-          p_inviter_id: inviterUserId,
-        });
-        const applied = Boolean((applyRes as { applied?: boolean } | null)?.applied);
+        // Creation-only parent-edge write via Admin API (service role)
+        let applied = false;
+        let edgeWrite: 'admin_api' | 'skipped' = 'skipped';
+        const hadRef = !!(prevMeta as { referred_by?: unknown }).referred_by && String((prevMeta as { referred_by?: unknown }).referred_by || '').trim().length > 0;
+        if (inviterUserId && !hadRef && inviterUserId !== row.id) {
+          const upd = await supabaseServer.auth.admin.updateUserById(row.id, { user_metadata: { ...nextMeta, referred_by: inviterUserId, ...(canonicalCode ? { referral_id: canonicalCode } : {}) } });
+          if (upd.error) return NextResponse.json({ error: upd.error.message }, { status: 400 });
+          (nextMeta as { referred_by?: string }).referred_by = inviterUserId;
+          applied = true;
+          edgeWrite = 'admin_api';
+        }
+
+        // Awards: SQL-only, idempotent; do not block success on error
+        let awardsCalled = false;
+        let awardsErr: string | null = null;
+        if (applied) {
+          try {
+            await supabaseServer.rpc('award_referral_chain', { p_invitee_id: row.id } as unknown as Record<string, unknown>);
+            awardsCalled = true;
+          } catch (e: unknown) {
+            awardsCalled = true;
+            awardsErr = e instanceof Error ? e.message : 'unknown';
+          }
+        }
 
         // Optional totals refresh (view usually reflects immediately); include ancestors + invitee
         if (inviterUserId) {
@@ -130,6 +145,9 @@ export async function POST(req: Request) {
             applied,
             skipped_reason: (!inviterUserId && (cookieCode || normalizedBodyRef)) ? 'invalid_or_self_ref' : null,
             invitee_id: row.id,
+            edge_write: edgeWrite,
+            awards_called: awardsCalled,
+            awards_err: awardsErr,
           });
         }
       }
