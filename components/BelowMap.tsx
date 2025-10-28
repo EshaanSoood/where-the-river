@@ -617,10 +617,10 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
         </div>
 
         {/* Desktop layout (≥1024px): 3 columns 1:2:1 over fluid container */}
-        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden page-container three-column-layout three-column-grid" style={{ gridTemplateColumns: '3fr 6fr 3fr', marginTop: 'var(--section-gap, 16px)', marginBottom: '0', alignItems: 'stretch' }}>
+        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden page-container three-column-layout three-column-grid" style={{ gridTemplateColumns: '3fr 6fr 3fr', marginBottom: '0', alignItems: 'stretch' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
           <section aria-label="Bandcamp and YouTube" className="min-w-0 flex" style={{ alignSelf: 'stretch' }}>
-            <div className="relative w-full flex flex-col frosted-panel overflow-hidden" style={{ borderRadius: 'var(--card-radius)', height: '100%' }}>
+            <div className="relative w-full flex flex-col frosted-panel overflow-hidden" style={{ borderRadius: '24px', height: '100%' }}>
               <div className="flex-1 flex flex-col px-4 py-3 min-h-0">
                 <LeftPanelEmbeds />
               </div>

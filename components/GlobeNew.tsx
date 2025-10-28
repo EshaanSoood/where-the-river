@@ -480,6 +480,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     overflow: 'hidden', 
     backgroundColor: '#000010', 
     aspectRatio: '1 / 1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundImage: `
       radial-gradient(1.5px 1.5px at 20% 30%, white, transparent),
       radial-gradient(1px 1px at 80% 10%, white, transparent),
