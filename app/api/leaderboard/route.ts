@@ -12,10 +12,11 @@ export async function GET() {
     if (listErr) return NextResponse.json({ error: listErr.message }, { status: 400 });
     const users = (list?.users || []) as AdminUser[];
 
-    // Read boats totals from unified users_referrals table
+    // Read boats totals from unified users_referrals table, ordered by boats_total DESC
     const { data: referrals, error: refErr } = await supabaseServer
       .from('users_referrals')
-      .select('user_id,boats_total');
+      .select('user_id,boats_total')
+      .order('boats_total', { ascending: false });
     if (refErr) return NextResponse.json({ error: refErr.message }, { status: 400 });
 
     const totalsById = new Map<string, number>();
@@ -41,11 +42,17 @@ export async function GET() {
       };
     }));
 
-    const filtered = entries.filter((e) => e.otp_verified && !!e.boat_color);
+    // Filter: must have boat_color and otp_verified, and boats_total > 0
+    const filtered = entries.filter((e) => e.otp_verified && !!e.boat_color && e.boats_total > 0);
+    
+    // Sort by boats_total DESC (should already be sorted, but ensure it)
+    filtered.sort((a, b) => (b.boats_total || 0) - (a.boats_total || 0));
+    
+    // Calculate total boats from filtered users only
     const totalBoats = filtered.reduce((acc, e) => acc + (e.boats_total || 0), 0);
+    
+    // Top 5 with accurate boats totals
     const top = filtered
-      .slice()
-      .sort((a, b) => (b.boats_total || 0) - (a.boats_total || 0))
       .slice(0, 5)
       .map((e) => ({ first_name: e.first_name, displayName: e.displayName, country_code: e.country_code, boats_total: e.boats_total || 0 }));
 

@@ -16,7 +16,7 @@ export default function FooterBar() {
           borderRadius: '24px 24px 0 0'
         }}
       >
-        <div className="h-full flex items-center justify-start gap-2" style={{ paddingInline: '8px' }}>
+        <div className="h-full flex items-center justify-center gap-2" style={{ paddingInline: '8px' }}>
           {/* Left-aligned button row */}
           <a href="https://www.instagram.com/thejumpymonkey" aria-label="Instagram" className="footer-btn" target="_blank" rel="noopener noreferrer">
             <span className="footer-mask instagram" aria-hidden="true" />

@@ -278,6 +278,116 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     try { const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || ''; if (!guessedBase) return null; const base = guessedBase.replace(/\/$/, ''); const email = (window as any)?.RIVER_EMAIL || null; if (!email) return null; const resp = await fetch(`${base}/api/me`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); if (!resp.ok) return null; const j = await resp.json(); const ref = j?.me?.referral_code || j?.me?.ref_code_8 || null; const name = j?.me?.name || null; return { id: ref || null, name }; } catch { return null; }
   };
 
+  // Helper: Get multiple deterministic scatter centroids for large countries
+  const getScatterCentroids = (countryCode: string, baseLatLng: [number, number], countryDiagonal: number): [number, number][] => {
+    if (countryDiagonal < 2.5) return [baseLatLng];
+    const [baseLat, baseLng] = baseLatLng;
+    const halfDiag = countryDiagonal / 2;
+    return [
+      [baseLat + halfDiag * 0.25, baseLng - halfDiag * 0.25], // NW
+      [baseLat + halfDiag * 0.25, baseLng + halfDiag * 0.25], // NE
+      [baseLat - halfDiag * 0.25, baseLng - halfDiag * 0.25], // SW
+      [baseLat - halfDiag * 0.25, baseLng + halfDiag * 0.25], // SE
+    ];
+  };
+
+  // Helper: Build adjacency graph and compute depths from user
+  const buildChainMetadata = (userId: string | null, links: Array<{ source: string; target: string }>) => {
+    const adj = new Map<string, Set<string>>();
+    links.forEach(l => {
+      if (!adj.has(l.source)) adj.set(l.source, new Set());
+      if (!adj.has(l.target)) adj.set(l.target, new Set());
+      adj.get(l.source)!.add(l.target);
+      adj.get(l.target)!.add(l.source);
+    });
+
+    const depths = new Map<string, number>();
+    const parents = new Map<string, string>();
+    if (userId) {
+      const q: Array<{ id: string; depth: number }> = [{ id: userId, depth: 0 }];
+      while (q.length) {
+        const { id, depth } = q.shift()!;
+        if (depths.has(id)) continue;
+        depths.set(id, depth);
+        const neighbors = adj.get(id);
+        if (neighbors) {
+          neighbors.forEach(n => {
+            if (!depths.has(n)) {
+              parents.set(n, id);
+              q.push({ id: n, depth: depth + 1 });
+            }
+          });
+        }
+      }
+    }
+    return { adj, depths, parents };
+  };
+
+  // Helper: Find maximum depth reachable from a node via parents
+  const findChainDepth = (nodeId: string, parents: Map<string, string>, visited?: Set<string>): number => {
+    if (!visited) visited = new Set();
+    if (visited.has(nodeId)) return 0;
+    visited.add(nodeId);
+    const children: string[] = [];
+    for (const [child, parent] of parents.entries()) {
+      if (parent === nodeId) children.push(child);
+    }
+    if (children.length === 0) return 1;
+    return 1 + Math.max(...children.map(c => findChainDepth(c, parents, visited)));
+  };
+
+  // Helper: Build waypoint list for boat traversal (longest chains first)
+  const buildBoatWaypoints = (userId: string | null, nodeMap: Map<string, NodeData>, depths: Map<string, number>, parents: Map<string, string>, adj: Map<string, Set<string>>): THREE.Vector3[] => {
+    if (!userId || !nodeMap.has(userId)) return [];
+    
+    const waypoints: THREE.Vector3[] = [];
+    const userNode = nodeMap.get(userId)!;
+    const userPos = globeEl.current?.getCoords(userNode.lat, userNode.lng);
+    if (!userPos) return [];
+    const userVec = new THREE.Vector3(userPos.x, userPos.y, userPos.z);
+    waypoints.push(userVec);
+
+    // Get direct neighbors (depth 1)
+    const neighbors = (Array.from(adj.get(userId) || new Set()) as string[]).filter(n => depths.get(n) === 1);
+    
+    // Sort by max chain depth (longest first)
+    neighbors.sort((a, b) => findChainDepth(b, parents) - findChainDepth(a, parents));
+
+    // Traverse each neighbor chain to endpoint and back
+    neighbors.forEach(neighborId => {
+      const visited = new Set<string>();
+      let current = neighborId;
+      const chain: string[] = [current];
+      visited.add(current);
+      
+      // Follow chain to endpoint
+      while (true) {
+        const children: string[] = [];
+        for (const [child, parent] of parents.entries()) {
+          if (parent === current && !visited.has(child)) children.push(child);
+        }
+        if (children.length === 0) break;
+        current = children[0];
+        chain.push(current);
+        visited.add(current);
+      }
+
+      // Add all chain nodes as waypoints
+      chain.forEach(nodeId => {
+        const node = nodeMap.get(nodeId);
+        if (node) {
+          const c = globeEl.current?.getCoords(node.lat, node.lng);
+          if (c) waypoints.push(new THREE.Vector3(c.x, c.y, c.z));
+        }
+      });
+
+      // Return to user
+      waypoints.push(userVec);
+    });
+
+    return waypoints;
+  };
+
   // Data load + layout
   useEffect(() => {
     let cancelled = false;
@@ -304,7 +414,12 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
           const base = resolveLatLngForCode(cc);
           const name = getCountryNameFromIso2(cc);
           const spread = getCountrySpreadDeg(name, base[0]);
-          const [lat, lng] = seededJitterAround(base[0], base[1], n.id, spread);
+          const diag = (name ? countryBBoxDiagRef.current.get(name) : undefined) || 0;
+          const centroids = getScatterCentroids(cc, base, diag);
+          const seed = hashString(n.id);
+          const centroidIndex = seed % centroids.length;
+          const scatterCentroid = centroids[centroidIndex];
+          const [lat, lng] = seededJitterAround(scatterCentroid[0], scatterCentroid[1], n.id, spread);
           nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: 'rgba(255,255,255,0.95)', countryCode: cc, name: n.name || null });
         });
 
@@ -324,20 +439,40 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         arcs.sort((x, y) => Number(Boolean(x.primary)) - Number(Boolean(y.primary)));
         setArcsData(arcs);
 
-        const pri = arcs.find(a => a.primary) || arcs[0];
-        const sec = arcs.find(a => !a.primary);
-        if (pri) {
-          const key = `${pri.startId}->${pri.endId}`;
-          if (!boatArcKeysRef.current.has(key)) {
-            boatArcKeysRef.current.add(key);
-            spawnBoatAlongArc(pri.startLat, pri.startLng, pri.endLat, pri.endLng, key);
-          }
-        }
-        if (sec) {
-          const key2 = `${sec.startId}->${sec.endId}`;
-          if (!boatArcKeysRef.current.has(key2)) {
-            boatArcKeysRef.current.add(key2);
-            spawnBoatAlongArc(sec.startLat, sec.startLng, sec.endLat, sec.endLng, key2);
+        const boatKey = 'user-chain-traversal';
+        if (!boatArcKeysRef.current.has(boatKey)) {
+          boatArcKeysRef.current.add(boatKey);
+          if (myIdRef.current && isLoggedInRef.current) {
+            const { adj, depths, parents } = buildChainMetadata(myIdRef.current, links);
+            const waypoints = buildBoatWaypoints(myIdRef.current, nodeMap, depths, parents, adj);
+            if (waypoints.length > 1) {
+              try {
+                const curve = new THREE.CatmullRomCurve3(waypoints);
+                curve.closed = false;
+                const scene = sceneRef.current;
+                if (scene && boatTemplateRef.current && !safeProfileRef.current && glbLoadedRef.current) {
+                  spawnBoatFromCurve(curve, boatKey);
+                } else if (scene && !safeProfileRef.current) {
+                  spawnProceduralBoatFromCurve(curve, boatKey);
+                  if (boatTemplateRef.current && !safeProfileRef.current) {
+                    pendingSpawnsRef.current.push({ curve, arcKey: boatKey });
+                  }
+                }
+              } catch {}
+            }
+          } else {
+            const pri = arcs.find(a => a.primary) || arcs[0];
+            const sec = arcs.find(a => !a.primary);
+            if (pri) {
+              spawnBoatAlongArc(pri.startLat, pri.startLng, pri.endLat, pri.endLng, boatKey);
+            }
+            if (sec) {
+              const key2 = `${sec.startId}->${sec.endId}`;
+              if (!boatArcKeysRef.current.has(key2)) {
+                boatArcKeysRef.current.add(key2);
+                spawnBoatAlongArc(sec.startLat, sec.startLng, sec.endLat, sec.endLng, key2);
+              }
+            }
           }
         }
 
@@ -471,7 +606,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const handlePolygonHover = (feature: any | null) => { setHoveredCountry(feature); if (feature) { setTooltipContent(feature.properties.name); setIsTooltipVisible(true); } else { setIsTooltipVisible(false); } };
   const tooltipRefPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const rafPendingRef = useRef<boolean>(false);
-  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => { tooltipRefPos.current = { x: event.clientX, y: event.clientY }; if (rafPendingRef.current) return; rafPendingRef.current = true; requestAnimationFrame(() => { rafPendingRef.current = false; setTooltipPosition(tooltipRefPos.current); }); };
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => { tooltipRefPos.current = { x: event.nativeEvent.offsetX, y: event.nativeEvent.offsetY }; if (rafPendingRef.current) return; rafPendingRef.current = true; requestAnimationFrame(() => { rafPendingRef.current = false; setTooltipPosition(tooltipRefPos.current); }); };
 
   const containerStyle: React.CSSProperties = { 
     width: '100%', 
@@ -595,6 +730,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       const tan0 = curve.getTangentAt(0);
       cloned.up.copy(pos0).normalize();
       cloned.lookAt(pos0.clone().add(tan0));
+      // Rotate boat 90° on X-axis so it sails forward instead of sideways
+      cloned.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
       // Cap to two boats: remove oldest if exceeding
       if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
       boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned as unknown as THREE.Mesh, curve, startTime: performance.now(), duration: 15000, isPlaceholder: false });
@@ -611,6 +748,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       mesh.position.copy(pos0);
       (mesh as any).up.copy(pos0).normalize();
       (mesh as any).lookAt(pos0.clone().add(tan0));
+      // Rotate boat 90° on X-axis so it sails forward instead of sideways
+      mesh.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
       if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
       boatsRef.current.push({ id: Date.now() + Math.random(), mesh, curve, startTime: performance.now(), duration: 15000, isPlaceholder: true });
       scene.add(mesh);
@@ -648,9 +787,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         atmosphereColor="#66c2ff"
         atmosphereAltitude={0.25}
         arcsData={arcsData}
-        arcColor={useCallback((d: any) => { try { const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)'; const midLat = (d.startLat + d.endLat) / 2; const midLng = (d.startLng + d.endLng) / 2; const c = globe.getCoords(midLat, midLng); if (!c) return 'rgba(102, 194, 255, 0.8)'; const cam = globe.camera(); const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); const isPri = !!d.primary; const basePrimary = '140, 220, 255'; const baseSecondary = '102, 194, 255'; const alpha = dot >= 0 ? (isPri ? 0.98 : 0.64) : (isPri ? 0.42 : 0.10); const base = isPri ? basePrimary : baseSecondary; return `rgba(${base}, ${alpha})`; } catch { return 'rgba(102, 194, 255, 0.8)'; } }, [])}
-        arcStroke={useCallback((d: any) => (d?.primary ? 2.2 : 2), [])}
-        arcAltitude={0.2}
+        arcColor={useCallback((d: any) => { try { const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)'; const midLat = (d.startLat + d.endLat) / 2; const midLng = (d.startLng + d.endLng) / 2; const c = globe.getCoords(midLat, midLng); if (!c) return 'rgba(102, 194, 255, 0.8)'; const cam = globe.camera(); const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); const isPri = !!d.primary; const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); const basePrimary = isUserArc ? '200, 255, 255' : '140, 220, 255'; const baseSecondary = '102, 194, 255'; const alpha = dot >= 0 ? (isPri ? (isUserArc ? 0.99 : 0.98) : 0.64) : (isPri ? 0.42 : 0.10); const base = isPri ? basePrimary : baseSecondary; return `rgba(${base}, ${alpha})`; } catch { return 'rgba(102, 194, 255, 0.8)'; } }, [])}
+        arcStroke={useCallback((d: any) => { const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); return isUserArc ? 3.2 : (d?.primary ? 2.2 : 2); }, [])}
+        arcAltitude={0.5}
         arcDashLength={1}
         arcDashGap={0}
         arcDashAnimateTime={0}
@@ -683,7 +822,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
             aria-hidden="true"
           >
             <div className="font-seasons" style={{ position: 'absolute', left: '50%', top: 18, transform: 'translate(-50%, 0)', color: 'var(--ink, #e6e6e6)', fontSize: 12, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}>
-              {isMe ? (myFirstNameRef.current || '') : (p.name ? String(p.name).split(/\s+/)[0]?.[0]?.toUpperCase() : '')}
+              {isMe ? (myFirstNameRef.current || '') : (p.name ? String(p.name).split(/\s+/)[0] || '' : '')}
             </div>
           </div>
         );

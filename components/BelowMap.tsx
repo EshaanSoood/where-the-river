@@ -14,6 +14,7 @@ import ShareTiles from "@/components/ShareTiles";
 import ColorChips from "@/components/ColorChips";
 import LeftPanelEmbeds from "@/components/LeftPanelEmbeds";
 import HowToPlayVideo from "@/components/HowToPlayVideo";
+import FooterBar from "@/components/FooterBar";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 // Client snapshot removed; use server-latched inviter only
 import { refDebug } from "@/lib/refDebug";
@@ -617,7 +618,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
         </div>
 
         {/* Desktop layout (≥1024px): 3 columns 1:2:1 over fluid container */}
-        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden page-container three-column-layout three-column-grid" style={{ gridTemplateColumns: '3fr 6fr 3fr', marginBottom: '0', alignItems: 'stretch' }}>
+        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden page-container three-column-layout three-column-grid" style={{ gridTemplateColumns: '3fr 6fr 3fr', marginTop: '8px', marginBottom: '0', alignItems: 'stretch' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
           <section aria-label="Bandcamp and YouTube" className="min-w-0 flex" style={{ alignSelf: 'stretch' }}>
             <div className="relative w-full flex flex-col frosted-panel overflow-hidden" style={{ borderRadius: '24px', height: '100%' }}>
@@ -633,7 +634,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
           <section aria-label="Global participation" className="min-w-0 flex globe-section" style={{ alignSelf: 'stretch' }}>
             <div className="relative w-full rounded-[24px] overflow-hidden flex items-center justify-center globe-container" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', height: '100%' }}>
               {/* Globe container - square, centered, with equal inset */}
-              <div className="relative globe-inner">
+              <div className="relative globe-inner" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
               </div>
               {/* Subtle inner glow ring to keep globe away from edges */}
@@ -663,6 +664,34 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.06)' }} />
             </div>
           </section>
+        </div>
+
+        {/* 2K+ Layout (1920px+): 2-column grid with perfect square globe */}
+        <div className="layout-2k-container">
+          {/* Header */}
+          <header className="layout-2k-header" style={{ paddingInline: 'clamp(16px, 4vw, 32px)', marginTop: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', height: '64px', borderRadius: '0 0 24px 24px', border: '1.5px solid rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', paddingInline: '16px', gap: '16px' }}>
+              <button aria-label="Participate" aria-expanded={dashboardOpen} className="inline-flex items-center gap-1 rounded-[24px] border px-3 py-2 text-sm" style={{ color: 'var(--ink)', borderColor: 'rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.45)' }} onClick={() => setDashboardOpen(v => !v)} onKeyDown={(e) => { if (e.key === 'Escape') setDashboardOpen(false); }}>Participate</button>
+              <h1 style={{ fontFamily: 'var(--font-seasons, serif)', fontSize: '24px', fontWeight: 'bold', color: 'white', margin: 0 }}>Dream River</h1>
+              <button aria-label="Open leaderboard" aria-expanded={leaderboardOpen} className="inline-flex items-center gap-1 rounded-[24px] border px-3 py-2 text-sm" style={{ color: 'var(--ink)', borderColor: 'rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.45)' }} onClick={() => setLeaderboardOpen(v => !v)} onKeyDown={(e) => { if (e.key === 'Escape') setLeaderboardOpen(false); }}>Leaderboard</button>
+            </div>
+          </header>
+
+          {/* Left Column */}
+          <section className="layout-2k-left" style={{ display: 'grid', gridTemplateRows: 'auto auto 1fr', gap: '8px', minHeight: 0, overflow: 'hidden', paddingInline: 'clamp(16px, 4vw, 32px)' }}>
+            <div style={{ minHeight: 0, overflow: 'hidden', aspectRatio: '16 / 9', borderRadius: '24px', border: '1.5px solid rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}><HowToPlayVideo /></div>
+            <div style={{ minHeight: 0, overflow: 'hidden', borderRadius: '24px', border: '1.5px solid rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}><BandcampEmbed /></div>
+            <div style={{ minHeight: 0, overflow: 'hidden', borderRadius: '24px', border: '1.5px solid rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}><div style={{ height: '100%', overflowY: 'auto', padding: '16px', color: 'var(--ink)' }}><Hero /></div></div>
+          </section>
+
+          {/* Right Column */}
+          <section className="layout-2k-right" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0, aspectRatio: '1 / 1', paddingInline: 'clamp(16px, 4vw, 32px)' }}>
+            <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: '24px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}><Globe describedById="globe-sr-summary" ariaLabel="Interactive globe" tabIndex={0} /></div>
+          </section>
+
+          {/* Footer */}
+          <footer className="layout-2k-footer" style={{ paddingInline: 'clamp(16px, 4vw, 32px)' }}><FooterBar /></footer>
+
         </div>
       </div>
 
@@ -1497,6 +1526,11 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
         .stream-icon.applemusic { -webkit-mask-image: url('/Streaming/pngs/applemusic.png'); mask-image: url('/Streaming/pngs/applemusic.png'); }
         .stream-icon.youtube { -webkit-mask-image: url('/Streaming/pngs/youtube.png'); mask-image: url('/Streaming/pngs/youtube.png'); }
         .stream-icon.bandcamp { -webkit-mask-image: url('/Streaming/pngs/bandcamp.png'); mask-image: url('/Streaming/pngs/bandcamp.png'); }
+        /* 2K+ Layout (1920px+) */
+        @media (min-width: 1920px) {
+          .layout-2k-container { display: grid !important; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr auto; gap: 8px; height: 100%; min-height: 0; overflow: hidden; }
+          .hidden\.lg\:grid { display: none !important; }
+        }
       `}</style>
       {/* Privacy Policy Modal */}
       {privacyOpen && (
