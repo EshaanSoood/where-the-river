@@ -42,16 +42,32 @@ export async function POST(req: Request) {
     const emailLower = String(email || "").trim().toLowerCase();
     const sanitized = { name: cleanedName, email: emailLower, country_code: cc, message: message ?? null, photo_url: photo_url ?? null, boat_color: boat_color ?? null, referred_by: normalizedBodyRef };
 
-    // Lookup auth user by email
+    // Lookup auth user by email using Admin API (not PostgREST, since auth.users is not exposed)
     type AuthMeta = Record<string, unknown>;
     type AuthUserRow = { id: string; email: string; user_metadata: AuthMeta | null; raw_user_meta_data: AuthMeta | null };
-    const { data: authUser, error: authErr } = await supabaseServer
-      .from('auth.users')
-      .select('id,email,user_metadata,raw_user_meta_data')
-      .eq('email', sanitized.email)
-      .maybeSingle();
-    if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 });
-    if (!authUser) return NextResponse.json({ error: 'auth_user_not_found' }, { status: 404 });
+    
+    let authUser: AuthUserRow | null = null;
+    try {
+      const { data: { users }, error: adminErr } = await supabaseServer.auth.admin.listUsers();
+      if (adminErr) throw adminErr;
+      // Find user by email (listUsers doesn't support filters, so search in memory)
+      authUser = (users && users.length > 0) 
+        ? (users.find(u => u.email === emailLower) as AuthUserRow | undefined) || null 
+        : null;
+    } catch (e) {
+      console.warn('[upsert] auth lookup failed', { email: emailLower, error: String(e) });
+      return NextResponse.json({ error: 'auth_lookup_failed' }, { status: 400 });
+    }
+
+    // If user exists, get their stored metadata (which may have referred_by from OTP signup)
+    const existingMeta = (authUser as AuthUserRow | null)?.raw_user_meta_data || {};
+    const storedReferredBy = (existingMeta as Record<string, unknown>).referred_by as string | null | undefined;
+
+    // Merge: prefer body-provided referred_by, fallback to stored referred_by
+    const finalReferredBy = normalizedBodyRef || (
+      typeof storedReferredBy === 'string' ? storedReferredBy.trim() : null
+    );
+    const finalNormalizedRef = /^\d{6,12}$/.test(finalReferredBy || '') ? finalReferredBy : null;
 
     const row = authUser as unknown as AuthUserRow;
     const prevMeta: AuthMeta = (row.raw_user_meta_data || {}) as AuthMeta;
@@ -76,50 +92,48 @@ export async function POST(req: Request) {
       console.warn('[upsert] assign_users_referrals_row failed', { user_id: row.id, error: String(e) });
     }
 
+    // STEP 1b: Ensure referred_by is in metadata if we have it (so finalize RPC can read it)
+    if (finalNormalizedRef && !storedReferredBy) {
+      try {
+        await supabaseServer.auth.admin.updateUserById(row.id, {
+          user_metadata: { ...(row.raw_user_meta_data || {}), referred_by: finalNormalizedRef }
+        });
+        console.log('[upsert] stored referred_by in metadata', { user_id: row.id, code: finalNormalizedRef });
+      } catch (e) {
+        console.warn('[upsert] failed to store referred_by in metadata', { user_id: row.id, error: String(e) });
+      }
+    }
+
     // STEP 2: Set parent and apply referral attribution (creation-only)
     let parentApplied = false;
     let inviterUserId: string | null = null;
     let attributionSource: 'payload' | 'none' = 'none';
 
     try {
-      // Import helpers to resolve inviter by code
-      const { getInviterByCode } = await import('@/server/db/referrals');
+      // Call Supabase RPC to handle referral attribution entirely within the database
+      // This RPC: looks up the code from metadata → resolves to inviter → sets parent → awards points
+      const { data: attrResult, error: attrErr } = await supabaseServer.rpc(
+        'finalize_users_referral_attribution',
+        { p_user_id: row.id }
+      );
+      
+      console.log('[upsert] referral attribution result', {
+        user_id: row.id,
+        success: (attrResult as Record<string, unknown>)?.success,
+        reason: (attrResult as Record<string, unknown>)?.reason,
+        inviter_id: (attrResult as Record<string, unknown>)?.inviter_id,
+        code: (attrResult as Record<string, unknown>)?.code,
+        error: attrErr?.message
+      });
 
-      // Validate body code and lookup inviter
-      if (normalizedBodyRef) {
-        const hit = await getInviterByCode(normalizedBodyRef);
-        if (hit?.user_id && hit.user_id !== row.id) {
-          inviterUserId = hit.user_id;
-          attributionSource = 'payload';
-        }
-      }
-
-      // Check if parent already set (creation-only policy)
-      const { data: existingRow } = await supabaseServer
-        .from('users_referrals')
-        .select('referred_by_user_id')
-        .eq('user_id', row.id)
-        .maybeSingle();
-
-      const hadParent = !!(existingRow as { referred_by_user_id?: unknown | null } | null)?.referred_by_user_id;
-
-      // Write parent edge if new and valid
-      if (inviterUserId && !hadParent && inviterUserId !== row.id) {
-        const { error: edgeErr } = await supabaseServer
-          .from('users_referrals')
-          .update({ referred_by_user_id: inviterUserId, updated_at: new Date().toISOString() })
-          .eq('user_id', row.id);
-
-        if (!edgeErr) {
-          parentApplied = true;
-          // Mirror to auth metadata for display
-          (nextMeta as { referred_by?: string }).referred_by = inviterUserId;
-        } else {
-          console.warn('[upsert] parent write failed', { user_id: row.id, error: edgeErr.message });
-        }
+      if (attrResult && (attrResult as Record<string, unknown>).success) {
+        parentApplied = true;
+        inviterUserId = (attrResult as Record<string, unknown>).inviter_id as string | null;
+        attributionSource = 'payload';
       }
     } catch (e) {
-      console.warn('[upsert] parent attribution failed', { user_id: row.id, error: String(e) });
+      console.warn('[upsert] referral attribution RPC failed', { user_id: row.id, error: String(e) });
+      // Non-blocking; continue
     }
 
     // STEP 3: Award points (idempotent depth-based)

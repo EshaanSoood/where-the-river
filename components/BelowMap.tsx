@@ -819,6 +819,14 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
                           const codeParam = inviterCode ? `?ref=${encodeURIComponent(inviterCode)}` : '';
                           const redirectTo = (typeof window !== 'undefined') ? `${window.location.origin}/auth/callback${codeParam}` : undefined;
+                          
+                          // Sanitize referral code - extract only numeric portion (6-12 digits)
+                          const sanitizedRefCode = (() => {
+                            const code = inviterCode || '';
+                            const match = code.match(/(\d{6,12})/);
+                            return match ? match[1] : '';
+                          })();
+                          
                             const { error: signUpErr } = await supabase.auth.signInWithOtp({
                               email: emailNorm,
                               options: {
@@ -830,7 +838,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                                   country_code: country,
                                   boat_color: boatColor,
                                   message: favoriteSong,
-                                  referred_by: inviterCode || '',
+                                  referred_by: sanitizedRefCode,
                                 },
                                 emailRedirectTo: redirectTo,
                               },
@@ -897,13 +905,18 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           if (error) throw error;
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
-                            // Read from visible input, fallback to state if not found
-                            let referredByCode = '';
-                            try {
-                              const referralInput = document.getElementById('referralCodeInput') as HTMLInputElement | null;
-                              referredByCode = referralInput?.value || inviterCode || '';
-                            } catch {
-                              referredByCode = inviterCode || '';
+                            // Read referral code from multiple sources (in priority order)
+                            // 1. From auth metadata (where it was stored during OTP signup)
+                            // 2. From visible input
+                            // 3. From state
+                            let referredByCode = (data.user.user_metadata?.referred_by as string) || '';
+                            if (!referredByCode) {
+                              try {
+                                const referralInput = document.getElementById('referralCodeInput') as HTMLInputElement | null;
+                                referredByCode = referralInput?.value || inviterCode || '';
+                              } catch {
+                                referredByCode = inviterCode || '';
+                              }
                             }
                             
                             const payload: Record<string, unknown> = {
