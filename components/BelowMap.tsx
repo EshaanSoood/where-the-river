@@ -777,7 +777,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                   {inviterCode && (
                     <div className="grid grid-cols-1">
                       <label className="text-sm font-medium">Referral code</label>
-                      <input className="border rounded-md px-3 py-2 bg-background" value={inviterCode} readOnly aria-label="Referral code" />
+                      <input id="referralCodeInput" className="border rounded-md px-3 py-2 bg-background" value={inviterCode} readOnly aria-label="Referral code" />
                     </div>
                   )}
                   <section aria-label="Choose your boat" className="mt-2">
@@ -830,6 +830,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                                   country_code: country,
                                   boat_color: boatColor,
                                   message: favoriteSong,
+                                  referred_by: inviterCode || '',
                                 },
                                 emailRedirectTo: redirectTo,
                               },
@@ -896,12 +897,15 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           if (error) throw error;
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
-                            // Use initialInviter.code as primary source (from SSR), fallback to state, then URL
-                            let referredByCode = initialInviter?.code || inviterCode;
-                            if (!referredByCode && typeof window !== 'undefined') {
-                              const u = new URL(window.location.href);
-                              referredByCode = u.searchParams.get('ref') || '';
+                            // Read from visible input, fallback to state if not found
+                            let referredByCode = '';
+                            try {
+                              const referralInput = document.getElementById('referralCodeInput') as HTMLInputElement | null;
+                              referredByCode = referralInput?.value || inviterCode || '';
+                            } catch {
+                              referredByCode = inviterCode || '';
                             }
+                            
                             const payload: Record<string, unknown> = {
                               name,
                               email,
@@ -943,7 +947,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                   {inviterCode && (
                     <div className="grid grid-cols-1">
                       <label className="text-sm font-medium">Referral code</label>
-                      <input className="border rounded-md px-3 py-2 bg-background" value={inviterCode} readOnly aria-label="Referral code" />
+                      <input id="referralCodeInput" className="border rounded-md px-3 py-2 bg-background" value={inviterCode} readOnly aria-label="Referral code" />
                     </div>
                   )}
                   <div className="flex items-center gap-3">
