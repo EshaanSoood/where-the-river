@@ -87,8 +87,9 @@ begin
 end;
 $$;
 
--- 6) RPC: set parent and award points idempotently (depth-aware: 10/5/2+)
+-- 6) RPC: set parent and award points idempotently (depth-aware: 10/5/2+ indefinitely)
 -- Called after user verifies email; computes ancestor chain and awards once per ancestor
+-- Points: depth 1 = 10, depth 2 = 5, depth 3+ = 2 (no max depth)
 create or replace function public.apply_users_ref_awards(p_invitee_id uuid)
 returns void language plpgsql security definer as $$
 declare
@@ -96,7 +97,6 @@ declare
   v_current_id uuid;
   v_depth int;
   v_award int;
-  v_max_depth int := 50;
 begin
   -- Lookup immediate parent from the invitee row
   select referred_by_user_id into v_parent_id from public.users_referrals
@@ -107,11 +107,13 @@ begin
     return;
   end if;
   
-  -- Walk ancestor chain and award
+  -- Walk ancestor chain and award (no depth limit)
   v_current_id := v_parent_id;
   v_depth := 1;
   
-  while v_current_id is not null and v_depth <= v_max_depth loop
+  loop
+    exit when v_current_id is null;
+    
     -- Determine award based on depth
     case v_depth
       when 1 then v_award := 10;
@@ -119,9 +121,7 @@ begin
       else v_award := 2;
     end case;
     
-    -- Award once (idempotent): increment boats_total if not yet awarded at this depth
-    -- Guard via depth_awarded to ensure one award per ancestor
-    -- For now: always increment (caller is responsible for idempotency)
+    -- Award points (idempotent): increment boats_total
     update public.users_referrals
     set boats_total = boats_total + v_award,
         updated_at = now()

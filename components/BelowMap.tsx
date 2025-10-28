@@ -896,7 +896,12 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           if (error) throw error;
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
-                            const referredByCode = inviterCode;
+                            // Use initialInviter.code as primary source (from SSR), fallback to state, then URL
+                            let referredByCode = initialInviter?.code || inviterCode;
+                            if (!referredByCode && typeof window !== 'undefined') {
+                              const u = new URL(window.location.href);
+                              referredByCode = u.searchParams.get('ref') || '';
+                            }
                             const payload: Record<string, unknown> = {
                               name,
                               email,
