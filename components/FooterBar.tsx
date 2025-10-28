@@ -7,7 +7,7 @@ export default function FooterBar() {
         className="w-full"
         style={{
           height: 40,
-          background: 'rgba(210, 245, 250, 0.35)',
+          background: 'var(--teal)',
           backdropFilter: 'blur(12px)',
           borderTop: '1.5px solid rgba(255,255,255,0.25)',
           borderBottom: 'none',
@@ -42,7 +42,7 @@ export default function FooterBar() {
           border-radius: 6px; background: rgba(11,13,26,0.75);
         }
         .footer-icon { display: none; }
-        .footer-mask { display: inline-block; width: 20px; height: 20px; background-color: var(--teal); -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
+        .footer-mask { display: inline-block; width: 20px; height: 20px; background-color: white; -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
         .footer-mask.youtube { -webkit-mask-image: url('/Streaming/pngs/youtube.png'); mask-image: url('/Streaming/pngs/youtube.png'); }
         .footer-mask.applemusic { -webkit-mask-image: url('/Streaming/pngs/applemusic.png'); mask-image: url('/Streaming/pngs/applemusic.png'); }
         .footer-mask.bandcamp { -webkit-mask-image: url('/Streaming/pngs/bandcamp.png'); mask-image: url('/Streaming/pngs/bandcamp.png'); }

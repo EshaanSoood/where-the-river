@@ -4,7 +4,7 @@ import { getDisplayNameByUserId } from "@/server/names/nameService";
 
 export async function GET() {
   try {
-    // Read boats totals from the server-authoritative view and join with auth metadata
+    // Read boats totals from the unified users_referrals table and join with auth metadata
     type AdminUser = { id: string; email: string | null; user_metadata?: Record<string, unknown> | null; raw_user_meta_data?: Record<string, unknown> | null };
     type AuthMeta = { name?: string | null; country_code?: string | null; boat_color?: string | null; otp_verified?: boolean | null };
 
@@ -12,13 +12,14 @@ export async function GET() {
     if (listErr) return NextResponse.json({ error: listErr.message }, { status: 400 });
     const users = (list?.users || []) as AdminUser[];
 
-    const { data: totalsRows, error: totalsErr } = await supabaseServer
-      .from('boats_totals')
-      .select('user_id, boats_total');
-    if (totalsErr) return NextResponse.json({ error: totalsErr.message }, { status: 400 });
+    // Read boats totals from unified users_referrals table
+    const { data: referrals, error: refErr } = await supabaseServer
+      .from('users_referrals')
+      .select('user_id,boats_total');
+    if (refErr) return NextResponse.json({ error: refErr.message }, { status: 400 });
 
     const totalsById = new Map<string, number>();
-    (totalsRows || []).forEach((r) => {
+    (referrals || []).forEach((r) => {
       const id = (r as { user_id: string }).user_id;
       const total = (r as { boats_total: number }).boats_total || 0;
       totalsById.set(id, total);

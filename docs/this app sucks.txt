@@ -1,0 +1,47 @@
+Why referral may not be attributed (field guide)
+
+1) Cookie not present at upsert
+- Capture and upsert happened on different hosts (alias vs deployment; apex vs www); cookies are host-only and SameSite=Lax.
+- OTP link opened on a different origin than the one that set the cookie; no cookie sent to /api/users/upsert.
+- Private browsing or strict settings cleared/blocked cookies before verify.
+
+2) Magic-link flow lost the ref
+- emailRedirectTo lacked ?ref=… because SSR didn’t resolve an inviter on the initial visit; returning tab had no cookie.
+- OTP opened in a fresh context (new window/profile/webview) where the cookie didn’t exist.
+
+3) Display-only hidden field (expected)
+- Hidden input is non-authoritative; we only include referred_by in the POST when a digits-only code exists. If the cookie is missing and display field is empty, server sees no code and skips attribution.
+
+4) Code normalization/validation failed
+- We normalize to digits-only and require length 6–12. Non-digit or wrong-length inputs are treated as invalid.
+
+5) Self-ref / creation-only guards
+- Self-ref guard blocks attribution when invitee === inviter.
+- Creation-only semantics: if referred_by is already set (non-empty), we never overwrite.
+
+6) Middleware not hit before upsert
+- User posted directly to /api/users/upsert without visiting /?ref=… or /r/…; no cookie was set.
+- A redirect path bypassed the matcher (unlikely, but check middleware matcher and rewrites).
+
+7) Host/redirect mismatches
+- http↔https, apex↔www, or alias↔deployment transitions can drop cookies; ensure the whole flow stays on one canonical host.
+
+8) Timing/expiry
+- Cookie lifetime is 7 days; long delays between capture and verify can expire the cookie.
+
+9) SQL vs Admin write (historic)
+- Earlier, SQL function attempted to UPDATE auth.users (disallowed); parent edge wasn’t set. Fixed by moving the edge write to Admin API.
+
+10) Awards idempotency
+- If the parent edge wasn’t set, awards won’t run; points_ledger remains empty by design.
+
+11) Ad-blockers / strict browsers
+- Some environments aggressively block cookies even with SameSite=Lax; in those cases, only a body code (hidden field) can carry—but we intentionally made the field display-only.
+
+12) Different flow path
+- User used the login path instead of signup; no body code submitted; cookie missing → no attribution.
+
+What to check when this happens again
+- Enable DEBUG_REFERRALS and read: { cookie_present, body_present, chosen_source, inviter_found, applied, skipped_reason } from /api/users/upsert logs.
+- Confirm the OTP emailRedirectTo domain equals the capture domain.
+- Reproduce on https://riverflowseshaan.vercel.app/?ref=<CODE> in the same tab/session.

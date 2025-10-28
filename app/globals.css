@@ -1,71 +1,53 @@
 @import "tailwindcss";
 
-:root {
-  /* Palette (original) */
-  --ink: #111111;
-  --ink-2: #444444;
-  --navy: #0b0d1a;
-  --aqua: #2AA7B5;
-  --teal: #135E66; /* deep teal from original palette */
-  --mist: #8CA7B2; /* soft teal */
-  --parchment: #F7F0E4; /* parchment background */
-  --amber: #A66A2B; /* brownish amber divider */
-  --white-soft: #FAF9F6; /* soft white */
-
-  --background: var(--parchment);
-  --foreground: var(--ink);
-  
-  /* Layout tokens - frozen to prevent regressions */
-  --card-radius: 24px;
-  --card-border: 1.5px solid rgba(255,255,255,0.25);
-  --card-frost: #135E6680;
-  --card-blur: blur(12px);
-  --header-border-radius: 0 0 24px 24px;
-  --gutter-desktop: 32px;
-  --gutter-mobile: 16px;
+@layer base {
+  :root {
+    --navy: #0b0d1a;
+    --teal: #135e66;
+    --aqua: #2aa7b5;
+    --amber: #d4984a;
+    --parchment: #f7f0e4;
+    --white-soft: #fcf9f5;
+    --card-radius: 24px;
+    --card-border: 1.5px solid rgba(255, 255, 255, 0.25);
+    --card-frost: #135E6680;
+    --card-blur: blur(12px);
+    --header-border-radius: 0 0 24px 24px;
+    --section-gap: 16px;
+    --ink: #0b0d1a;
+    --ink-2: #6b6b6b;
+    --mist: rgba(0, 0, 0, 0.1);
+  }
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-deep-teal: var(--teal);
-  --color-aqua: var(--aqua);
-  --color-mist: var(--mist);
-  --color-amber: var(--amber);
-  --color-white-soft: var(--white-soft);
-  --font-sans: Helvetica, Arial, sans-serif;
-  --font-mono: var(--font-geist-mono);
+/* Ensure root html/body always fill viewport on desktop */
+@media (min-width: 1024px) {
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
 }
 
-/* Remove all debug outlines and borders */
-html, body {
-  outline: none !important;
-  border: none !important;
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Helvetica, Arial, sans-serif;
-  margin: 0;
-  padding: 0;
-}
-
-/* Soft rounded corners by default */
-* {
-  border-radius: 12px; /* soft everywhere by default; components can override */
-}
-
-/* Remove debug borders from all elements */
-*, *::before, *::after {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-/* Page gutters: consistent ~32px desktop / ≥16px mobile */
+/* Page frame ensures layout stays within bounds */
 .page-frame {
-  padding-left: clamp(var(--gutter-mobile), 4vw, var(--gutter-desktop));
-  padding-right: clamp(var(--gutter-mobile), 4vw, var(--gutter-desktop));
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.page-viewport {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Smooth scrolling for reduced-motion awareness */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 /* Desktop-only shared page width for header/main/footer containers */
@@ -125,11 +107,14 @@ body {
     border-radius: var(--header-border-radius) !important;
   }
   
-  /* Prevent any child from overriding header rounding */
-  .header-bar *,
-  .header-bar > *,
-  .header-bar > * > * {
+  /* Prevent any child from overriding header rounding - but allow buttons to have their own rounding */
+  .header-bar * {
     border-radius: 0 !important;
+  }
+  
+  /* Allow header buttons to have rounded corners */
+  .header-bar button {
+    border-radius: 24px !important;
   }
   
   .header-bar h1 {
@@ -171,12 +156,13 @@ button, .btn {
   /* Ensure common containers inherit 24px rounding */
   .rounded-global { border-radius: var(--card-radius); }
   
-  /* FROZEN FOOTER STYLE - rounded top, straight bottom */
+  /* FROZEN FOOTER STYLE - rounded top, straight bottom, dark teal background */
   footer {
     border-top-left-radius: var(--card-radius) !important;
     border-top-right-radius: var(--card-radius) !important;
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
+    background-color: var(--teal) !important;
   }
   
   /* Prevent any child from overriding footer rounding */
@@ -186,4 +172,97 @@ button, .btn {
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
   }
+  
+  /* Footer icon colors - white text */
+  footer .footer-mask {
+    background-color: white !important;
+  }
+
+/* GLITCH FIX 1: Globe centering - use flexbox to perfectly center */
+@media (min-width: 1024px) {
+  /* Three-column layout wrapper */
+  .three-column-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    flex-grow: 1;
+  }
+  
+  /* Three-column grid */
+  .three-column-grid {
+    display: grid;
+    grid-template-columns: 3fr 6fr 3fr;
+    gap: 32px;
+    height: 100%;
+    align-items: stretch;
+    flex-grow: 1;
+  }
+  
+  /* Globe container - CENTERED PERFECTLY */
+  .globe-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+  }
+  
+  .globe-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 24px;
+    overflow: hidden;
+  }
+  
+  .globe-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1 / 1;
+    width: min(100%, 100% - 32px);
+    height: min(100%, 100% - 32px);
+    max-width: calc(100% - 32px);
+    max-height: calc(100% - 32px);
+  }
+}
+
+/* GLITCH FIX 2: Footer baseline flush - ensure containers stick to footer */
+@media (min-width: 1024px) {
+  html, body {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  body {
+    height: 100vh;
+  }
+  
+  /* Main content wrapper */
+  .page-viewport > * {
+    flex-shrink: 0;
+  }
+  
+  /* Header stays at top */
+  [class*="header"],
+  .header-bar {
+    flex-shrink: 0;
+  }
+  
+  /* Content fills middle */
+  [class*="BelowMap"],
+  [class*="content"] {
+    flex-grow: 1;
+    overflow-y: auto;
+  }
+  
+  /* Footer stays at bottom, flush */
+  footer {
+    flex-shrink: 0;
+    margin-top: auto;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
 

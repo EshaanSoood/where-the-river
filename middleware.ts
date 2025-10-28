@@ -28,15 +28,30 @@ export function middleware(req: NextRequest) {
   const pathKind = rMatch ? '/r' : (searchParams.has('ref') ? 'query' : null);
 
   const isHttps = req.nextUrl.protocol === "https:";
+  const isCallback = pathname.startsWith('/auth/callback');
+  const isLanding = pathname === '/';
 
   // Log (guarded)
   if (process.env.DEBUG_REFERRALS) {
     try { console.info('[mw:ref]', { saw_ref: sawRef, path: pathKind, valid: codeValid }); } catch {}
   }
 
-  // Always produce a response (either redirect or next)
+  // Always produce a response (either preserve on callback, redirect elsewhere, or next)
   if (sawRef) {
-    // Build redirect target
+    if (isCallback || isLanding) {
+      // Preserve ?ref on the OTP callback page so payload can carry it reliably
+      const res = NextResponse.next();
+      if (codeValid && digitsOnly) {
+        res.cookies.set('river_ref_h', digitsOnly, { httpOnly: true, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 7 * 24 * 60 * 60 });
+        res.cookies.set('river_ref', digitsOnly, { httpOnly: false, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 7 * 24 * 60 * 60 });
+      } else {
+        res.cookies.set('river_ref_h', '', { httpOnly: true, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 0 });
+        res.cookies.set('river_ref', '', { httpOnly: false, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 0 });
+      }
+      return res;
+    }
+
+    // Non-callback: set cookies and redirect canonically (strip query or /r → /)
     let redirectUrl: URL;
     if (rMatch) {
       redirectUrl = new URL(req.nextUrl.origin);
@@ -45,14 +60,10 @@ export function middleware(req: NextRequest) {
       redirectUrl.searchParams.delete('ref');
     }
     const redirect = NextResponse.redirect(redirectUrl);
-
-    // Set or clear cookies on redirect response
     if (codeValid && digitsOnly) {
-      // Overwrite both cookies to the normalized digits-only value
       redirect.cookies.set('river_ref_h', digitsOnly, { httpOnly: true, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 7 * 24 * 60 * 60 });
       redirect.cookies.set('river_ref', digitsOnly, { httpOnly: false, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 7 * 24 * 60 * 60 });
     } else {
-      // Clear both on invalid
       redirect.cookies.set('river_ref_h', '', { httpOnly: true, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 0 });
       redirect.cookies.set('river_ref', '', { httpOnly: false, secure: isHttps, sameSite: 'lax', path: '/', maxAge: 0 });
     }

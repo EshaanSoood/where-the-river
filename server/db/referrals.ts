@@ -14,11 +14,11 @@ export async function getReferralCodeByUserId(userId: string): Promise<string | 
   if (!id) return null;
   try {
     const { data } = await supabaseServer
-      .from('referral_codes')
-      .select('code')
+      .from('users_referrals')
+      .select('referral_code')
       .eq('user_id', id)
       .maybeSingle();
-    return (data as { code?: string | null } | null)?.code ?? null;
+    return (data as { referral_code?: string | null } | null)?.referral_code ?? null;
   } catch {
     return null;
   }
@@ -26,18 +26,18 @@ export async function getReferralCodeByUserId(userId: string): Promise<string | 
 
 // A.1 — Fetch inviter (user_id) by canonical code
 export async function getInviterByCode(code: string): Promise<InviterInfo> {
-  const normalized = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const normalized = String(code || "").trim();
   if (!normalized) return null;
   try {
     const { data } = await supabaseServer
-      .from('referral_codes')
-      .select('user_id, code')
-      .eq('code', normalized)
+      .from('users_referrals')
+      .select('user_id, referral_code')
+      .eq('referral_code', normalized)
       .maybeSingle();
     dbg('getInviterByCode', { code: normalized, hit: !!data });
     if (data && (data as { user_id?: string }).user_id) {
-      const row = data as { user_id: string; code?: string | null };
-      return { user_id: row.user_id, code: (row.code ?? normalized) };
+      const row = data as { user_id: string; referral_code?: string | null };
+      return { user_id: row.user_id, code: (row.referral_code ?? normalized) };
     }
     return null;
   } catch {
@@ -45,37 +45,25 @@ export async function getInviterByCode(code: string): Promise<InviterInfo> {
   }
 }
 
-// A.1b — Direct parent lookup using users metadata mirror
+// A.1b — Direct parent lookup using unified table
 export async function getParent(userId: string): Promise<{ parent_user_id: string | null; code: string | null } | null> {
   const id = String(userId || '').trim();
   if (!id) return null;
   try {
-    // Read referred_by from auth users metadata (SoT for edge per Phase 2 contract)
-    const { data: authRow } = await supabaseServer
-      .from('auth.users' as unknown as string)
-      .select('id, raw_user_meta_data')
-      .eq('id', id)
+    const { data } = await supabaseServer
+      .from('users_referrals')
+      .select('referred_by_user_id')
+      .eq('user_id', id)
       .maybeSingle();
-    const meta = (authRow as { raw_user_meta_data?: Record<string, unknown> } | null)?.raw_user_meta_data || {};
-    const rawRef = String((meta as Record<string, unknown>)['referred_by'] || '').trim();
-    if (!rawRef) return { parent_user_id: null, code: null };
-    // Detect UUID vs code
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawRef);
-    if (isUuid) {
-      const parentId = rawRef;
-      // Best-effort fetch code for parent (optional)
-      const { data: rc } = await supabaseServer
-        .from('referral_codes')
-        .select('code')
-        .eq('user_id', parentId)
-        .maybeSingle();
-      const parentCode = (rc as { code?: string | null } | null)?.code ?? null;
-      return { parent_user_id: parentId, code: parentCode };
-    }
-    const code = rawRef.replace(/\D+/g, '') || null;
-    if (!code) return { parent_user_id: null, code: null };
-    const inviter = await getInviterByCode(code);
-    return { parent_user_id: inviter?.user_id || null, code };
+    const parentId = (data as { referred_by_user_id?: string | null } | null)?.referred_by_user_id ?? null;
+    if (!parentId) return { parent_user_id: null, code: null };
+    const { data: rc } = await supabaseServer
+      .from('users_referrals')
+      .select('referral_code')
+      .eq('user_id', parentId)
+      .maybeSingle();
+    const code = (rc as { referral_code?: string | null } | null)?.referral_code ?? null;
+    return { parent_user_id: parentId, code };
   } catch {
     return { parent_user_id: null, code: null };
   }
@@ -86,23 +74,17 @@ export async function ensureUserHasReferralCode(userId: string): Promise<{ code:
   const id = String(userId || '').trim();
   if (!id) return { code: null };
   try {
-    // First try read existing
     const { data: existing } = await supabaseServer
-      .from('referral_codes')
-      .select('code')
+      .from('users_referrals')
+      .select('referral_code')
       .eq('user_id', id)
       .maybeSingle();
-    if (existing && (existing as { code?: string | null }).code) {
-      const c = (existing as { code?: string | null }).code || null;
+    if (existing && (existing as { referral_code?: string | null }).referral_code) {
+      const c = (existing as { referral_code?: string | null }).referral_code || null;
       dbg('ensureUserHasReferralCode.hit', { userId: id, code: c });
       return { code: c };
     }
-    // Fallback to RPC that mints idempotently (Phase 2: gated, off by default)
-    try {
-      const { ALLOW_ENSURE_ON_READ } = await import('@/server/config/flags');
-      if (!ALLOW_ENSURE_ON_READ) return { code: null };
-    } catch { return { code: null }; }
-    const { data: minted } = await supabaseServer.rpc('assign_referral_code', { p_user_id: id });
+    const { data: minted } = await supabaseServer.rpc('assign_users_referrals_row', { p_user_id: id });
     const code = (minted as unknown as string) || null;
     dbg('ensureUserHasReferralCode.mint', { userId: id, code });
     return { code };
@@ -124,13 +106,12 @@ export async function getAncestorChain(userId: string, maxDepth = 20): Promise<A
       const parentId = parent.parent_user_id;
       if (visited.has(parentId)) { dbg('getAncestorChain.cycle', { at: parentId, depth }); break; }
       visited.add(parentId);
-      // Fetch parent code for convenience
       const { data: rc } = await supabaseServer
-        .from('referral_codes')
-        .select('code')
+        .from('users_referrals')
+        .select('referral_code')
         .eq('user_id', parentId)
         .maybeSingle();
-      const code = (rc as { code?: string | null } | null)?.code ?? null;
+      const code = (rc as { referral_code?: string | null } | null)?.referral_code ?? null;
       chain.push({ user_id: parentId, code });
       currentId = parentId;
     }

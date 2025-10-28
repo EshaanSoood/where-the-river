@@ -1,0 +1,89 @@
+Single-table referral system refactor (plan only; no code changes yet)
+
+Goal
+- Collapse referral attribution, codes, parent edges, and points into one authoritative table for reads/writes across the app. Secondary tables/views may exist for performance, but all primary fields live in one place.
+
+Proposed canonical table: public.users_referrals
+- Keyed by auth user id (uuid)
+- Columns (authoritative):
+  - user_id uuid primary key references auth.users(id) on delete cascade
+  - referral_code text unique not null
+  - referred_by_user_id uuid null references auth.users(id) on delete set null  -- parent edge
+  - depth_awarded boolean not null default false                                 -- whether awards were applied
+  - boats_total integer not null default 0                                       -- denormalized points/boats
+  - created_at timestamptz not null default now()
+  - updated_at timestamptz not null default now()
+  - last_awarded_at timestamptz null
+
+Derived/secondary (optional):
+- public.users_referrals_ledger (append-only), or a materialized view summarizing points, but not required for app reads.
+
+Writes (single path)
+1) User creation/upsert API (POST /api/users/upsert)
+   - Look up auth user by email (lowercase).
+   - Ensure there is a row in users_referrals for this user:
+     - If missing, insert with minted referral_code (CSPRNG numeric 8–10 digits loop-checked for uniqueness).
+   - Attribution (body-first, then cookie):
+     - Validate digits-only code; resolve parent user_id via users_referrals.referral_code.
+     - If user has no referred_by_user_id (null/''), write parent edge once (creation-only).
+   - Awards (idempotent):
+     - Compute ancestor chain by following referred_by_user_id pointers in users_referrals.
+     - Upsert boats_total for each ancestor per depth (10/5/2) directly in users_referrals (increment boats_total); mark depth_awarded true for invitee when applied.
+   - Return same response shape as today; do not expose internal ids.
+
+Reads (everywhere)
+- Globe: nodes = select user_id, referral_code, boats_total from users_referrals; arcs = join child.user_id → parent.referred_by_user_id.
+- Dashboard: use users_referrals for referral_code, boats_total, and whether referred_by exists; invite list can be derived by reverse lookup on referred_by_user_id.
+- Share link: build from users_referrals.referral_code.
+- Resolver (invite banner): resolve name via auth.users, code via users_referrals (no mixed SoT).
+
+Migrations
+1) Create table public.users_referrals with columns/indexes:
+   - primary key (user_id)
+   - unique (referral_code)
+   - index (referred_by_user_id)
+2) Backfill from current SoT:
+   - Insert all existing users with COALESCE(existing_code, minted_code).
+   - Translate existing auth.users.user_metadata.referred_by (UUID) into referred_by_user_id.
+   - Initialize boats_total from points_ledger summaries (or 0 if not available).
+3) Create function assign_users_referrals_row(p_user_id uuid) returns text (referral_code):
+   - Upsert on user_id; mint code if missing; return code.
+4) Create function apply_referral_awards(p_invitee_id uuid):
+   - In a transaction: follow chain via users_referrals; increment boats_total per ancestor (10/5/2); set depth_awarded true; set last_awarded_at.
+
+API changes (minimal surface; same shapes)
+- app/api/users/upsert/route.ts
+  - Replace: referral_codes + points_ledger usage
+  - With: users_referrals (ensure row), parent edge write, apply_referral_awards()
+  - Keep response JSON identical.
+- app/api/referral/route.ts and /api/me/route.ts
+  - Read referral_code and boats_total from users_referrals.
+- server/db/referrals.ts
+  - Thin wrappers now read/write users_referrals only; remove schema drift and cookie logic from helpers.
+- middleware.ts (unchanged behavior)
+  - Still captures ?ref and /r/:code to cookies for SSR cues; server always authoritative.
+
+Globe and UI adjustments (read-only)
+- Update globe endpoints to source nodes/arcs from users_referrals.
+- Dashboard share link and counters read users_referrals.
+
+Rollout plan
+1) Ship table and dual-write (optional short window): upsert continues to award via legacy path and increments users_referrals.boats_total in parallel.
+2) Flip reads to users_referrals in non-critical endpoints (/api/referral, /api/me), then globe.
+3) Remove legacy writes (points_ledger, referral_codes edge) once stable.
+4) Backfill verification script to assert rows exist for 100% of auth.users; alert on drift.
+
+Failure modes guarded
+- No empty-string traps: server treats null/'' as not set.
+- Body-first digits code; ignore junk; fallback to cookie only if body is absent/invalid.
+- Idempotent awards; re-running upsert does not double-count.
+
+Endpoints touched
+- POST /api/users/upsert (write path consolidate)
+- GET /api/me (reads from users_referrals)
+- GET /api/referral (share link)
+- GET /api/referral/resolve (code→user_id via users_referrals)
+- Any globe data endpoints (/api/globe, /api/leaderboard) switch to users_referrals
+
+No code changes done yet; this file is the implementation plan.
+

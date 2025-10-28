@@ -12,8 +12,6 @@ export async function POST(req: Request) {
     const { name, email, country_code, message, photo_url, referred_by, boat_color } = parsedBody || {} as Record<string, unknown>;
     if (!email || !country_code) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
-    // Diagnostics removed (previous hotfix)
-
     // Name validation: trim, collapse spaces, length 2..80, must contain a letter or digit
     const cleanedName = String(name || "").replace(/\s+/g, " ").trim().slice(0, 80);
     const hasAlnum = /[\p{L}\p{N}]/u.test(cleanedName);
@@ -34,12 +32,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "invalid_country" }, { status: 400 });
     }
 
-    // 02 — upsert sanitized input (Phase 3: keep response shape, but move attribution to atomic path)
+    // Extract and normalize referral code from payload (body-first attribution)
     const bodyRefRaw = (referred_by ?? null) as string | null;
-    const bodyRef = (typeof bodyRefRaw === 'string' ? bodyRefRaw.replace(/\D+/g, '') : '').trim();
-    const normalizedBodyRef = bodyRef.length > 0 ? bodyRef : null;
-    const sanitized = { name: cleanedName, email: String(email), country_code: cc, message: message ?? null, photo_url: photo_url ?? null, boat_color: boat_color ?? null, referred_by: normalizedBodyRef };
-    // Diagnostics removed
+    const bodyRefRawStr = typeof bodyRefRaw === 'string' ? bodyRefRaw.trim() : '';
+    const bodyRefDigits = /^\d{6,12}$/.test(bodyRefRawStr) ? bodyRefRawStr : '';
+    const normalizedBodyRef = bodyRefDigits.length > 0 ? bodyRefDigits : null;
+
+    // Email normalization
+    const emailLower = String(email || "").trim().toLowerCase();
+    const sanitized = { name: cleanedName, email: emailLower, country_code: cc, message: message ?? null, photo_url: photo_url ?? null, boat_color: boat_color ?? null, referred_by: normalizedBodyRef };
 
     // Lookup auth user by email
     type AuthMeta = Record<string, unknown>;
@@ -52,111 +53,87 @@ export async function POST(req: Request) {
     if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 });
     if (!authUser) return NextResponse.json({ error: 'auth_user_not_found' }, { status: 404 });
 
-    // Ensure referral code via SoT (idempotent) — safe if already exists
-    let canonicalCode: string | null = null;
-    try {
-      const { data: codeData } = await supabaseServer.rpc('assign_referral_code', { p_user_id: (authUser as { id: string }).id });
-      canonicalCode = (codeData as unknown as string) || null;
-    } catch {}
-
     const row = authUser as unknown as AuthUserRow;
     const prevMeta: AuthMeta = (row.raw_user_meta_data || {}) as AuthMeta;
+
+    // Prepare next metadata (includes new profile data)
     const nextMeta: AuthMeta = {
       ...prevMeta,
       name: sanitized.name,
+      full_name: sanitized.name,
       country_code: sanitized.country_code,
       message: sanitized.message,
       boat_color: sanitized.boat_color,
       otp_verified: true,
     };
 
-    // Phase 3 — Atomic attribution and depth-aware awards (no response shape change)
+    // STEP 1: Ensure user has referral code in unified table
+    let canonicalCode: string | null = null;
     try {
-      const cookieHeader = req.headers.get('cookie') || '';
-      const m = cookieHeader.match(/(?:^|; )river_ref_h=([^;]+)/);
-      const cookieCodeRaw = m ? decodeURIComponent(m[1]) : '';
-      const cookieDigits = cookieCodeRaw.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/[^0-9]/g, '');
-      const cookieCode = cookieDigits.length ? cookieDigits : null;
+      const { data: codeData } = await supabaseServer.rpc('assign_users_referrals_row', { p_user_id: row.id });
+      canonicalCode = (codeData as unknown as string) || null;
+    } catch (e) {
+      console.warn('[upsert] assign_users_referrals_row failed', { user_id: row.id, error: String(e) });
+    }
 
-      const { USE_REFERRAL_HELPERS } = await import('@/server/config/flags');
-      let inviterUserId: string | null = null;
-      let chosenSource: 'cookie'|'body'|'none' = 'none';
-      if (USE_REFERRAL_HELPERS) {
-        const { getInviterByCode, getAncestorChain } = await import('@/server/db/referrals');
-        // Validate cookie first
-        if (cookieCode) {
-          const hit = await getInviterByCode(cookieCode);
-          if (hit?.user_id && hit.user_id !== row.id) { inviterUserId = hit.user_id; chosenSource = 'cookie'; }
-        }
-        // Fallback to body code
-        if (!inviterUserId && normalizedBodyRef) {
-          const hit2 = await getInviterByCode(normalizedBodyRef);
-          if (hit2?.user_id && hit2.user_id !== row.id) { inviterUserId = hit2.user_id; chosenSource = 'body'; }
-        }
+    // STEP 2: Set parent and apply referral attribution (creation-only)
+    let parentApplied = false;
+    let inviterUserId: string | null = null;
+    let attributionSource: 'payload' | 'none' = 'none';
 
-        // Creation-only parent-edge write via Admin API (service role)
-        let applied = false;
-        let edgeWrite: 'admin_api' | 'skipped' = 'skipped';
-        const hadRef = !!(prevMeta as { referred_by?: unknown }).referred_by && String((prevMeta as { referred_by?: unknown }).referred_by || '').trim().length > 0;
-        if (inviterUserId && !hadRef && inviterUserId !== row.id) {
-          const upd = await supabaseServer.auth.admin.updateUserById(row.id, { user_metadata: { ...nextMeta, referred_by: inviterUserId, ...(canonicalCode ? { referral_id: canonicalCode } : {}) } });
-          if (upd.error) return NextResponse.json({ error: upd.error.message }, { status: 400 });
-          (nextMeta as { referred_by?: string }).referred_by = inviterUserId;
-          applied = true;
-          edgeWrite = 'admin_api';
-        }
+    try {
+      // Import helpers to resolve inviter by code
+      const { getInviterByCode } = await import('@/server/db/referrals');
 
-        // Awards: SQL-only, idempotent; do not block success on error
-        let awardsCalled = false;
-        let awardsErr: string | null = null;
-        if (applied) {
-          try {
-            await supabaseServer.rpc('award_referral_chain', { p_invitee_id: row.id } as unknown as Record<string, unknown>);
-            awardsCalled = true;
-          } catch (e: unknown) {
-            awardsCalled = true;
-            awardsErr = e instanceof Error ? e.message : 'unknown';
-          }
-        }
-
-        // Optional totals refresh (view usually reflects immediately); include ancestors + invitee
-        if (inviterUserId) {
-          try {
-            const { refreshBoatsTotals } = await import('@/server/boats/totals');
-            const ancestors = await getAncestorChain(row.id, 3);
-            const beneficiaryIds = Array.from(new Set<string>([inviterUserId, ...ancestors.map(a => a.user_id)]));
-            await refreshBoatsTotals(beneficiaryIds);
-          } catch {}
-        }
-
-        // Clear cookie on success (regardless of chosen source) to avoid stale attribution
-        if (applied) {
-          // Cookie cleared in response below
-          (nextMeta as Record<string, unknown>).__clear_ref_cookie = true;
-        }
-
-        // Debug log (guarded)
-        if (process.env.DEBUG_REFERRALS) {
-          console.info('[upsert:p3]', {
-            cookie_present: !!cookieCode,
-            body_present: !!normalizedBodyRef,
-            chosen_source: chosenSource,
-            inviter_found: !!inviterUserId,
-            applied,
-            skipped_reason: (!inviterUserId && (cookieCode || normalizedBodyRef)) ? 'invalid_or_self_ref' : null,
-            invitee_id: row.id,
-            edge_write: edgeWrite,
-            awards_called: awardsCalled,
-            awards_err: awardsErr,
-          });
+      // Validate body code and lookup inviter
+      if (normalizedBodyRef) {
+        const hit = await getInviterByCode(normalizedBodyRef);
+        if (hit?.user_id && hit.user_id !== row.id) {
+          inviterUserId = hit.user_id;
+          attributionSource = 'payload';
         }
       }
-    } catch {}
 
-    // Server-side non-invasive auto-fill for display name in auth metadata (profilesless)
+      // Check if parent already set (creation-only policy)
+      const { data: existingRow } = await supabaseServer
+        .from('users_referrals')
+        .select('referred_by_user_id')
+        .eq('user_id', row.id)
+        .maybeSingle();
+
+      const hadParent = !!(existingRow as { referred_by_user_id?: unknown | null } | null)?.referred_by_user_id;
+
+      // Write parent edge if new and valid
+      if (inviterUserId && !hadParent && inviterUserId !== row.id) {
+        const { error: edgeErr } = await supabaseServer
+          .from('users_referrals')
+          .update({ referred_by_user_id: inviterUserId, updated_at: new Date().toISOString() })
+          .eq('user_id', row.id);
+
+        if (!edgeErr) {
+          parentApplied = true;
+          // Mirror to auth metadata for display
+          (nextMeta as { referred_by?: string }).referred_by = inviterUserId;
+        } else {
+          console.warn('[upsert] parent write failed', { user_id: row.id, error: edgeErr.message });
+        }
+      }
+    } catch (e) {
+      console.warn('[upsert] parent attribution failed', { user_id: row.id, error: String(e) });
+    }
+
+    // STEP 3: Award points (idempotent depth-based)
+    if (parentApplied) {
+      try {
+        await supabaseServer.rpc('apply_users_ref_awards', { p_invitee_id: row.id });
+      } catch (e) {
+        console.warn('[upsert] awards RPC failed', { user_id: row.id, error: String(e) });
+        // Non-blocking; continue
+      }
+    }
+
+    // STEP 4: Ensure display name in metadata
     try {
-      // Derive candidate from sources in order (metadata-first, then email local-part)
-      const metaNew = nextMeta as Record<string, unknown>;
       const metaPrev = prevMeta as Record<string, unknown>;
       const fromBody = sanitized.name as string;
       const fromAuthFull = (typeof metaPrev.full_name === 'string' ? metaPrev.full_name as string : '') || '';
@@ -166,37 +143,43 @@ export async function POST(req: Request) {
       const candidate = [fromBody, fromAuthFull, fromAuthName, titleCaseLocal]
         .map(s => (String(s || '').trim()))
         .find(s => s.length > 0) || '';
-      if (candidate) {
+      if (candidate && !((nextMeta as Record<string, unknown>).full_name)) {
+        (nextMeta as Record<string, unknown>).full_name = candidate;
         await ensureDisplayName(row.id, candidate);
-        if (!(typeof metaPrev.full_name === 'string' && metaPrev.full_name.trim().length > 0)) {
-          (nextMeta as Record<string, unknown>).full_name = candidate;
-        }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[upsert] display name ensure failed', { user_id: row.id, error: String(e) });
+    }
 
-    // Update auth user metadata via admin API (mirror canonical referral_id for dashboard convenience)
+    // STEP 5: Update auth user metadata
     const { error: updErr } = await supabaseServer.auth.admin.updateUserById(
       row.id,
       { user_metadata: { ...nextMeta, ...(canonicalCode ? { referral_id: canonicalCode } : {}) } }
     );
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 400 });
 
-    // 03 — db probe removed
-
-    // 04 — mark OTP verified (monotonic true); awards handled atomically above
+    // STEP 6: Mark OTP verified (monotonic)
     try { await supabaseServer.rpc('mark_otp_verified', { p_user_id: row.id }); } catch {}
 
-    const res = NextResponse.json({ user: { email: row.email, name: sanitized.name, country_code: sanitized.country_code, message: sanitized.message, referral_id: (nextMeta as { referral_id?: string | null }).referral_id ?? null, boat_color: sanitized.boat_color } }, { headers: { 'Cache-Control': 'no-store' } });
-    // Clear cookie if requested by atomic path
-    try {
-      if ((nextMeta as Record<string, unknown>).__clear_ref_cookie) {
-        const isHttps = true; // server routes typically on https in prod; cookie flags must mirror middleware
-        res.cookies.set('river_ref_h', '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0, secure: isHttps });
-      }
-    } catch {}
+    // Prepare response
+    const res = NextResponse.json(
+      {
+        user: {
+          email: row.email,
+          name: sanitized.name,
+          country_code: sanitized.country_code,
+          message: sanitized.message,
+          referral_id: canonicalCode,
+          boat_color: sanitized.boat_color
+        }
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
+
     return res;
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
+    console.error('[upsert] unhandled error', { error: msg });
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

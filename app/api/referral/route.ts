@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
       }
     } else {
       const res = await supabaseServer
-        .from('referral_codes')
-        .select('code')
+        .from('users_referrals')
+        .select('referral_code')
         .eq('user_id', inviterId)
         .maybeSingle();
       row = res.data;

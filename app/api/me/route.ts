@@ -41,11 +41,11 @@ async function handleProfile(req: Request) {
     const country_name = country_code ? getCountryNameFromCode(country_code) : null;
     const message = (meta.message ?? null) as string | null;
     const boat_color = (meta.boat_color ?? null) as string | null;
-    // Prefer server-authoritative total from boats_totals view; fallback to metadata if unavailable
+    // Prefer server-authoritative total from users_referrals; fallback to metadata if unavailable
     let boats_total = 0;
     try {
       const { data: totalRow, error: totalErr } = await supabaseServer
-        .from('boats_totals')
+        .from('users_referrals')
         .select('boats_total')
         .eq('user_id', target.id)
         .maybeSingle();

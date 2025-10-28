@@ -60,6 +60,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
   // Removed client-generated referral_id; canonical is minted server-side via SoT
   const [refInviterFirst, setRefInviterFirst] = useState<string | null>((initialInviter?.firstName || initialInviter?.fullName) || null);
   const [refInviterId, setRefInviterId] = useState<string | null>(initialInviter?.userId || null);
+  const [inviterCode, setInviterCode] = useState<string>("");
 
   // 1) Latch SSR inviter so hydration cannot clear it
   const [inviter, setInviter] = useState<InitialInviter>({
@@ -83,6 +84,17 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
     try { window.addEventListener('participate:open', onOpen as EventListener); } catch {}
     return () => { try { window.removeEventListener('participate:open', onOpen as EventListener); } catch {} };
   }, []);
+
+  // Capture referral code once (SSR code first, fallback to URL ?ref); keep as-is, show visibly, reuse in POST
+  useEffect(() => {
+    try {
+      const fromSSR = (initialInviter?.code || "").trim();
+      if (fromSSR) { setInviterCode(fromSSR); return; }
+      const u = typeof window !== 'undefined' ? new URL(window.location.href) : null;
+      const q = u ? (u.searchParams.get('ref') || '').trim() : '';
+      if (q) setInviterCode(q);
+    } catch {}
+  }, [initialInviter?.code]);
 
   const [announce, setAnnounce] = useState("");
   const dashboardRef = useRef<HTMLDivElement | null>(null);
@@ -605,7 +617,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
         </div>
 
         {/* Desktop layout (≥1024px): 3 columns 1:2:1 over fluid container */}
-        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden page-container" style={{ gridTemplateColumns: '3fr 6fr 3fr', marginTop: 'var(--section-gap, 16px)', marginBottom: '0', alignItems: 'stretch' }}>
+        <div className="hidden lg:grid h-full min-h-0 gap-8 overflow-hidden page-container three-column-layout three-column-grid" style={{ gridTemplateColumns: '3fr 6fr 3fr', marginTop: 'var(--section-gap, 16px)', marginBottom: '0', alignItems: 'stretch' }}>
           {/* Left: single frosted panel with Bandcamp + divider + YouTube 16:9 */}
           <section aria-label="Bandcamp and YouTube" className="min-w-0 flex" style={{ alignSelf: 'stretch' }}>
             <div className="relative w-full flex flex-col frosted-panel overflow-hidden" style={{ borderRadius: 'var(--card-radius)', height: '100%' }}>
@@ -617,17 +629,11 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
             </div>
           </section>
 
-          {/* Globe (center) */}
-          <section aria-label="Global participation" className="min-w-0 flex" style={{ alignSelf: 'stretch' }}>
-            <div className="relative w-full rounded-[24px] overflow-hidden flex items-center justify-center" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', height: '100%' }}>
+          {/* Globe (center) - PERFECTLY CENTERED */}
+          <section aria-label="Global participation" className="min-w-0 flex globe-section" style={{ alignSelf: 'stretch' }}>
+            <div className="relative w-full rounded-[24px] overflow-hidden flex items-center justify-center globe-container" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', height: '100%' }}>
               {/* Globe container - square, centered, with equal inset */}
-              <div className="relative" style={{ 
-                width: 'min(100%, 100vh - 200px)',
-                height: 'min(100%, 100vh - 200px)',
-                aspectRatio: '1 / 1',
-                maxWidth: 'calc(100% - 32px)',
-                maxHeight: 'calc(100% - 32px)'
-              }}>
+              <div className="relative globe-inner">
                 <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
               </div>
               {/* Subtle inner glow ring to keep globe away from edges */}
@@ -767,8 +773,13 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                       <option>Sailing Through Dream River</option>
                     </select>
                   </div>
-                  {/* Display-only inviter code (server remains authoritative; cookie→body precedence) */}
-                  <input type="hidden" name="data_inviter_code_display" value={(codeSnapSSRFirst || '').replace(/\D+/g, '')} readOnly />
+                  {/* Referral code (display, uneditable) */}
+                  {inviterCode && (
+                    <div className="grid grid-cols-1">
+                      <label className="text-sm font-medium">Referral code</label>
+                      <input className="border rounded-md px-3 py-2 bg-background" value={inviterCode} readOnly aria-label="Referral code" />
+                    </div>
+                  )}
                   <section aria-label="Choose your boat" className="mt-2">
                     <h3 className="font-seasons text-lg mb-2" style={{ color: "var(--teal)" }}>Choose your boat</h3>
                     <div className="rounded-full size-16 mb-3 flex items-center justify-center border" style={{ background: "var(--white-soft)", borderColor: "var(--mist)" }} aria-label="Boat preview">
@@ -806,8 +817,8 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           } else {
                             // New user → send signup OTP with metadata and go to Screen C
                           const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-                          const codeParam = codeSnapSSRFirst ? `?ref=${encodeURIComponent(codeSnapSSRFirst)}` : '';
-                          const redirectTo = (typeof window !== 'undefined') ? `${window.location.origin}/${codeParam}` : undefined;
+                          const codeParam = inviterCode ? `?ref=${encodeURIComponent(inviterCode)}` : '';
+                          const redirectTo = (typeof window !== 'undefined') ? `${window.location.origin}/auth/callback${codeParam}` : undefined;
                             const { error: signUpErr } = await supabase.auth.signInWithOtp({
                               email: emailNorm,
                               options: {
@@ -885,7 +896,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           if (error) throw error;
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
-                            const referredByCode = (codeSnapSSRFirst || null);
+                            const referredByCode = inviterCode;
                             const payload: Record<string, unknown> = {
                               name,
                               email,
@@ -894,7 +905,12 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                               photo_url: null,
                               boat_color: boatColor,
                             };
-                            if (referredByCode && /\d+/.test(referredByCode)) { payload.referred_by = referredByCode; }
+                            {
+                              const rb = (referredByCode || '').trim();
+                              if (/^\d{6,12}$/.test(rb)) {
+                                payload.referred_by = rb;
+                              }
+                            }
                             await fetch('/api/users/upsert', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
@@ -918,8 +934,13 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                       }
                     }}
                   />
-                  {/* Display-only inviter code (server remains authoritative; cookie→body precedence) */}
-                  <input type="hidden" name="data_inviter_code_display" value={(codeSnapSSRFirst || '').replace(/\D+/g, '')} readOnly />
+                  {/* Referral code (display, uneditable) */}
+                  {inviterCode && (
+                    <div className="grid grid-cols-1">
+                      <label className="text-sm font-medium">Referral code</label>
+                      <input className="border rounded-md px-3 py-2 bg-background" value={inviterCode} readOnly aria-label="Referral code" />
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
                     <button
                       className="rounded-md px-4 py-3 btn flex-1"
@@ -933,7 +954,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                           if (error) throw error;
                           if (data?.user) {
                             const name = `${firstName} ${lastName}`.trim();
-                            const referredByCode = (codeSnapSSRFirst || null);
+                            const referredByCode = inviterCode;
                             const payload2: Record<string, unknown> = {
                               name,
                               email,
@@ -942,7 +963,12 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                               photo_url: null,
                               boat_color: boatColor,
                             };
-                            if (referredByCode && /\d+/.test(referredByCode)) { (payload2 as Record<string, unknown>).referred_by = referredByCode; }
+                            {
+                              const rb2 = (referredByCode || '').trim();
+                              if (/^\d{6,12}$/.test(rb2)) {
+                                (payload2 as Record<string, unknown>).referred_by = rb2;
+                              }
+                            }
                             await fetch('/api/users/upsert', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
@@ -980,8 +1006,8 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                         try {
                           const supabase = getSupabase();
                           const emailNorm = email.trim().toLowerCase();
-                          const codeParam2 = codeSnapSSRFirst ? `?ref=${encodeURIComponent(codeSnapSSRFirst)}` : '';
-                          const redirectTo2 = (typeof window !== 'undefined') ? `${window.location.origin}/${codeParam2}` : undefined;
+                          const codeParam2 = inviterCode ? `?ref=${encodeURIComponent(inviterCode)}` : '';
+                          const redirectTo2 = (typeof window !== 'undefined') ? `${window.location.origin}/auth/callback${codeParam2}` : undefined;
                           const { error: signUpErr } = await supabase.auth.signInWithOtp({
                             email: emailNorm,
                             options: {

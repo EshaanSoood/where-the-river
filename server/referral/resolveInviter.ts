@@ -75,10 +75,22 @@ export async function resolveInviterFromCode(code: string | null | undefined): P
 export async function resolveInviterFromCookie(): Promise<Inviter> {
   try {
     const hdrs = await headers();
-    const cookie = String(hdrs.get('cookie') || '');
-    const m = cookie.match(/(?:^|; )river_ref_h=([^;]+)/);
-    const raw = m ? decodeURIComponent(m[1]) : "";
-    const code = (raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    // Prefer ?ref present in the URL (middleware preserves it on landing and callback)
+    let code: string | null = null;
+    try {
+      const referer = hdrs.get('referer') || '';
+      const host = hdrs.get('host') || '';
+      const proto = (hdrs.get('x-forwarded-proto') || 'https').split(',')[0].trim();
+      const url = referer ? new URL(referer) : (host ? new URL(`${proto}://${host}`) : null);
+      const q = url?.searchParams.get('ref') || '';
+      code = (q || '').toUpperCase().replace(/[^A-Z0-9]/g, "");
+    } catch { code = null; }
+    if (!code) {
+      const cookie = String(hdrs.get('cookie') || '');
+      const m = cookie.match(/(?:^|; )river_ref_h=([^;]+)/);
+      const raw = m ? decodeURIComponent(m[1]) : "";
+      code = (raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    }
     return await resolveInviterFromCode(code || null);
   } catch {
     return { code: null, fullName: null, firstName: null, userId: null };

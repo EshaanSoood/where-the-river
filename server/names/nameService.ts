@@ -26,7 +26,7 @@ export async function getDisplayNameByUserId(userId: string): Promise<NameResult
     let email: string | null = null;
     try {
       const { data: authRow } = await supabaseServer
-        .from("auth.users")
+        .from("auth.users" as unknown as string)
         .select("email, raw_user_meta_data")
         .eq("id", userId)
         .maybeSingle();
@@ -38,6 +38,21 @@ export async function getDisplayNameByUserId(userId: string): Promise<NameResult
         metaName = isNonEmpty(m.name) ? String(m.name) : null;
       }
     } catch {}
+
+    // Fallback: Admin API read (service role) if PostgREST path fails or empty
+    if (!isNonEmpty(metaFull) && !isNonEmpty(metaName)) {
+      try {
+        const { data, error } = await supabaseServer.auth.admin.getUserById(userId);
+        if (!error && data?.user) {
+          const um = (data.user.user_metadata || {}) as Record<string, unknown>;
+          if (!email && isNonEmpty((data.user as { email?: string | null }).email || null)) {
+            email = String((data.user as { email?: string | null }).email);
+          }
+          metaFull = isNonEmpty(um.full_name) ? String(um.full_name) : metaFull;
+          metaName = isNonEmpty(um.name) ? String(um.name) : metaName;
+        }
+      } catch {}
+    }
 
     if (isNonEmpty(metaFull)) {
       const first = metaFull!.split(/\s+/)[0] || null;
