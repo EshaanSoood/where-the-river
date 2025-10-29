@@ -136,17 +136,7 @@ export async function POST(req: Request) {
       // Non-blocking; continue
     }
 
-    // STEP 3: Award points (idempotent depth-based)
-    if (parentApplied) {
-      try {
-        await supabaseServer.rpc('apply_users_ref_awards', { p_invitee_id: row.id });
-      } catch (e) {
-        console.warn('[upsert] awards RPC failed', { user_id: row.id, error: String(e) });
-        // Non-blocking; continue
-      }
-    }
-
-    // STEP 4: Ensure display name in metadata
+    // STEP 3: Ensure display name in metadata
     try {
       const metaPrev = prevMeta as Record<string, unknown>;
       const fromBody = sanitized.name as string;

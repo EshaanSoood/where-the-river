@@ -99,6 +99,12 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const boatsRef = useRef<{ id: number; mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; startTime: number; duration: number; isPlaceholder?: boolean }[]>([]);
   const boatArcKeysRef = useRef<Set<string>>(new Set());
   const pendingSpawnsRef = useRef<{ curve: THREE.CatmullRomCurve3; arcKey: string }[]>([]);
+
+  // Data versioning & caching (deterministic, spawn-once pattern)
+  const dataVersionRef = useRef<string>('');
+  const positionCacheRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
+  const nodeMapCacheRef = useRef<Map<string, NodeData>>(new Map());
+  const overlayNodesCacheRef = useRef<NodeData[]>([]);
   const cloneFnRef = useRef<null | ((obj: THREE.Object3D) => THREE.Object3D)>(null);
   const fpsRef = useRef<number>(0);
   useEffect(() => { fpsRef.current = fps; }, [fps]);
@@ -263,6 +269,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const resolveLatLngForCode = (cc: string): [number, number] => { const t = countryCodeToLatLng[cc]; if (t) return t; const name = getCountryNameFromIso2(cc); if (name) { const exact = countryCentroidsRef.current.get(name); if (exact) return [exact.lat, exact.lng]; const upper = name.toUpperCase(); for (const [k, v] of countryCentroidsRef.current.entries()) { const ku = k.toUpperCase(); if (ku.includes(upper) || upper.includes(ku)) return [v.lat, v.lng]; } } return [0, 0]; };
   const getCountrySpreadDeg = (name: string | null | undefined, fallbackLat: number): number | undefined => { try { if (!name) return undefined; let diag = countryBBoxDiagRef.current.get(name); if (typeof diag !== 'number') { const target = name.toUpperCase(); for (const [k, v] of countryBBoxDiagRef.current.entries()) { const ku = k.toUpperCase(); if (ku.includes(target) || target.includes(ku)) { diag = v as number; break; } } } if (typeof diag !== 'number' || !(diag > 0)) return undefined; const latRad = (fallbackLat || 0) * Math.PI / 180; const latScale = Math.max(0.5, Math.cos(latRad)); const effDiag = Math.hypot(diag * latScale, diag); const multiplier = effDiag > 35 ? 0.20 : (effDiag > 20 ? 0.175 : 0.15); const base = Math.max(0.12, Math.min(4.0, effDiag * multiplier)); return base; } catch { return undefined; } };
   const seededJitterAround = (lat: number, lng: number, id: string, spreadDeg?: number, overrideAngleRad?: number, radiusScale?: number): [number, number] => { const seed = hashString(id); const rnd = mulberry32(seed); const angle = typeof overrideAngleRad === 'number' ? overrideAngleRad : (rnd() * Math.PI * 2); const base = typeof spreadDeg === 'number' ? Math.max(0.08, Math.min(4.5, spreadDeg)) : 0.24; const rUnscaled = (0.6 * base) + rnd() * (0.4 * base); const r = (radiusScale && radiusScale > 0 ? rUnscaled * radiusScale : rUnscaled); const dLat = r * Math.sin(angle); const dLng = r * Math.cos(angle) / Math.max(0.5, Math.cos(lat * Math.PI / 180)); const jLat = Math.max(-85, Math.min(85, lat + dLat)); const jLng = ((lng + dLng + 540) % 360) - 180; return [jLat, jLng]; };
+
+  // Compute stable data version from API payload + auth state
+  const computeDataVersion = (nodes: any[], myId: string | null): string => {
+    const nodeIds = nodes.map(n => n.id).sort().join(',');
+    const key = `${nodeIds}|${myId || 'none'}`;
+    return String(hashString(key));
+  };
 
   type GlobeNode = { id: string; name: string; countryCode: string; createdAt: string };
   type GlobeLink = { source: string; target: string };
@@ -435,10 +448,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
                 if (scene && boatTemplateRef.current && !safeProfileRef.current && glbLoadedRef.current) {
                   spawnBoatFromCurve(curve, boatKey);
                 } else if (scene && !safeProfileRef.current) {
-                  spawnProceduralBoatFromCurve(curve, boatKey);
-                  if (boatTemplateRef.current && !safeProfileRef.current) {
-                    pendingSpawnsRef.current.push({ curve, arcKey: boatKey });
-                  }
+                  // Queue for GLB spawn once ready; never spawn procedural fallback
+                  pendingSpawnsRef.current.push({ curve, arcKey: boatKey });
                 }
               } catch {}
             }
@@ -458,11 +469,25 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
           }
         }
 
-        // Overlays list
-        const max = 6; const result: NodeData[] = []; const byId = new Map<string, NodeData>(); Array.from(nodeMap.values()).forEach(n => byId.set(n.id, n));
+        // Always spawn at least one boat along logged-in user's direct arcs (in addition to traversal boat)
+        if (myIdRef.current && isLoggedInRef.current) {
+          const myArcs = arcs.filter(a => a.startId === myIdRef.current || a.endId === myIdRef.current);
+          myArcs.slice(0, 2).forEach((a, i) => {
+            const key = `my-arc-${a.startId}->${a.endId}-${i}`;
+            if (!boatArcKeysRef.current.has(key)) {
+              boatArcKeysRef.current.add(key);
+              spawnBoatAlongArc(a.startLat, a.startLng, a.endLat, a.endLng, key);
+            }
+          });
+        }
+
+        // Overlays list — show me + ALL friends (no cap; stable order by id)
+        const result: NodeData[] = []; const byId = new Map<string, NodeData>(); Array.from(nodeMap.values()).forEach(n => byId.set(n.id, n));
         const meId = myIdRef.current; if (meId && byId.has(meId)) result.push(byId.get(meId)!);
-        for (const id of Array.from(myConnectionsRef.current.values())) { if (result.length >= max) break; const n = byId.get(id); if (n) result.push(n); }
-        setOverlayNodes(result.slice(0, max));
+        const friendIds = Array.from(myConnectionsRef.current.values()).sort();
+        for (const id of friendIds) { const n = byId.get(id); if (n) result.push(n); }
+        overlayNodesCacheRef.current = result;
+        setOverlayNodes(result);
       } catch { if (!cancelled) { setNodesData([]); setArcsData([]); } }
     })();
     return () => { cancelled = true; };
@@ -571,7 +596,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     if (!isGlobeReady) return;
     const controls = controlsRef.current; const camera = cameraRef.current; const renderer = rendererRef.current; if (!controls || !camera || !renderer) return;
     const ZOOM_LOD_THRESHOLD = 220;
-    const handleZoom = () => { const distance = camera.position.length(); setCurrentLOD(distance < ZOOM_LOD_THRESHOLD && countriesLODRef.current.high.features.length > 0 ? 'high' : 'low'); const ratio = Math.max(0.0001, baselineDistanceRef.current / distance); const raw = Math.min(2.0, Math.max(0.6, 0.85 + 0.55 * ratio)); const quant = Math.round(raw * 10) / 10; setZoomScale(prev => (Math.abs((prev ?? 0) - quant) >= 0.05 ? quant : prev)); };
+    const handleZoom = () => { const distance = camera.position.length(); setCurrentLOD(distance < ZOOM_LOD_THRESHOLD && countriesLODRef.current.high.features.length > 0 ? 'high' : 'low'); const ratio = Math.max(0.0001, baselineDistanceRef.current / distance); const raw = Math.min(2.0, Math.max(0.6, 0.85 + 0.55 * ratio)); const quant = Math.round(raw * 10) / 10; setZoomScale(prev => (Math.abs((prev ?? 0) - quant) >= 0.05 ? quant : prev)); scheduleOverlayUpdate(); };
     controls.addEventListener('change', handleZoom); const onInteractionStart = () => { hasInteractedRef.current = true; }; controls.addEventListener('start', onInteractionStart);
     if (!hasInteractedRef.current) { requestAnimationFrame(() => { if (!globeEl.current || hasInteractedRef.current) return; controls.target.set(0, 0, 0); camera.position.set(0, 0, baselineDistanceRef.current); camera.lookAt(0, 0, 0); camera.updateProjectionMatrix(); }); }
     let resizeTimer: number | null = null; const onResize = () => { if (resizeTimer) window.clearTimeout(resizeTimer); resizeTimer = window.setTimeout(() => { refitCameraRef.current(); try { renderer.setPixelRatio?.(Math.min(1.75, window.devicePixelRatio || 1)); } catch {} }, 150) as any; }; window.addEventListener('resize', onResize);
@@ -644,11 +669,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
           } catch {}
           boat.mesh.position.copy(pos);
           // Offset boat slightly away from globe center (radially outward) to keep it above arcs/land
-          boat.mesh.position.multiplyScalar(1.02);
+          boat.mesh.position.multiplyScalar(1.10);
           boat.curve.getTangentAt(t, tan);
           boat.mesh.up.copy(pos).normalize();
           boat.mesh.lookAt(pos.clone().add(tan));
         });
+        // Keep overlay labels pinned to nodes every frame
+        scheduleOverlayUpdate();
       }
       rafId = requestAnimationFrame(animate);
     };
@@ -691,9 +718,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       const curve = new THREE.CatmullRomCurve3([s, mid, e]);
       const key = arcKey || `${startLat},${startLng}->${endLat},${endLng}`;
       if (!boatTemplateRef.current || safeProfileRef.current) {
-        // Spawn procedural fallback immediately and record for later upgrade
-        spawnProceduralBoatFromCurve(curve, key);
-        if (boatTemplateRef.current && !safeProfileRef.current) return;
+        // Queue for GLB spawn once ready; never spawn procedural fallback
         pendingSpawnsRef.current.push({ curve, arcKey: key });
         return;
       }
@@ -711,13 +736,23 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       // Initial placement & orientation at t=0 for immediate visibility
       const pos0 = curve.getPointAt(0);
       cloned.position.copy(pos0);
-      // Offset boat slightly away from globe center (radially outward) to keep it above arcs/land
-      cloned.position.multiplyScalar(1.02);
+      // Offset boat above arcs (arcs are at 1.07x, boats at 1.10x to ensure z-ordering)
+      cloned.position.multiplyScalar(1.10);
       const tan0 = curve.getTangentAt(0);
       cloned.up.copy(pos0).normalize();
       cloned.lookAt(pos0.clone().add(tan0));
-      // Rotate boat 90° on Z-axis so it sails forward instead of sideways
-      cloned.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+      // Rotate boat 90° on X-axis so it sails forward instead of sideways
+      cloned.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+      // Draw above arcs: high render order + disable depth test on materials
+      (cloned as any).traverse?.((child: any) => {
+        if (child.isMesh) {
+          child.renderOrder = 9999;
+          if (child.material) {
+            child.material.depthTest = false;
+            child.material.depthWrite = false;
+          }
+        }
+      });
       // Cap to two boats: remove oldest if exceeding
       if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
       boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned as unknown as THREE.Mesh, curve, startTime: performance.now(), duration: 15000, isPlaceholder: false });
@@ -733,11 +768,17 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       const tan0 = curve.getTangentAt(0);
       mesh.position.copy(pos0);
       // Offset boat slightly away from globe center (radially outward) to keep it above arcs/land
-      mesh.position.multiplyScalar(1.02);
+      mesh.position.multiplyScalar(1.10);
       (mesh as any).up.copy(pos0).normalize();
       (mesh as any).lookAt(pos0.clone().add(tan0));
-      // Rotate boat 90° on Z-axis so it sails forward instead of sideways
-      mesh.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+      // Rotate boat 90° on X-axis so it sails forward instead of sideways
+      mesh.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+      // Draw above arcs: high render order + disable depth test
+      mesh.renderOrder = 9999;
+      if (mesh.material) {
+        (mesh.material as any).depthTest = false;
+        (mesh.material as any).depthWrite = false;
+      }
       if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
       boatsRef.current.push({ id: Date.now() + Math.random(), mesh, curve, startTime: performance.now(), duration: 15000, isPlaceholder: true });
       scene.add(mesh);
