@@ -261,8 +261,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const mulberry32 = (seed: number) => () => { let t = (seed += 0x6D2B79F5); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const getCountryNameFromIso2 = (code: string): string | null => { try { const DN = (Intl as any).DisplayNames; if (!DN) return null; const r = new DN(['en'], { type: 'region' }) as { of: (c: string) => string }; const name = r.of(code); return typeof name === 'string' ? name : null; } catch { return null; } };
   const resolveLatLngForCode = (cc: string): [number, number] => { const t = countryCodeToLatLng[cc]; if (t) return t; const name = getCountryNameFromIso2(cc); if (name) { const exact = countryCentroidsRef.current.get(name); if (exact) return [exact.lat, exact.lng]; const upper = name.toUpperCase(); for (const [k, v] of countryCentroidsRef.current.entries()) { const ku = k.toUpperCase(); if (ku.includes(upper) || upper.includes(ku)) return [v.lat, v.lng]; } } return [0, 0]; };
-  const getCountrySpreadDeg = (name: string | null | undefined, fallbackLat: number): number | undefined => { try { if (!name) return undefined; let diag = countryBBoxDiagRef.current.get(name); if (typeof diag !== 'number') { const target = name.toUpperCase(); for (const [k, v] of countryBBoxDiagRef.current.entries()) { const ku = k.toUpperCase(); if (ku.includes(target) || target.includes(ku)) { diag = v as number; break; } } } if (typeof diag !== 'number' || !(diag > 0)) return undefined; const latRad = (fallbackLat || 0) * Math.PI / 180; const latScale = Math.max(0.5, Math.cos(latRad)); const effDiag = Math.hypot(diag * latScale, diag); const base = Math.max(0.12, Math.min(1.2, effDiag * 0.1)); return base; } catch { return undefined; } };
-  const seededJitterAround = (lat: number, lng: number, id: string, spreadDeg?: number, overrideAngleRad?: number, radiusScale?: number): [number, number] => { const seed = hashString(id); const rnd = mulberry32(seed); const angle = typeof overrideAngleRad === 'number' ? overrideAngleRad : (rnd() * Math.PI * 2); const base = typeof spreadDeg === 'number' ? Math.max(0.08, Math.min(1.5, spreadDeg)) : 0.24; const rUnscaled = (0.6 * base) + rnd() * (0.4 * base); const r = (radiusScale && radiusScale > 0 ? rUnscaled * radiusScale : rUnscaled); const dLat = r * Math.sin(angle); const dLng = r * Math.cos(angle) / Math.max(0.5, Math.cos(lat * Math.PI / 180)); const jLat = Math.max(-85, Math.min(85, lat + dLat)); const jLng = ((lng + dLng + 540) % 360) - 180; return [jLat, jLng]; };
+  const getCountrySpreadDeg = (name: string | null | undefined, fallbackLat: number): number | undefined => { try { if (!name) return undefined; let diag = countryBBoxDiagRef.current.get(name); if (typeof diag !== 'number') { const target = name.toUpperCase(); for (const [k, v] of countryBBoxDiagRef.current.entries()) { const ku = k.toUpperCase(); if (ku.includes(target) || target.includes(ku)) { diag = v as number; break; } } } if (typeof diag !== 'number' || !(diag > 0)) return undefined; const latRad = (fallbackLat || 0) * Math.PI / 180; const latScale = Math.max(0.5, Math.cos(latRad)); const effDiag = Math.hypot(diag * latScale, diag); const multiplier = effDiag > 35 ? 0.20 : (effDiag > 20 ? 0.175 : 0.15); const base = Math.max(0.12, Math.min(4.0, effDiag * multiplier)); return base; } catch { return undefined; } };
+  const seededJitterAround = (lat: number, lng: number, id: string, spreadDeg?: number, overrideAngleRad?: number, radiusScale?: number): [number, number] => { const seed = hashString(id); const rnd = mulberry32(seed); const angle = typeof overrideAngleRad === 'number' ? overrideAngleRad : (rnd() * Math.PI * 2); const base = typeof spreadDeg === 'number' ? Math.max(0.08, Math.min(4.5, spreadDeg)) : 0.24; const rUnscaled = (0.6 * base) + rnd() * (0.4 * base); const r = (radiusScale && radiusScale > 0 ? rUnscaled * radiusScale : rUnscaled); const dLat = r * Math.sin(angle); const dLng = r * Math.cos(angle) / Math.max(0.5, Math.cos(lat * Math.PI / 180)); const jLat = Math.max(-85, Math.min(85, lat + dLat)); const jLng = ((lng + dLng + 540) % 360) - 180; return [jLat, jLng]; };
 
   type GlobeNode = { id: string; name: string; countryCode: string; createdAt: string };
   type GlobeLink = { source: string; target: string };
@@ -276,19 +276,6 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   };
   const fetchMeSafe = async (): Promise<{ id: string | null; name: string | null } | null> => {
     try { const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || ''; if (!guessedBase) return null; const base = guessedBase.replace(/\/$/, ''); const email = (window as any)?.RIVER_EMAIL || null; if (!email) return null; const resp = await fetch(`${base}/api/me`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); if (!resp.ok) return null; const j = await resp.json(); const ref = j?.me?.referral_code || j?.me?.ref_code_8 || null; const name = j?.me?.name || null; return { id: ref || null, name }; } catch { return null; }
-  };
-
-  // Helper: Get multiple deterministic scatter centroids for large countries
-  const getScatterCentroids = (countryCode: string, baseLatLng: [number, number], countryDiagonal: number): [number, number][] => {
-    if (countryDiagonal < 2.5) return [baseLatLng];
-    const [baseLat, baseLng] = baseLatLng;
-    const halfDiag = countryDiagonal / 2;
-    return [
-      [baseLat + halfDiag * 0.25, baseLng - halfDiag * 0.25], // NW
-      [baseLat + halfDiag * 0.25, baseLng + halfDiag * 0.25], // NE
-      [baseLat - halfDiag * 0.25, baseLng - halfDiag * 0.25], // SW
-      [baseLat - halfDiag * 0.25, baseLng + halfDiag * 0.25], // SE
-    ];
   };
 
   // Helper: Build adjacency graph and compute depths from user
@@ -414,12 +401,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
           const base = resolveLatLngForCode(cc);
           const name = getCountryNameFromIso2(cc);
           const spread = getCountrySpreadDeg(name, base[0]);
-          const diag = (name ? countryBBoxDiagRef.current.get(name) : undefined) || 0;
-          const centroids = getScatterCentroids(cc, base, diag);
-          const seed = hashString(n.id);
-          const centroidIndex = seed % centroids.length;
-          const scatterCentroid = centroids[centroidIndex];
-          const [lat, lng] = seededJitterAround(scatterCentroid[0], scatterCentroid[1], n.id, spread);
+          const [lat, lng] = seededJitterAround(base[0], base[1], n.id, spread);
           nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: 'rgba(255,255,255,0.95)', countryCode: cc, name: n.name || null });
         });
 
@@ -613,7 +595,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     height: '100%', 
     position: 'relative', 
     overflow: 'hidden', 
-    backgroundColor: '#000010', 
+    backgroundColor: 'transparent',
     aspectRatio: '1 / 1',
     display: 'flex',
     alignItems: 'center',
@@ -661,6 +643,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
             }
           } catch {}
           boat.mesh.position.copy(pos);
+          // Offset boat slightly away from globe center (radially outward) to keep it above arcs/land
+          boat.mesh.position.multiplyScalar(1.02);
           boat.curve.getTangentAt(t, tan);
           boat.mesh.up.copy(pos).normalize();
           boat.mesh.lookAt(pos.clone().add(tan));
@@ -727,11 +711,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       // Initial placement & orientation at t=0 for immediate visibility
       const pos0 = curve.getPointAt(0);
       cloned.position.copy(pos0);
+      // Offset boat slightly away from globe center (radially outward) to keep it above arcs/land
+      cloned.position.multiplyScalar(1.02);
       const tan0 = curve.getTangentAt(0);
       cloned.up.copy(pos0).normalize();
       cloned.lookAt(pos0.clone().add(tan0));
-      // Rotate boat 90° on X-axis so it sails forward instead of sideways
-      cloned.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+      // Rotate boat 90° on Z-axis so it sails forward instead of sideways
+      cloned.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), Math.PI / 2);
       // Cap to two boats: remove oldest if exceeding
       if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
       boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned as unknown as THREE.Mesh, curve, startTime: performance.now(), duration: 15000, isPlaceholder: false });
@@ -746,10 +732,12 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       const pos0 = curve.getPointAt(0);
       const tan0 = curve.getTangentAt(0);
       mesh.position.copy(pos0);
+      // Offset boat slightly away from globe center (radially outward) to keep it above arcs/land
+      mesh.position.multiplyScalar(1.02);
       (mesh as any).up.copy(pos0).normalize();
       (mesh as any).lookAt(pos0.clone().add(tan0));
-      // Rotate boat 90° on X-axis so it sails forward instead of sideways
-      mesh.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+      // Rotate boat 90° on Z-axis so it sails forward instead of sideways
+      mesh.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), Math.PI / 2);
       if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
       boatsRef.current.push({ id: Date.now() + Math.random(), mesh, curve, startTime: performance.now(), duration: 15000, isPlaceholder: true });
       scene.add(mesh);

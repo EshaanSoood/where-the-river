@@ -31,7 +31,7 @@ export default function LeftPanelEmbeds() {
 
   return (
     <div ref={wrapRef} className="h-full flex flex-col min-h-0 overflow-hidden">
-      <div ref={headerRef} className="flex-shrink-0 pb-3">
+      <div ref={headerRef} className="flex-shrink-0">
         <HowToPlayVideo />
       </div>
       <div className="flex-shrink-0" style={{ height: 1, background: 'rgba(255,255,255,0.25)' }} />

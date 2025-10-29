@@ -14,7 +14,6 @@ import ShareTiles from "@/components/ShareTiles";
 import ColorChips from "@/components/ColorChips";
 import LeftPanelEmbeds from "@/components/LeftPanelEmbeds";
 import HowToPlayVideo from "@/components/HowToPlayVideo";
-import FooterBar from "@/components/FooterBar";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 // Client snapshot removed; use server-latched inviter only
 import { refDebug } from "@/lib/refDebug";
@@ -456,7 +455,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
           <div className="lg:hidden">
             <div
               className="min-h-12 py-2.5 flex items-center justify-center rounded-b-[24px] shadow-sm px-2"
-              style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+              style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
             >
               <div className="grid grid-cols-3 items-center gap-2 w-full lg:[grid-template-columns:1fr_4fr_1fr]">
                 <div className="justify-self-start lg:min-w-[176px]">
@@ -520,7 +519,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
         <div className="lg:hidden space-y-4">
           {/* Slim Bandcamp player directly under the header, same horizontal space */}
           <section aria-label="Bandcamp player (mobile)">
-            <div className="rounded-[16px] shadow p-2 overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.25)' }}>
+            <div className="rounded-[16px] shadow p-2 overflow-hidden" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.25)' }}>
               <iframe
                 title="Bandcamp player (slim)"
                 aria-label="Bandcamp player for Dream River"
@@ -549,21 +548,21 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
 
           {/* How to play (YouTube) comes before text block on mobile */}
           <section aria-label="How to Play (mobile)">
-            <div className="rounded-[24px] shadow-md p-3 overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div className="rounded-[24px] shadow-md p-3 overflow-hidden" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <HowToPlayVideo />
             </div>
           </section>
 
           {/* Intro text block */}
           <section aria-label="Project intro (mobile)">
-            <div id="mobile-intro" className="rounded-[24px] shadow-md p-4 overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div id="mobile-intro" className="rounded-[24px] shadow-md p-4 overflow-hidden" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <Hero />
             </div>
           </section>
 
           {/* Accordions for remaining sections */}
           <div className="space-y-3">
-            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <button
                 className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
                 aria-expanded={accOpen.how}
@@ -580,7 +579,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                 </div>
               )}
             </div>
-            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <button
                 className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
                 aria-expanded={accOpen.why}
@@ -597,7 +596,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
                 </div>
               )}
             </div>
-            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
               <button
                 className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
                 aria-expanded={accOpen.who}
@@ -632,7 +631,7 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
 
           {/* Globe (center) - PERFECTLY CENTERED */}
           <section aria-label="Global participation" className="min-w-0 flex globe-section" style={{ alignSelf: 'stretch' }}>
-            <div className="relative w-full rounded-[24px] overflow-hidden flex items-center justify-center globe-container" style={{ background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', height: '100%' }}>
+            <div className="relative w-full rounded-[24px] overflow-hidden flex items-center justify-center globe-container" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', height: '100%' }}>
               {/* Globe container - square, centered, with equal inset */}
               <div className="relative globe-inner" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
@@ -664,34 +663,6 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.06)' }} />
             </div>
           </section>
-        </div>
-
-        {/* 2K+ Layout (1920px+): 2-column grid with perfect square globe */}
-        <div className="layout-2k-container">
-          {/* Header */}
-          <header className="layout-2k-header" style={{ paddingInline: 'clamp(16px, 4vw, 32px)', marginTop: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', height: '64px', borderRadius: '0 0 24px 24px', border: '1.5px solid rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', paddingInline: '16px', gap: '16px' }}>
-              <button aria-label="Participate" aria-expanded={dashboardOpen} className="inline-flex items-center gap-1 rounded-[24px] border px-3 py-2 text-sm" style={{ color: 'var(--ink)', borderColor: 'rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.45)' }} onClick={() => setDashboardOpen(v => !v)} onKeyDown={(e) => { if (e.key === 'Escape') setDashboardOpen(false); }}>Participate</button>
-              <h1 style={{ fontFamily: 'var(--font-seasons, serif)', fontSize: '24px', fontWeight: 'bold', color: 'white', margin: 0 }}>Dream River</h1>
-              <button aria-label="Open leaderboard" aria-expanded={leaderboardOpen} className="inline-flex items-center gap-1 rounded-[24px] border px-3 py-2 text-sm" style={{ color: 'var(--ink)', borderColor: 'rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.45)' }} onClick={() => setLeaderboardOpen(v => !v)} onKeyDown={(e) => { if (e.key === 'Escape') setLeaderboardOpen(false); }}>Leaderboard</button>
-            </div>
-          </header>
-
-          {/* Left Column */}
-          <section className="layout-2k-left" style={{ display: 'grid', gridTemplateRows: 'auto auto 1fr', gap: '8px', minHeight: 0, overflow: 'hidden', paddingInline: 'clamp(16px, 4vw, 32px)' }}>
-            <div style={{ minHeight: 0, overflow: 'hidden', aspectRatio: '16 / 9', borderRadius: '24px', border: '1.5px solid rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}><HowToPlayVideo /></div>
-            <div style={{ minHeight: 0, overflow: 'hidden', borderRadius: '24px', border: '1.5px solid rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}><BandcampEmbed /></div>
-            <div style={{ minHeight: 0, overflow: 'hidden', borderRadius: '24px', border: '1.5px solid rgba(255,255,255,0.25)', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}><div style={{ height: '100%', overflowY: 'auto', padding: '16px', color: 'var(--ink)' }}><Hero /></div></div>
-          </section>
-
-          {/* Right Column */}
-          <section className="layout-2k-right" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0, aspectRatio: '1 / 1', paddingInline: 'clamp(16px, 4vw, 32px)' }}>
-            <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: '24px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(210, 245, 250, 0.35)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}><Globe describedById="globe-sr-summary" ariaLabel="Interactive globe" tabIndex={0} /></div>
-          </section>
-
-          {/* Footer */}
-          <footer className="layout-2k-footer" style={{ paddingInline: 'clamp(16px, 4vw, 32px)' }}><FooterBar /></footer>
-
         </div>
       </div>
 
@@ -1526,11 +1497,6 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
         .stream-icon.applemusic { -webkit-mask-image: url('/Streaming/pngs/applemusic.png'); mask-image: url('/Streaming/pngs/applemusic.png'); }
         .stream-icon.youtube { -webkit-mask-image: url('/Streaming/pngs/youtube.png'); mask-image: url('/Streaming/pngs/youtube.png'); }
         .stream-icon.bandcamp { -webkit-mask-image: url('/Streaming/pngs/bandcamp.png'); mask-image: url('/Streaming/pngs/bandcamp.png'); }
-        /* 2K+ Layout (1920px+) */
-        @media (min-width: 1920px) {
-          .layout-2k-container { display: grid !important; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr auto; gap: 8px; height: 100%; min-height: 0; overflow: hidden; }
-          .hidden\.lg\:grid { display: none !important; }
-        }
       `}</style>
       {/* Privacy Policy Modal */}
       {privacyOpen && (
