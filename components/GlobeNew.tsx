@@ -54,6 +54,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const [nodesData, setNodesData] = useState<NodeData[]>([]);
   const [arcsData, setArcsData] = useState<ArcData[]>([]);
   const [overlayNodes, setOverlayNodes] = useState<NodeData[]>([]);
+  const [refreshVersion, setRefreshVersion] = useState<number>(0);
 
   const countriesLODRef = useRef(countriesLOD);
   useEffect(() => { countriesLODRef.current = countriesLOD; }, [countriesLOD]);
@@ -107,6 +108,10 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const overlayNodesCacheRef = useRef<NodeData[]>([]);
   const cloneFnRef = useRef<null | ((obj: THREE.Object3D) => THREE.Object3D)>(null);
   const fpsRef = useRef<number>(0);
+  const refreshRequestedRef = useRef<boolean>(false);
+  const retryTimeoutRef = useRef<number | null>(null);
+  const ensureMyNodeTimeoutRef = useRef<number | null>(null);
+  const ensureMyNodeAttemptsRef = useRef<number>(0);
   useEffect(() => { fpsRef.current = fps; }, [fps]);
 
   // FPS Counter + Dev HUD metrics
@@ -408,8 +413,10 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       try {
         const [{ nodes, links }, me] = await Promise.all([fetchGlobeData('all'), fetchMeSafe()]);
         if (cancelled) return;
-        myIdRef.current = me?.id || null;
-        isLoggedInRef.current = !!myIdRef.current;
+        const resolvedId = me?.id || null;
+        myIdRef.current = resolvedId;
+        isLoggedInRef.current = !!resolvedId;
+        if (resolvedId) refreshRequestedRef.current = true;
         try { myFirstNameRef.current = ((me?.name || '').trim().split(/\s+/)[0] || ''); } catch { myFirstNameRef.current = ''; }
         const conn = new Set<string>();
         if (myIdRef.current) { links.forEach(l => { if (l.source === myIdRef.current) conn.add(l.target); if (l.target === myIdRef.current) conn.add(l.source); }); }
@@ -501,9 +508,69 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         for (const id of friendIds) { const n = byId.get(id); if (n) result.push(n); }
         overlayNodesCacheRef.current = result;
         setOverlayNodes(result);
+
+        if (typeof window !== 'undefined') {
+          const targetId = myIdRef.current;
+          const hasMyNode = targetId ? nodeMap.has(targetId) : false;
+          if (targetId && !hasMyNode) {
+            if (ensureMyNodeAttemptsRef.current < 4) {
+              ensureMyNodeAttemptsRef.current += 1;
+              if (ensureMyNodeTimeoutRef.current) window.clearTimeout(ensureMyNodeTimeoutRef.current);
+              ensureMyNodeTimeoutRef.current = window.setTimeout(() => {
+                ensureMyNodeTimeoutRef.current = null;
+                setRefreshVersion(prev => prev + 1);
+              }, 1500);
+            }
+          } else {
+            ensureMyNodeAttemptsRef.current = 0;
+            if (ensureMyNodeTimeoutRef.current) {
+              window.clearTimeout(ensureMyNodeTimeoutRef.current);
+              ensureMyNodeTimeoutRef.current = null;
+            }
+          }
+        }
       } catch { if (!cancelled) { setNodesData([]); setArcsData([]); } }
     })();
     return () => { cancelled = true; };
+  }, [refreshVersion]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (myIdRef.current) return;
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 5;
+    const RETRY_DELAY_MS = 1500;
+
+    const attemptFetch = async () => {
+      if (cancelled || myIdRef.current || refreshRequestedRef.current) return;
+      attempts += 1;
+      try {
+        const me = await fetchMeSafe();
+        if (me?.id) {
+          refreshRequestedRef.current = true;
+          setRefreshVersion(prev => prev + 1);
+          return;
+        }
+      } catch {}
+      if (!cancelled && attempts < MAX_ATTEMPTS) {
+        retryTimeoutRef.current = window.setTimeout(attemptFetch, RETRY_DELAY_MS);
+      }
+    };
+
+    retryTimeoutRef.current = window.setTimeout(attemptFetch, 1000);
+
+    return () => {
+      cancelled = true;
+      if (retryTimeoutRef.current) {
+        window.clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      if (ensureMyNodeTimeoutRef.current) {
+        window.clearTimeout(ensureMyNodeTimeoutRef.current);
+        ensureMyNodeTimeoutRef.current = null;
+      }
+    };
   }, []);
 
   const globeMaterial = useMemo(() => new THREE.MeshPhongMaterial({ color: '#a8c5cd', opacity: 0.6, transparent: true }), []);

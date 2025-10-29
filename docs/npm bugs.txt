@@ -1,0 +1,29 @@
+Scan date: 2025-10-29
+
+Command executed: `npm run lint`
+
+Summary
+- Lint run produced 112 errors and ~9.1k warnings. Majority of warnings stem from generated Turbopack bundles under `.vercel/output/static/_next/...`; consider excluding that directory from linting to reduce noise.
+- Blocking errors in source files:
+  • `hooks/useMe.ts`: `headers` declared with `let` but never reassigned (prefer `const`).
+  • `scripts/generate_country_lists.js`, `scripts/introspect.js`, `scripts/seed_nodes_and_rls.js`: use of CommonJS `require()` flagged by `@typescript-eslint/no-require-imports` (may fail depending on tooling config).
+  • `scripts/generate_country_lists.js`: ESLint forbid `require()`—same root cause.
+  • `types.ts`: contains an `any` (`Unexpected any`) that should be typed precisely.
+  • Several generated Turbopack bundles also flagged for `no-this-alias`; these are build artifacts and can be ignored if excluded from lint.
+
+Notable warnings affecting usability
+- `app/(app)/r/[referral]/page.tsx` is an async client component. Next.js warns this can break streaming/flight behavior; worth reviewing to ensure client-side rendering remains stable.
+- `GlobeNew.tsx` and `Globe.tsx` contain multiple `useEffect` hooks with missing dependencies. While some may be intentional to avoid re-renders, they risk stale state (e.g., overlay updates, spinner). Verify each dependency omission is deliberate.
+- `MobileSticky.tsx` likewise omits `analytics` from a `useEffect` dependency array; if `analytics` changes at runtime, effects may not re-run.
+- `BelowMap.tsx` contains numerous unused state values and refs (e.g., `shareLoading`, `refInviterFirst`). Although harmless, they hint at partially removed logic; if re-enabled, ensure state is handled correctly.
+
+Other observations
+- `app/api/globe/route.ts` defines `since` but never uses it. If time-based filtering is expected, this currently no-ops.
+- Static bundle lint errors indicate `.vercel/output` should be excluded from lint runs (`.eslintignore`) to prevent generated files from causing failures.
+
+Next steps
+1. Decide whether scripts should use ESM or disable the `no-require-imports` rule for tooling-only scripts.
+2. Address `types.ts` `any` typing to keep type guarantees.
+3. Audit missing dependencies in `useEffect` hooks—add dependencies or document intentional omissions.
+4. Optionally, simplify lint output by ignoring generated directories.
+
