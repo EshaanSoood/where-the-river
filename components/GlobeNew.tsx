@@ -51,6 +51,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [srSummary, setSrSummary] = useState<string>("");
+  const [srConnections, setSrConnections] = useState<Array<{ depth: number; label: string }>>([]);
+  const [srCountries, setSrCountries] = useState<Array<{ country: string; count: number }>>([]);
   const [nodesData, setNodesData] = useState<NodeData[]>([]);
   const [arcsData, setArcsData] = useState<ArcData[]>([]);
   const [overlayNodes, setOverlayNodes] = useState<NodeData[]>([]);
@@ -106,6 +108,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const positionCacheRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
   const nodeMapCacheRef = useRef<Map<string, NodeData>>(new Map());
   const overlayNodesCacheRef = useRef<NodeData[]>([]);
+  const arcsCacheRef = useRef<ArcData[]>([]);
+  const lastFocusedUserRef = useRef<string | null>(null);
   const cloneFnRef = useRef<null | ((obj: THREE.Object3D) => THREE.Object3D)>(null);
   const fpsRef = useRef<number>(0);
   const refreshRequestedRef = useRef<boolean>(false);
@@ -271,14 +275,26 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const hashString = (s: string): number => { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
   const mulberry32 = (seed: number) => () => { let t = (seed += 0x6D2B79F5); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const getCountryNameFromIso2 = (code: string): string | null => { try { const DN = (Intl as any).DisplayNames; if (!DN) return null; const r = new DN(['en'], { type: 'region' }) as { of: (c: string) => string }; const name = r.of(code); return typeof name === 'string' ? name : null; } catch { return null; } };
+  const resolveFriendlyCountryName = (feature: any | null | undefined): string => {
+    if (!feature) return '';
+    const props = feature.properties || {};
+    const iso = typeof props.iso_a2 === 'string' ? props.iso_a2.trim() : '';
+    const fallback = typeof props.name === 'string' ? props.name : (iso || '');
+    if (iso && iso.length === 2) {
+      const friendly = getCountryNameFromIso2(iso.toUpperCase());
+      if (friendly && friendly.toUpperCase() !== iso.toUpperCase()) return friendly;
+    }
+    return fallback;
+  };
   const resolveLatLngForCode = (cc: string): [number, number] => { const t = countryCodeToLatLng[cc]; if (t) return t; const name = getCountryNameFromIso2(cc); if (name) { const exact = countryCentroidsRef.current.get(name); if (exact) return [exact.lat, exact.lng]; const upper = name.toUpperCase(); for (const [k, v] of countryCentroidsRef.current.entries()) { const ku = k.toUpperCase(); if (ku.includes(upper) || upper.includes(ku)) return [v.lat, v.lng]; } } return [0, 0]; };
   const getCountrySpreadDeg = (name: string | null | undefined, fallbackLat: number): number | undefined => { try { if (!name) return undefined; let diag = countryBBoxDiagRef.current.get(name); if (typeof diag !== 'number') { const target = name.toUpperCase(); for (const [k, v] of countryBBoxDiagRef.current.entries()) { const ku = k.toUpperCase(); if (ku.includes(target) || target.includes(ku)) { diag = v as number; break; } } } if (typeof diag !== 'number' || !(diag > 0)) return undefined; const latRad = (fallbackLat || 0) * Math.PI / 180; const latScale = Math.max(0.5, Math.cos(latRad)); const effDiag = Math.hypot(diag * latScale, diag); const multiplier = effDiag > 35 ? 0.20 : (effDiag > 20 ? 0.175 : 0.15); const base = Math.max(0.12, Math.min(4.0, effDiag * multiplier)); return base; } catch { return undefined; } };
   const seededJitterAround = (lat: number, lng: number, id: string, spreadDeg?: number, overrideAngleRad?: number, radiusScale?: number): [number, number] => { const seed = hashString(id); const rnd = mulberry32(seed); const angle = typeof overrideAngleRad === 'number' ? overrideAngleRad : (rnd() * Math.PI * 2); const base = typeof spreadDeg === 'number' ? Math.max(0.08, Math.min(4.5, spreadDeg)) : 0.24; const rUnscaled = (0.6 * base) + rnd() * (0.4 * base); const r = (radiusScale && radiusScale > 0 ? rUnscaled * radiusScale : rUnscaled); const dLat = r * Math.sin(angle); const dLng = r * Math.cos(angle) / Math.max(0.5, Math.cos(lat * Math.PI / 180)); const jLat = Math.max(-85, Math.min(85, lat + dLat)); const jLng = ((lng + dLng + 540) % 360) - 180; return [jLat, jLng]; };
 
   // Compute stable data version from API payload + auth state
-  const computeDataVersion = (nodes: any[], myId: string | null): string => {
+  const computeDataVersion = (nodes: any[], myId: string | null, links: Array<{ source: string; target: string }>): string => {
     const nodeIds = nodes.map(n => n.id).sort().join(',');
-    const key = `${nodeIds}|${myId || 'none'}`;
+    const linkIds = links.map(l => `${l.source}->${l.target}`).sort().join(',');
+    const key = `${nodeIds}|${linkIds}|${myId || 'none'}`;
     return String(hashString(key));
   };
 
@@ -406,60 +422,221 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     return waypoints;
   };
 
-  // Data load + layout
+  const clearBoats = useCallback(() => {
+    try {
+      const scene = sceneRef.current;
+      boatsRef.current.forEach(boat => {
+        try {
+          scene?.remove(boat.mesh);
+          (boat.mesh as any).traverse?.((child: any) => {
+            if (child.isMesh) {
+              child.geometry?.dispose?.();
+              if (child.material?.dispose) child.material.dispose();
+            }
+          });
+        } catch {}
+      });
+      boatsRef.current = [];
+    } catch {}
+    pendingSpawnsRef.current = [];
+    boatArcKeysRef.current.clear();
+  }, []);
+
+  const focusCameraOnUser = useCallback(() => {
+    try {
+      const id = myIdRef.current; if (!id) return;
+      const node = nodeMapCacheRef.current.get(id); if (!node) return;
+      const globe = globeEl.current; if (!globe) return;
+      const cam = cameraRef.current; if (!cam) return;
+      const controls = controlsRef.current; if (!controls) return;
+      const coords = globe.getCoords(node.lat, node.lng); if (!coords) return;
+      const target = new THREE.Vector3(coords.x, coords.y, coords.z);
+      controls.target.copy(target);
+      const distance = cam.position.length();
+      const dir = target.clone().normalize().multiplyScalar(distance || (baselineDistanceRef.current || 150));
+      cam.position.copy(dir);
+      cam.lookAt(target);
+      cam.updateProjectionMatrix();
+      controls.update();
+      lastFocusedUserRef.current = id;
+    } catch {}
+  }, []);
+
+  // Data load + layout with caching & refresh retries
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const [{ nodes, links }, me] = await Promise.all([fetchGlobeData('all'), fetchMeSafe()]);
         if (cancelled) return;
+
+        const previousId = myIdRef.current;
         const resolvedId = me?.id || null;
         myIdRef.current = resolvedId;
         isLoggedInRef.current = !!resolvedId;
         if (resolvedId) refreshRequestedRef.current = true;
-        try { myFirstNameRef.current = ((me?.name || '').trim().split(/\s+/)[0] || ''); } catch { myFirstNameRef.current = ''; }
-        const conn = new Set<string>();
-        if (myIdRef.current) { links.forEach(l => { if (l.source === myIdRef.current) conn.add(l.target); if (l.target === myIdRef.current) conn.add(l.source); }); }
-        myConnectionsRef.current = conn;
 
-        // Build chain (ancestors+descendants) via BFS over undirected links
-        const chain = new Set<string>(); const adj = new Map<string, Set<string>>();
-        links.forEach(l => { if (!adj.has(l.source)) adj.set(l.source, new Set()); if (!adj.has(l.target)) adj.set(l.target, new Set()); adj.get(l.source)!.add(l.target); adj.get(l.target)!.add(l.source); });
-        const startId = myIdRef.current; if (startId) { const q: string[] = [startId]; chain.add(startId); while (q.length) { const cur = q.shift()!; const neigh = adj.get(cur); if (!neigh) continue; neigh.forEach(n => { if (!chain.has(n)) { chain.add(n); q.push(n); } }); } }
-        myChainRef.current = chain;
-
-        const nodeMap = new Map<string, NodeData>();
-        nodes.forEach(n => {
-          const cc = (n.countryCode || '').toUpperCase();
-          const base = resolveLatLngForCode(cc);
-          const name = getCountryNameFromIso2(cc);
-          const spread = getCountrySpreadDeg(name, base[0]);
-          const [lat, lng] = seededJitterAround(base[0], base[1], n.id, spread);
-          nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: 'rgba(255,255,255,0.95)', countryCode: cc, name: n.name || null });
-        });
-
-        // Moat around user
-        const N = 8; const sectorSize = (2 * Math.PI) / N; let userSector: number | null = null; let userAngle: number | null = null; let userCountry: string | null = null;
-        if (myIdRef.current && nodeMap.has(myIdRef.current)) { const meNode = nodeMap.get(myIdRef.current)!; userCountry = meNode.countryCode || null; const seed = hashString(myIdRef.current); const rnd = mulberry32(seed); const baseAngle = rnd() * Math.PI * 2; userSector = Math.floor(baseAngle / sectorSize) % N; userAngle = (userSector * sectorSize) + (sectorSize / 2); }
-        if (userSector !== null && userAngle !== null && userCountry) {
-          const bubbleDeg = 0.35; const bubbleRad = bubbleDeg * Math.PI / 180; const entries = Array.from(nodeMap.values());
-          for (const val of entries) {
-            const cc = (val.countryCode || '').toUpperCase(); const base = resolveLatLngForCode(cc); const name = getCountryNameFromIso2(cc); const spread = getCountrySpreadDeg(name, base[0]); const seed = hashString(val.id); const rnd = mulberry32(seed); const baseAngle = rnd() * Math.PI * 2; let angle = baseAngle; if (cc === userCountry) { let sector = Math.floor(baseAngle / sectorSize) % N; if (sector === userSector) sector = (sector + 1) % N; angle = (sector * sectorSize) + (sectorSize / 2); const diff = Math.atan2(Math.sin(angle - userAngle), Math.cos(angle - userAngle)); if (Math.abs(diff) < bubbleRad) { const leftBoundary = userSector * sectorSize; const rightBoundary = ((userSector + 1) % N) * sectorSize; const distLeft = Math.abs(Math.atan2(Math.sin(angle - leftBoundary), Math.cos(angle - leftBoundary))); const distRight = Math.abs(Math.atan2(Math.sin(angle - rightBoundary), Math.cos(angle - rightBoundary))); angle = distLeft <= distRight ? leftBoundary : rightBoundary; } } const radiusScale = (myIdRef.current && val.id === myIdRef.current) ? 1.6 : undefined; const [lat, lng] = seededJitterAround(base[0], base[1], val.id, spread, angle, radiusScale); val.lat = lat; val.lng = lng; }
+        try {
+          myFirstNameRef.current = ((me?.name || '').trim().split(/\s+/)[0] || '');
+        } catch {
+          myFirstNameRef.current = '';
         }
 
-        const darkTeal = '#135E66'; const aqua = 'rgba(42,167,181,0.95)'; const nearWhite = 'rgba(255,255,255,0.95)';
-        nodeMap.forEach((val, key) => { if (myIdRef.current && key === myIdRef.current) { val.color = darkTeal; val.size = 0.35; } else if (myConnectionsRef.current.has(key)) { val.color = aqua; val.size = 0.28; } else { val.color = nearWhite; val.size = 0.20; } });
+        const connections = new Set<string>();
+        if (resolvedId) {
+          links.forEach(link => {
+            if (link.source === resolvedId) connections.add(link.target);
+            if (link.target === resolvedId) connections.add(link.source);
+          });
+        }
+        myConnectionsRef.current = connections;
+
+        const parentLookup = new Map<string, string>();
+        const childLookup = new Map<string, Set<string>>();
+        links.forEach(link => {
+          parentLookup.set(link.target, link.source);
+          if (!childLookup.has(link.source)) childLookup.set(link.source, new Set());
+          childLookup.get(link.source)!.add(link.target);
+        });
+
+        const { adj: adjacency, depths, parents } = buildChainMetadata(resolvedId, links);
+        const chain = new Set<string>();
+        if (resolvedId) {
+          const queue: string[] = [resolvedId];
+          chain.add(resolvedId);
+          while (queue.length) {
+            const current = queue.shift()!;
+            const neighbors = adjacency.get(current);
+            if (!neighbors) continue;
+            neighbors.forEach(n => {
+              if (!chain.has(n)) {
+                chain.add(n);
+                queue.push(n);
+              }
+            });
+          }
+        }
+        myChainRef.current = chain;
+
+        const versionKey = computeDataVersion(nodes, resolvedId, links);
+        const shouldRebuild = versionKey !== dataVersionRef.current || nodeMapCacheRef.current.size === 0;
+        dataVersionRef.current = versionKey;
+
+        let nodeMap = nodeMapCacheRef.current;
+        if (shouldRebuild) {
+          nodeMap = new Map<string, NodeData>();
+          nodes.forEach(n => {
+            const cc = (n.countryCode || '').toUpperCase();
+            const base = resolveLatLngForCode(cc);
+            const name = getCountryNameFromIso2(cc);
+            const spread = getCountrySpreadDeg(name, base[0]);
+            const [lat, lng] = seededJitterAround(base[0], base[1], n.id, spread);
+            nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: 'rgba(255,255,255,0.95)', countryCode: cc, name: n.name || null });
+          });
+
+          const N = 8;
+          const sectorSize = (2 * Math.PI) / N;
+          let userSector: number | null = null;
+          let userAngle: number | null = null;
+          let userCountry: string | null = null;
+          if (resolvedId && nodeMap.has(resolvedId)) {
+            const meNode = nodeMap.get(resolvedId)!;
+            userCountry = meNode.countryCode || null;
+            const seed = hashString(resolvedId);
+            const rnd = mulberry32(seed);
+            const baseAngle = rnd() * Math.PI * 2;
+            userSector = Math.floor(baseAngle / sectorSize) % N;
+            userAngle = (userSector * sectorSize) + (sectorSize / 2);
+          }
+          if (userSector !== null && userAngle !== null && userCountry) {
+            const bubbleDeg = 0.35;
+            const bubbleRad = bubbleDeg * Math.PI / 180;
+            for (const val of Array.from(nodeMap.values())) {
+              const cc = (val.countryCode || '').toUpperCase();
+              const base = resolveLatLngForCode(cc);
+              const name = getCountryNameFromIso2(cc);
+              const spread = getCountrySpreadDeg(name, base[0]);
+              const seed = hashString(val.id);
+              const rnd = mulberry32(seed);
+              const baseAngle = rnd() * Math.PI * 2;
+              let angle = baseAngle;
+              if (cc === userCountry) {
+                let sector = Math.floor(baseAngle / sectorSize) % N;
+                if (sector === userSector) sector = (sector + 1) % N;
+                angle = (sector * sectorSize) + (sectorSize / 2);
+                const diff = Math.atan2(Math.sin(angle - userAngle), Math.cos(angle - userAngle));
+                if (Math.abs(diff) < bubbleRad) {
+                  const leftBoundary = userSector * sectorSize;
+                  const rightBoundary = ((userSector + 1) % N) * sectorSize;
+                  const distLeft = Math.abs(Math.atan2(Math.sin(angle - leftBoundary), Math.cos(angle - leftBoundary)));
+                  const distRight = Math.abs(Math.atan2(Math.sin(angle - rightBoundary), Math.cos(angle - rightBoundary)));
+                  angle = distLeft <= distRight ? leftBoundary : rightBoundary;
+                }
+              }
+              const radiusScale = resolvedId && val.id === resolvedId ? 1.6 : undefined;
+              const [lat, lng] = seededJitterAround(base[0], base[1], val.id, spread, angle, radiusScale);
+              val.lat = lat;
+              val.lng = lng;
+            }
+          }
+
+          nodeMapCacheRef.current = nodeMap;
+        }
+
+        const darkTeal = '#135E66';
+        const aqua = 'rgba(42,167,181,0.95)';
+        const nearWhite = 'rgba(255,255,255,0.95)';
+        nodeMap.forEach((val, key) => {
+          if (resolvedId && key === resolvedId) {
+            val.color = darkTeal;
+            val.size = 0.35;
+          } else if (myConnectionsRef.current.has(key)) {
+            val.color = aqua;
+            val.size = 0.28;
+          } else {
+            val.color = nearWhite;
+            val.size = 0.20;
+          }
+        });
+
+        let arcs: ArcData[];
+        if (shouldRebuild || arcsCacheRef.current.length === 0) {
+          const built: ArcData[] = [];
+          links.forEach(link => {
+            const a = nodeMap.get(link.source);
+            const b = nodeMap.get(link.target);
+            if (!a || !b) return;
+            const isPrimary = myChainRef.current.has(a.id) && myChainRef.current.has(b.id);
+            built.push({ startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng, startId: a.id, endId: b.id, primary: isPrimary });
+          });
+          built.sort((x, y) => Number(Boolean(x.primary)) - Number(Boolean(y.primary)));
+          arcsCacheRef.current = built;
+          arcs = built;
+        } else {
+          arcs = arcsCacheRef.current;
+        }
+
         setNodesData(Array.from(nodeMap.values()));
-        const arcs: ArcData[] = []; links.forEach(l => { const a = nodeMap.get(l.source); const b = nodeMap.get(l.target); if (!a || !b) return; const isPrimary = myChainRef.current.has(a.id) && myChainRef.current.has(b.id); arcs.push({ startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng, startId: a.id, endId: b.id, primary: isPrimary }); });
-        arcs.sort((x, y) => Number(Boolean(x.primary)) - Number(Boolean(y.primary)));
         setArcsData(arcs);
 
-        const boatKey = 'user-chain-traversal';
-        if (!boatArcKeysRef.current.has(boatKey)) {
+        if (shouldRebuild || overlayNodesCacheRef.current.length === 0) {
+          const overlayList: NodeData[] = [];
+          if (resolvedId && nodeMap.has(resolvedId)) overlayList.push(nodeMap.get(resolvedId)!);
+          const friendIds = Array.from(myConnectionsRef.current.values()).sort();
+          friendIds.forEach(id => {
+            const node = nodeMap.get(id);
+            if (node) overlayList.push(node);
+          });
+          overlayNodesCacheRef.current = overlayList;
+        }
+        setOverlayNodes(overlayNodesCacheRef.current);
+
+        if (shouldRebuild) {
+          clearBoats();
+          const boatKey = 'user-chain-traversal';
           boatArcKeysRef.current.add(boatKey);
-          if (myIdRef.current && isLoggedInRef.current) {
-            const { adj, depths, parents } = buildChainMetadata(myIdRef.current, links);
-            const waypoints = buildBoatWaypoints(myIdRef.current, nodeMap, depths, parents, adj);
+          if (resolvedId && isLoggedInRef.current) {
+            const waypoints = buildBoatWaypoints(resolvedId, nodeMap, depths, parents, adjacency);
             if (waypoints.length > 1) {
               try {
                 const curve = new THREE.CatmullRomCurve3(waypoints);
@@ -468,49 +645,39 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
                 if (scene && boatTemplateRef.current && !safeProfileRef.current && glbLoadedRef.current) {
                   spawnBoatFromCurve(curve, boatKey);
                 } else if (scene && !safeProfileRef.current) {
-                  // Queue for GLB spawn once ready; never spawn procedural fallback
                   pendingSpawnsRef.current.push({ curve, arcKey: boatKey });
                 }
               } catch {}
             }
           } else {
-            const pri = arcs.find(a => a.primary) || arcs[0];
-            const sec = arcs.find(a => !a.primary);
-            if (pri) {
-              spawnBoatAlongArc(pri.startLat, pri.startLng, pri.endLat, pri.endLng, boatKey);
+            const primaryArc = arcs.find(a => a.primary) || arcs[0];
+            const secondaryArc = arcs.find(a => !a.primary);
+            if (primaryArc) {
+              spawnBoatAlongArc(primaryArc.startLat, primaryArc.startLng, primaryArc.endLat, primaryArc.endLng, boatKey);
             }
-            if (sec) {
-              const key2 = `${sec.startId}->${sec.endId}`;
-              if (!boatArcKeysRef.current.has(key2)) {
-                boatArcKeysRef.current.add(key2);
-                spawnBoatAlongArc(sec.startLat, sec.startLng, sec.endLat, sec.endLng, key2);
+            if (secondaryArc) {
+              const secondaryKey = `${secondaryArc.startId}->${secondaryArc.endId}`;
+              if (!boatArcKeysRef.current.has(secondaryKey)) {
+                boatArcKeysRef.current.add(secondaryKey);
+                spawnBoatAlongArc(secondaryArc.startLat, secondaryArc.startLng, secondaryArc.endLat, secondaryArc.endLng, secondaryKey);
               }
             }
           }
-        }
 
-        // Always spawn at least one boat along logged-in user's direct arcs (in addition to traversal boat)
-        if (myIdRef.current && isLoggedInRef.current) {
-          const myArcs = arcs.filter(a => a.startId === myIdRef.current || a.endId === myIdRef.current);
-          myArcs.slice(0, 2).forEach((a, i) => {
-            const key = `my-arc-${a.startId}->${a.endId}-${i}`;
-            if (!boatArcKeysRef.current.has(key)) {
-              boatArcKeysRef.current.add(key);
-              spawnBoatAlongArc(a.startLat, a.startLng, a.endLat, a.endLng, key);
-            }
-          });
+          if (resolvedId && isLoggedInRef.current) {
+            const myArcs = arcs.filter(a => a.startId === resolvedId || a.endId === resolvedId);
+            myArcs.slice(0, 2).forEach((arc, index) => {
+              const key = `my-arc-${arc.startId}->${arc.endId}-${index}`;
+              if (!boatArcKeysRef.current.has(key)) {
+                boatArcKeysRef.current.add(key);
+                spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, key);
+              }
+            });
+          }
         }
-
-        // Overlays list — show me + ALL friends (no cap; stable order by id)
-        const result: NodeData[] = []; const byId = new Map<string, NodeData>(); Array.from(nodeMap.values()).forEach(n => byId.set(n.id, n));
-        const meId = myIdRef.current; if (meId && byId.has(meId)) result.push(byId.get(meId)!);
-        const friendIds = Array.from(myConnectionsRef.current.values()).sort();
-        for (const id of friendIds) { const n = byId.get(id); if (n) result.push(n); }
-        overlayNodesCacheRef.current = result;
-        setOverlayNodes(result);
 
         if (typeof window !== 'undefined') {
-          const targetId = myIdRef.current;
+          const targetId = resolvedId;
           const hasMyNode = targetId ? nodeMap.has(targetId) : false;
           if (targetId && !hasMyNode) {
             if (ensureMyNodeAttemptsRef.current < 4) {
@@ -529,10 +696,104 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
             }
           }
         }
-      } catch { if (!cancelled) { setNodesData([]); setArcsData([]); } }
+
+        requestAnimationFrame(() => { try { scheduleOverlayUpdate(); } catch {} });
+
+        if (resolvedId) {
+          const shouldFocus = resolvedId !== previousId || lastFocusedUserRef.current !== resolvedId;
+          if (shouldFocus) {
+            requestAnimationFrame(() => focusCameraOnUser());
+          }
+        } else {
+          lastFocusedUserRef.current = null;
+        }
+
+        if (resolvedId) {
+          const connectionEntries: Array<{ depth: number; label: string }> = [];
+          const ancestorIds: string[] = [];
+          let cursor = resolvedId;
+          while (parentLookup.has(cursor)) {
+            const parentId = parentLookup.get(cursor)!;
+            ancestorIds.push(parentId);
+            cursor = parentId;
+          }
+          ancestorIds.reverse();
+          ancestorIds.forEach((nodeId, idx) => {
+            const node = nodeMap.get(nodeId);
+            if (!node) return;
+            const distance = ancestorIds.length - idx;
+            const friendlyCountry = resolveFriendlyCountryName({ properties: { iso_a2: node.countryCode, name: node.countryCode } });
+            connectionEntries.push({ depth: distance, label: `${distance}. ${node.name || 'Friend'} — ${friendlyCountry || 'Unknown country'}` });
+          });
+          const meNode = nodeMap.get(resolvedId);
+          if (meNode) {
+            const friendlyCountry = resolveFriendlyCountryName({ properties: { iso_a2: meNode.countryCode, name: meNode.countryCode } });
+            connectionEntries.push({ depth: 0, label: `0. ${meNode.name || 'You'} — ${friendlyCountry || 'Unknown country'}` });
+          }
+          const visitedDescendants = new Set<string>([resolvedId, ...ancestorIds]);
+          const queue: Array<{ id: string; depth: number }> = [];
+          const firstChildren = childLookup.get(resolvedId);
+          if (firstChildren) {
+            Array.from(firstChildren).sort().forEach(childId => {
+              queue.push({ id: childId, depth: 1 });
+            });
+          }
+          while (queue.length) {
+            const { id, depth } = queue.shift()!;
+            if (visitedDescendants.has(id)) continue;
+            visitedDescendants.add(id);
+            const node = nodeMap.get(id);
+            if (node) {
+              const friendlyCountry = resolveFriendlyCountryName({ properties: { iso_a2: node.countryCode, name: node.countryCode } });
+              connectionEntries.push({ depth, label: `${depth}. ${node.name || 'Friend'} — ${friendlyCountry || 'Unknown country'}` });
+            }
+            const children = childLookup.get(id);
+            if (children) {
+              Array.from(children).sort().forEach(childId => {
+                queue.push({ id: childId, depth: depth + 1 });
+              });
+            }
+          }
+          setSrConnections(connectionEntries);
+        } else {
+          setSrConnections([]);
+        }
+
+        const countryCounts = new Map<string, number>();
+        nodeMap.forEach(node => {
+          const iso = (node.countryCode || '').toUpperCase();
+          const friendly = resolveFriendlyCountryName({ properties: { iso_a2: iso, name: node.countryCode } });
+          const key = friendly || iso || 'Unknown country';
+          countryCounts.set(key, (countryCounts.get(key) || 0) + 1);
+        });
+        const countryEntries = Array.from(countryCounts.entries())
+          .sort((a, b) => {
+            if (b[1] !== a[1]) return b[1] - a[1];
+            return a[0].localeCompare(b[0]);
+          })
+          .map(([country, count]) => ({ country, count }));
+        setSrCountries(countryEntries);
+      } catch {
+        if (!cancelled) {
+          setNodesData([]);
+          setArcsData([]);
+        }
+      }
     })();
     return () => { cancelled = true; };
-  }, [refreshVersion]);
+  }, [refreshVersion, clearBoats, focusCameraOnUser]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onRevalidate = () => {
+      refreshRequestedRef.current = true;
+      setRefreshVersion(prev => prev + 1);
+    };
+    try { window.addEventListener('profile:revalidate', onRevalidate as EventListener); } catch {}
+    return () => {
+      try { window.removeEventListener('profile:revalidate', onRevalidate as EventListener); } catch {}
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -672,6 +933,14 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const startIdleRotate = useCallback(() => { stopRotateInterval(); const controls = controlsRef.current; if (!controls) return; autoStateRef.current = 'autorotate_idle'; const step = 0.006; rotateIntervalRef.current = window.setInterval(() => { try { controls.rotateLeft(step); controls.update(); } catch {} }, 66) as any; }, [stopRotateInterval]);
   const startIdleTimer = useCallback(() => { if (idleTimerRef.current) { window.clearTimeout(idleTimerRef.current); idleTimerRef.current = null; } idleTimerRef.current = window.setTimeout(() => { startIdleRotate(); }, 120000) as any; }, [startIdleRotate]);
   useEffect(() => { if (isGlobeReady) startBurstRotate(); }, [isGlobeReady, startBurstRotate]);
+
+  useEffect(() => {
+    if (!isGlobeReady) return;
+    const id = myIdRef.current;
+    if (!id) return;
+    if (lastFocusedUserRef.current === id) return;
+    focusCameraOnUser();
+  }, [isGlobeReady, focusCameraOnUser]);
   useEffect(() => {
     if (!isGlobeReady) return;
     const controls = controlsRef.current; const camera = cameraRef.current; const renderer = rendererRef.current; if (!controls || !camera || !renderer) return;
@@ -690,10 +959,28 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   // Observe container/renderer size changes to keep fit accurate
   useEffect(() => { let ro: ResizeObserver | null = null; const attach = () => { const targets = [containerRef.current, rendererRef.current?.domElement].filter(Boolean); if (targets.length > 0) { ro = new ResizeObserver(() => { refitCameraRef.current?.(); }); targets.forEach(t => ro!.observe(t!)); } }; const id = window.setTimeout(attach, 100); return () => { window.clearTimeout(id); ro?.disconnect(); }; }, []);
 
-  const handlePolygonHover = (feature: any | null) => { setHoveredCountry(feature); if (feature) { setTooltipContent(feature.properties.name); setIsTooltipVisible(true); } else { setIsTooltipVisible(false); } };
+  const handlePolygonHover = (feature: any | null) => {
+    setHoveredCountry(feature);
+    if (feature) {
+      setTooltipContent(resolveFriendlyCountryName(feature));
+      setIsTooltipVisible(true);
+    } else {
+      setIsTooltipVisible(false);
+    }
+  };
   const tooltipRefPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const rafPendingRef = useRef<boolean>(false);
-  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => { tooltipRefPos.current = { x: event.nativeEvent.offsetX, y: event.nativeEvent.offsetY }; if (rafPendingRef.current) return; rafPendingRef.current = true; requestAnimationFrame(() => { rafPendingRef.current = false; setTooltipPosition(tooltipRefPos.current); }); };
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    tooltipRefPos.current = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    if (rafPendingRef.current) return;
+    rafPendingRef.current = true;
+    requestAnimationFrame(() => {
+      rafPendingRef.current = false;
+      setTooltipPosition(tooltipRefPos.current);
+    });
+  };
 
   const containerStyle: React.CSSProperties = { 
     width: '100%', 
@@ -721,7 +1008,29 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   // Project helpers for overlays
   const projectLatLngIfFront = (lat: number, lng: number): { x: number; y: number } | null => { try { const globe = globeEl.current; if (!globe) return null; const cam = globe.camera(); const c = globe.getCoords(lat, lng); if (!c) return null; const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); if (dot <= 0) return null; const v = world.project(cam); const rect = globe.renderer()?.domElement?.getBoundingClientRect?.() || { width: window.innerWidth, height: window.innerHeight } as any; const x = (v.x * 0.5 + 0.5) * rect.width; const y = (-v.y * 0.5 + 0.5) * rect.height; return { x, y }; } catch { return null; } };
   const overlayUpdatePendingRef = useRef<boolean>(false);
-  const scheduleOverlayUpdate = () => { if (overlayUpdatePendingRef.current) return; overlayUpdatePendingRef.current = true; requestAnimationFrame(() => { overlayUpdatePendingRef.current = false; try { const globe = globeEl.current; if (!globe) return; overlayNodes.forEach(n => { const el = overlayRefs.current.get(n.id); if (!el) return; const px = projectLatLngIfFront(n.lat, n.lng); if (!px) { el.style.opacity = '0'; return; } el.style.left = `${px.x}px`; el.style.top = `${px.y}px`; el.style.opacity = '1'; }); } catch {} }); };
+  const scheduleOverlayUpdate = () => {
+    if (overlayUpdatePendingRef.current) return;
+    overlayUpdatePendingRef.current = true;
+    requestAnimationFrame(() => {
+      overlayUpdatePendingRef.current = false;
+      try {
+        const globe = globeEl.current;
+        if (!globe) return;
+        overlayNodes.forEach(n => {
+          const el = overlayRefs.current.get(n.id);
+          if (!el) return;
+          const px = projectLatLngIfFront(n.lat, n.lng);
+          if (!px) {
+            el.style.opacity = '0';
+            return;
+          }
+          el.style.left = `${px.x}px`;
+          el.style.top = `${px.y}px`;
+          el.style.opacity = '1';
+        });
+      } catch {}
+    });
+  };
 
   // --- Boat animation loop (single-boat) with fixed-step simulation (allocation-free) ---
   useEffect(() => {
@@ -821,6 +1130,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       const tan0 = curve.getTangentAt(0);
       cloned.up.copy(pos0).normalize();
       cloned.lookAt(pos0.clone().add(tan0));
+      const upAxis = pos0.clone().normalize();
+      cloned.rotateOnWorldAxis(upAxis, Math.PI / 2);
       // Rotate boat 90° on X-axis so it sails forward instead of sideways
       cloned.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
       // Draw above arcs: high render order + disable depth test on materials
@@ -851,6 +1162,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       mesh.position.multiplyScalar(1.10);
       (mesh as any).up.copy(pos0).normalize();
       (mesh as any).lookAt(pos0.clone().add(tan0));
+      const upAxis = pos0.clone().normalize();
+      mesh.rotateOnWorldAxis(upAxis, Math.PI / 2);
       // Rotate boat 90° on X-axis so it sails forward instead of sideways
       mesh.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
       // Draw above arcs: high render order + disable depth test
@@ -884,6 +1197,34 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       <div aria-live="polite" role="status" style={{ position: 'absolute', left: -9999, top: 'auto', width: 1, height: 1, overflow: 'hidden' }}>
         {srSummary}
       </div>
+      <div aria-label="Dream River accessible navigation" style={{ position: 'absolute', left: -9999, top: 'auto', width: 1, height: 1, overflow: 'hidden' }}>
+        <div role="group" aria-label="Your connections">
+          <ul role="list">
+            {srConnections.length === 0 ? (
+              <li role="listitem">No connections available yet.</li>
+            ) : (
+              srConnections.map(entry => (
+                <li role="listitem" key={`sr-conn-${entry.depth}-${entry.label}`}>
+                  {entry.label}
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+        <div role="group" aria-label="Countries">
+          <ul role="list">
+            {srCountries.length === 0 ? (
+              <li role="listitem">No countries detected yet.</li>
+            ) : (
+              srCountries.map(({ country, count }) => (
+                <li role="listitem" key={`sr-country-${country}`}>
+                  {country} — {count} {count === 1 ? 'person sailing' : 'people sailing'}
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      </div>
       <div style={tooltipStyle}>
         {tooltipContent}
       </div>
@@ -891,7 +1232,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         ref={globeEl}
         onGlobeReady={onGlobeReady}
         rendererConfig={rendererConfig}
-        backgroundColor="#000010"
+        backgroundColor="rgba(0,0,0,0)"
         globeMaterial={globeMaterial}
         atmosphereColor="#66c2ff"
         atmosphereAltitude={0.25}
