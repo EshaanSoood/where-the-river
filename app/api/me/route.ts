@@ -98,6 +98,7 @@ async function handleProfile(req: Request) {
     return NextResponse.json({
       exists: true,
       me: {
+        id: target.id,
         email: target.email,
         name,
         country_code,
