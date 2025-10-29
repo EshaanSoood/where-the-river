@@ -42,8 +42,8 @@ export async function GET() {
       };
     }));
 
-    // Filter: must have boat_color and otp_verified, and boats_total > 0
-    const filtered = entries.filter((e) => e.otp_verified && !!e.boat_color && e.boats_total > 0);
+    // Filter: must have boats_total > 0
+    const filtered = entries.filter((e) => e.boats_total > 0);
     
     // Sort by boats_total DESC (should already be sorted, but ensure it)
     filtered.sort((a, b) => (b.boats_total || 0) - (a.boats_total || 0));
