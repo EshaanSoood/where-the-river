@@ -122,7 +122,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  // Keep POST compatibility; ignore email gating and use session/authorization instead
+  // Keep POST compatibility; user identification via session (cookies) or Authorization header only
+  // Body parameters (like email) are ignored; session/auth header is the source of truth
   return handleProfile(req);
 }
 

@@ -288,7 +288,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     return { nodes: json?.nodes || [], links: json?.links || [] };
   };
   const fetchMeSafe = async (): Promise<{ id: string | null; name: string | null } | null> => {
-    try { const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || ''; if (!guessedBase) return null; const base = guessedBase.replace(/\/$/, ''); const email = (window as any)?.RIVER_EMAIL || null; if (!email) return null; const resp = await fetch(`${base}/api/me`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); if (!resp.ok) return null; const j = await resp.json(); const ref = j?.me?.referral_code || j?.me?.ref_code_8 || null; const name = j?.me?.name || null; return { id: ref || null, name }; } catch { return null; }
+    try { const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || ''; if (!guessedBase) return null; const base = guessedBase.replace(/\/$/, ''); const resp = await fetch(`${base}/api/me`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }); if (!resp.ok) return null; const j = await resp.json(); const ref = j?.me?.referral_code || j?.me?.ref_code_8 || null; const name = j?.me?.name || null; return { id: ref || null, name }; } catch { return null; }
   };
 
   // Helper: Build adjacency graph and compute depths from user
