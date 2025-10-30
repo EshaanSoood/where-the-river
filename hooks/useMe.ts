@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabaseClient";
 import { useUser } from "@/hooks/useUser";
 
@@ -32,6 +32,7 @@ export function useMe(): UseMeResult {
   const [me, setMe] = useState<MeData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const prevIdRef = useRef<string | null>(null);
 
   const baseUrl = useMemo(() => {
     try {
@@ -77,13 +78,29 @@ export function useMe(): UseMeResult {
         referral_url,
       });
       try {
-        if (typeof window !== 'undefined' && id) {
-          window.dispatchEvent(new CustomEvent('profile:revalidate', { detail: { source: 'useMe', hasId: true } }));
+        if (typeof window !== 'undefined') {
+          const prevId = prevIdRef.current;
+          if (id && id !== prevId) {
+            window.dispatchEvent(new CustomEvent('profile:revalidate', { detail: { source: 'useMe', hasId: true, id } }));
+          }
+          if (!id && prevId) {
+            window.dispatchEvent(new CustomEvent('profile:logout', { detail: { source: 'useMe' } }));
+          }
+          prevIdRef.current = id;
         }
       } catch {}
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
       setMe(null);
+      try {
+        if (typeof window !== 'undefined') {
+          const prevId = prevIdRef.current;
+          if (prevId) {
+            window.dispatchEvent(new CustomEvent('profile:logout', { detail: { source: 'useMe' } }));
+          }
+          prevIdRef.current = null;
+        }
+      } catch {}
     } finally {
       setLoading(false);
     }

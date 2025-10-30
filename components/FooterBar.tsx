@@ -47,7 +47,7 @@ export default function FooterBar() {
         .footer-mask.applemusic { -webkit-mask-image: url('/Streaming/pngs/applemusic.png'); mask-image: url('/Streaming/pngs/applemusic.png'); }
         .footer-mask.bandcamp { -webkit-mask-image: url('/Streaming/pngs/bandcamp.png'); mask-image: url('/Streaming/pngs/bandcamp.png'); }
         .footer-mask.spotify { -webkit-mask-image: url('/Streaming/pngs/spotify.png'); mask-image: url('/Streaming/pngs/spotify.png'); }
-        .footer-mask.instagram { -webkit-mask-image: url('/logos/Instagram.svg'); mask-image: url('/logos/Instagram.svg'); }
+        .footer-mask.instagram { -webkit-mask-image: url('/logos/instagram-.png'); mask-image: url('/logos/instagram-.png'); }
         .footer-mask.mail { -webkit-mask-image: url('/logos/email.png'); mask-image: url('/logos/email.png'); }
       `}</style>
     </footer>

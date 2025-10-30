@@ -35,7 +35,7 @@ export default function LeftPanelEmbeds() {
         <HowToPlayVideo />
       </div>
       <div className="flex-shrink-0" style={{ height: 1, background: 'rgba(255,255,255,0.25)' }} />
-      <div className="flex-1 min-h-0 relative p-2 rounded-[16px] overflow-hidden" style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}>
+      <div className="flex-1 min-h-0 relative rounded-[16px] overflow-hidden" style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}>
         <div className="h-full overflow-hidden">
           <BandcampEmbed fill computedHeight={bcHeight} />
         </div>

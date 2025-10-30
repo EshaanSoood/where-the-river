@@ -1,7 +1,3 @@
-"use client";
-
-import React from "react";
-
 export default function Background() {
   return (
     <div aria-hidden="true">
