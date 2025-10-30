@@ -33,7 +33,7 @@ export default function ShareTiles({ referralUrl, message, userFullName, onCopy 
       const mailto = `mailto:?subject=${enc(subject)}&body=${enc(body)}`;
       window.location.href = mailto;
     }},
-    { key: 'sms', id: 'btn-messages', label: 'Share via Messages', src: '/logos/messages.png', onClick: () => {
+    { key: 'sms', id: 'btn-messages', label: 'Share via Messages', src: '/logos/message.png', onClick: () => {
       const body = enc(shareCopy);
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       const smsUrl = isIOS ? `sms:&body=${body}` : `sms:?body=${body}`;

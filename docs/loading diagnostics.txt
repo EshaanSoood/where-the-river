@@ -1,0 +1,34 @@
+Loading Performance Diagnostics – 2025-10-30
+
+Summary: First-load performance regressed between commit 5686ab8b86005a6a025fae2a6cc8ad022dd3321f (performed well) and current head. The landing page now waits on a Supabase session call and a much heavier client-side globe pipeline before rendering meaningful content.
+
+Key differences identified:
+
+1. Globe now bundles Supabase and always calls /api/me
+   
+   • Current `components/GlobeNew.tsx` imports `getSupabase()` and runs `supabase.auth.getSession()` inside `fetchMeSafe` for every visitor. "Guest" loads still make this call, then wait for a 401 before proceeding.
+   • The healthy baseline commit accessed `/api/me` only when `window.RIVER_EMAIL` existed, so cold guests skipped the request entirely.
+   • Supabase’s browser client (≈90 KB minified) is now part of the landing bundle, increasing transfer and parse cost; the extra network round-trip delays the globe’s first paint.
+
+2. Expanded client-only globe work prior to initial render
+   
+   • The globe component currently builds multiple adjacency maps, BFS depth tables, deterministic caches and label projection helpers before showing any nodes.
+   • These computations are valuable for authenticated views but add blocking work for first-time guests.
+
+3. Still no SSR fallback for the landing globe
+   
+   • `BelowMap.tsx` continues to `dynamic(() => import('./GlobeNew'), { ssr: false })`, so the marketing page ships little to no globe markup from the server.
+   • Guests must wait for `/api/globe` + `/api/me`, Supabase session lookup, and the augmented client pipeline before seeing anything substantial.
+
+Recommended mitigation steps (no code applied yet):
+
+• Short-circuit Supabase for anonymous loads: reintroduce the earlier heuristic so we skip importing Supabase (and calling `/api/me`) when no session/email is present.
+
+• SSR a guest snapshot: fetch `/api/globe` in a server component (e.g., `app/(marketing)/page.tsx`) with caching and pass the data as props. Pre-render the guest globe so new visitors immediately see content while hydration takes over.
+
+• Gate expensive client work: wrap the adjacency/overlay/boat logic so it only executes when a logged-in user ID is available. Guests would render the SSR snapshot with minimal client overhead.
+
+• Decouple Supabase from marketing bundle: move `getSupabase()` usage behind an auth-only boundary (e.g., dashboard overlay) to keep the landing bundle lean.
+
+Next steps: align on the SSR approach, then implement the above mitigations systematically to restore acceptable first paint times.
+

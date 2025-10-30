@@ -6,7 +6,24 @@ import ReactGlobe from 'react-globe.gl';
 import * as THREE from 'three';
 import * as topojson from 'topojson-client';
 import { geoCentroid, geoBounds } from 'd3-geo';
-import { getSupabase } from '@/lib/supabaseClient';
+import type { PublicGlobeSnapshot } from '@/types/globe';
+
+let supabaseClientPromise: Promise<any> | null = null;
+
+async function loadSupabaseClient() {
+  if (!supabaseClientPromise) {
+    supabaseClientPromise = import('@/lib/supabaseClient').then((mod) => mod.getSupabase());
+  }
+  return supabaseClientPromise;
+}
+
+type BoatType = 'guest' | 'user';
+
+const MAX_BOATS = 3;
+const MAX_GUEST_BOATS = 2;
+
+const rawArcKey = (arc: ArcData) => `${arc.startId}->${arc.endId}`;
+const boatRegistryKey = (key: string, type: BoatType) => `${type}|${key}`;
 // GLB support (instantiate only in onGlobeReady)
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
@@ -36,8 +53,14 @@ interface ArcData {
   primary?: boolean;
 }
 
-type GlobeProps = { describedById?: string; ariaLabel?: string; tabIndex?: number };
-const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => {
+type GlobeProps = {
+  describedById?: string;
+  ariaLabel?: string;
+  tabIndex?: number;
+  initialSnapshot?: PublicGlobeSnapshot;
+  userEmail?: string | null;
+};
+const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initialSnapshot, userEmail }) => {
   const globeEl = useRef<any>(null);
   const baselineDistanceRef = useRef<number>(0);
   const hasInteractedRef = useRef<boolean>(false);
@@ -58,8 +81,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const [arcsData, setArcsData] = useState<ArcData[]>([]);
   const [overlayNodes, setOverlayNodes] = useState<NodeData[]>([]);
 
-  const DARK_TEAL = '#135E66';
-  const AQUA = 'rgba(42,167,181,0.95)';
+  const DARK_TEAL = '#6D2B79';
+  const AQUA = '#6E0E0A';
   const NEAR_WHITE = 'rgba(255,255,255,0.95)';
 
   const resetNodeStyles = (nodeMap: Map<string, NodeData>) => {
@@ -208,32 +231,37 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
 
   const spawnBoatsForIdentity = (identityId: string, nodeMap: Map<string, NodeData>, arcs: ArcData[]) => {
     if (!linksRef.current.length) return;
-    clearBoats();
+    clearBoatsByType('user');
     const { adj, depths, parents } = buildChainMetadata(identityId, linksRef.current);
     const waypoints = buildBoatWaypoints(identityId, nodeMap, depths, parents, adj);
     const traversalKey = 'user-chain-traversal';
-    boatArcKeysRef.current.add(traversalKey);
+    if (isBoatRegistered(traversalKey, 'user')) {
+      // already have traversal boat registered
+    } else {
+      registerBoatKey(traversalKey, 'user');
+    }
     if (!safeProfileRef.current && waypoints.length > 1) {
       try {
         const curve = new THREE.CatmullRomCurve3(waypoints);
         curve.closed = false;
         const scene = sceneRef.current;
         if (scene && boatTemplateRef.current && glbLoadedRef.current) {
-          spawnBoatFromCurve(curve, traversalKey);
+          spawnBoatFromCurve(curve, traversalKey, 'user');
         } else if (scene) {
-          pendingSpawnsRef.current.push({ curve, arcKey: traversalKey });
+          pendingSpawnsRef.current.push({ curve, arcKey: traversalKey, type: 'user' });
         }
       } catch {}
     } else if (waypoints.length > 1) {
-      pendingSpawnsRef.current.push({ curve: new THREE.CatmullRomCurve3(waypoints), arcKey: traversalKey });
+      pendingSpawnsRef.current.push({ curve: new THREE.CatmullRomCurve3(waypoints), arcKey: traversalKey, type: 'user' });
     }
+
+    drainPendingSpawns();
 
     const myArcs = arcs.filter((arc) => arc.startId === identityId || arc.endId === identityId);
     myArcs.slice(0, 2).forEach((arc, index) => {
       const key = `my-arc-${arc.startId}->${arc.endId}-${index}`;
-      if (!boatArcKeysRef.current.has(key)) {
-        boatArcKeysRef.current.add(key);
-        spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, key);
+      if (!isBoatRegistered(key, 'user')) {
+        spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, 'user', key);
       }
     });
   };
@@ -333,6 +361,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
 
     spawnBoatsForIdentity(identityId, nodeMap, arcs);
     requestAnimationFrame(() => focusCameraOnUser());
+    ensureGuestBoatsRef.current();
     scheduleOverlayUpdate();
   }, [focusCameraOnUser]);
 
@@ -346,8 +375,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     myChainRef.current = new Set();
     isLoggedInRef.current = false;
     lastFocusedUserRef.current = null;
-    clearBoats();
+    clearBoatsRef.current();
     applyGuestView();
+    ensureGuestBoatsRef.current();
   }, [applyGuestView]);
 
   const countriesLODRef = useRef(countriesLOD);
@@ -360,6 +390,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const myFirstNameRef = useRef<string>("");
   const myConnectionsRef = useRef<Set<string>>(new Set());
   const myChainRef = useRef<Set<string>>(new Set());
+  const guestArcCursorRef = useRef<number>(0);
+  const ensureGuestBoatsRef = useRef<() => void>(() => {});
+  const clearBoatsRef = useRef<() => void>(() => {});
   const linksRef = useRef<GlobeLink[]>([]);
   const adjacencyRef = useRef<Map<string, Set<string>>>(new Map());
   const parentLookupRef = useRef<Map<string, string>>(new Map());
@@ -398,9 +431,38 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const boatTemplateRef = useRef<THREE.Object3D | null>(null);
   const boatTemplateMaterialRef = useRef<THREE.Material | null>(null);
   const glbLoadedRef = useRef<boolean>(false);
-  const boatsRef = useRef<{ id: number; mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; startTime: number; duration: number; isPlaceholder?: boolean }[]>([]);
+  const boatsRef = useRef<{ id: number; mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; startTime: number; duration: number; type: BoatType; arcKey: string; isPlaceholder?: boolean }[]>([]);
   const boatArcKeysRef = useRef<Set<string>>(new Set());
-  const pendingSpawnsRef = useRef<{ curve: THREE.CatmullRomCurve3; arcKey: string }[]>([]);
+  const pendingSpawnsRef = useRef<{ curve: THREE.CatmullRomCurve3; arcKey: string; type: BoatType }[]>([]);
+  const drainingPendingRef = useRef<boolean>(false);
+  const appliedInitialSnapshotRef = useRef<boolean>(false);
+
+  const isBoatRegistered = useCallback((key: string, type: BoatType) => boatArcKeysRef.current.has(boatRegistryKey(key, type)), []);
+  const registerBoatKey = useCallback((key: string, type: BoatType) => { boatArcKeysRef.current.add(boatRegistryKey(key, type)); }, []);
+  const unregisterBoatKey = useCallback((key: string, type: BoatType) => { boatArcKeysRef.current.delete(boatRegistryKey(key, type)); }, []);
+
+  const drainPendingSpawns = () => {
+    if (drainingPendingRef.current) return;
+    if (!pendingSpawnsRef.current.length) return;
+    drainingPendingRef.current = true;
+    try {
+      const queue = pendingSpawnsRef.current.splice(0);
+      queue.forEach(({ curve, arcKey, type }) => {
+        try {
+          if (!safeProfileRef.current && glbLoadedRef.current && boatTemplateRef.current) {
+            spawnBoatFromCurve(curve, arcKey, type);
+          } else {
+            spawnProceduralBoatFromCurve(curve, arcKey, type);
+          }
+        } catch (err) {
+          unregisterBoatKey(arcKey, type);
+          console.error('[GlobeNew] pending boat spawn failed', err);
+        }
+      });
+    } finally {
+      drainingPendingRef.current = false;
+    }
+  };
 
   // Data versioning & caching (deterministic, spawn-once pattern)
   const nodeMapCacheRef = useRef<Map<string, NodeData>>(new Map());
@@ -585,7 +647,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
   const seededJitterAround = (lat: number, lng: number, id: string, spreadDeg?: number, overrideAngleRad?: number, radiusScale?: number): [number, number] => { const seed = hashString(id); const rnd = mulberry32(seed); const angle = typeof overrideAngleRad === 'number' ? overrideAngleRad : (rnd() * Math.PI * 2); const base = typeof spreadDeg === 'number' ? Math.max(0.08, Math.min(4.5, spreadDeg)) : 0.24; const rUnscaled = (0.6 * base) + rnd() * (0.4 * base); const r = (radiusScale && radiusScale > 0 ? rUnscaled * radiusScale : rUnscaled); const dLat = r * Math.sin(angle); const dLng = r * Math.cos(angle) / Math.max(0.5, Math.cos(lat * Math.PI / 180)); const jLat = Math.max(-85, Math.min(85, lat + dLat)); const jLng = ((lng + dLng + 540) % 360) - 180; return [jLat, jLng]; };
 
   // Compute stable data version from API payload + auth state
-  type GlobeNode = { id: string; name: string; countryCode: string; createdAt: string };
+  type GlobeNode = { id: string; name: string; countryCode: string; createdAt: string; boats?: number };
   type GlobeLink = { source: string; target: string };
   const fetchGlobeData = async (filter: 'all' | '30d' | '7d' = 'all'): Promise<{ nodes: GlobeNode[]; links: GlobeLink[] }> => {
     const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || 'https://riverflowseshaan.vercel.app';
@@ -595,18 +657,20 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     const json = await resp.json();
     return { nodes: json?.nodes || [], links: json?.links || [] };
   };
-  const fetchMeSafe = async (): Promise<{ id: string; name: string | null } | null> => {
+  const fetchMeSafe = async (shouldFetchIdentity: boolean): Promise<{ id: string; name: string | null } | null> => {
+    if (!shouldFetchIdentity) return null;
     try {
       const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || '';
       if (!guessedBase) return null;
       const base = guessedBase.replace(/\/$/, '');
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      try {
-        const supabase = getSupabase();
-        const { data: sess } = await supabase.auth.getSession();
-        const token = sess?.session?.access_token;
-        if (token) headers.Authorization = `Bearer ${token}`;
-      } catch {}
+      const supabase = await loadSupabaseClient();
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess?.session?.access_token;
+      if (!token) return null;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      };
       const resp = await fetch(`${base}/api/me`, {
         method: 'POST',
         headers,
@@ -721,86 +785,42 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     return waypoints;
   };
 
-  const clearBoats = useCallback(() => {
+  const removeBoat = useCallback((boat: { mesh: THREE.Mesh; arcKey: string; type: BoatType } | undefined) => {
+    if (!boat) return;
     try {
       const scene = sceneRef.current;
-      boatsRef.current.forEach(boat => {
-        try {
-          scene?.remove(boat.mesh);
-          (boat.mesh as any).traverse?.((child: any) => {
-            if (child.isMesh) {
-              child.geometry?.dispose?.();
-              if (child.material?.dispose) child.material.dispose();
-            }
-          });
-        } catch {}
+      if (scene) scene.remove(boat.mesh);
+      unregisterBoatKey(boat.arcKey, boat.type);
+      (boat.mesh as any).traverse?.((child: any) => {
+        if (child.isMesh) {
+          child.geometry?.dispose?.();
+          if (child.material?.dispose) child.material.dispose();
+        }
       });
+    } catch {}
+  }, [unregisterBoatKey]);
+
+  const clearBoatsByType = useCallback((type: BoatType) => {
+    const remaining: typeof boatsRef.current = [];
+    boatsRef.current.forEach((boat) => {
+      if (boat.type === type) {
+        removeBoat(boat);
+      } else {
+        remaining.push(boat);
+      }
+    });
+    boatsRef.current = remaining;
+  }, [removeBoat]);
+
+  const clearBoats = useCallback(() => {
+    try {
+      boatsRef.current.forEach(boat => removeBoat(boat));
       boatsRef.current = [];
     } catch {}
     pendingSpawnsRef.current = [];
     boatArcKeysRef.current.clear();
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [{ nodes, links }, me] = await Promise.all([fetchGlobeData('all'), fetchMeSafe()]);
-        if (cancelled) return;
-
-        linksRef.current = links;
-        adjacencyRef.current = buildAdjacencyFromLinks(links);
-
-        const parentLookup = new Map<string, string>();
-        const childLookup = new Map<string, Set<string>>();
-        links.forEach(({ source, target }) => {
-          parentLookup.set(target, source);
-          if (!childLookup.has(source)) childLookup.set(source, new Set());
-          childLookup.get(source)!.add(target);
-        });
-        parentLookupRef.current = parentLookup;
-        childLookupRef.current = childLookup;
-
-        const nodeMap = new Map<string, NodeData>();
-        nodes.forEach((n) => {
-          const cc = (n.countryCode || '').toUpperCase();
-          const base = resolveLatLngForCode(cc);
-          const name = getCountryNameFromIso2(cc);
-          const spread = getCountrySpreadDeg(name, base[0]);
-          const [lat, lng] = seededJitterAround(base[0], base[1], n.id, spread);
-          nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: NEAR_WHITE, countryCode: cc, name: n.name || null });
-        });
-        nodeMapCacheRef.current = nodeMap;
-
-        identityReadyRef.current = false;
-        identityIdRef.current = null;
-        myIdRef.current = null;
-        isLoggedInRef.current = false;
-        myFirstNameRef.current = '';
-        myConnectionsRef.current = new Set();
-        myChainRef.current = new Set();
-
-        applyGuestView();
-
-        if (me?.id) {
-          enableIdentity(me.id, me.name || null);
-        } else if (pendingIdentityRef.current) {
-          enableIdentity(pendingIdentityRef.current);
-        } else {
-          identityReadyRef.current = false;
-          identityIdRef.current = null;
-        }
-      } catch {
-        if (!cancelled) {
-          setNodesData([]);
-          setArcsData([]);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [applyGuestView, enableIdentity]);
+  }, [removeBoat]);
+  clearBoatsRef.current = clearBoats;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -901,11 +921,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
               glbLoadedRef.current = true;
               // Spawn any pending boats now that the model is ready
               try {
-                  if (!safeProfileRef.current && fpsRef.current >= 28) {
-                    pendingSpawnsRef.current.splice(0).forEach(({ curve, arcKey }) => {
-                      spawnBoatFromCurve(curve, arcKey);
-                    });
-                  }
+                drainPendingSpawns();
               } catch {}
             } catch {}
             },
@@ -1030,6 +1046,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     const tan = new THREE.Vector3();
     const animate = () => {
       const now = performance.now();
+      drainPendingSpawns();
       const tickMs = isHiddenRef.current ? TICK_MS_HIDDEN : (safeProfileRef.current ? 50 : 33);
       if (now - lastTick >= tickMs) {
         lastTick = now;
@@ -1085,7 +1102,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     return mesh as THREE.Mesh;
   };
 
-  const spawnBoatAlongArc = (startLat: number, startLng: number, endLat: number, endLng: number, arcKey?: string) => {
+  const spawnBoatAlongArc = (startLat: number, startLng: number, endLat: number, endLng: number, type: BoatType, arcKey?: string) => {
+    let key = '';
     try {
       const globe = globeEl.current; const scene = sceneRef.current || (globe ? globe.scene() : null); if (!globe || !scene) return;
       const ARC_ALTITUDE = 0.2; const BOAT_PATH_ALTITUDE = 0.07; const GLOBE_RADIUS = 100;
@@ -1094,17 +1112,22 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       const e = new THREE.Vector3(eC.x, eC.y, eC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
       const mid = new THREE.Vector3().addVectors(s, e).multiplyScalar(0.5).normalize().multiplyScalar(GLOBE_RADIUS * (1 + ARC_ALTITUDE));
       const curve = new THREE.CatmullRomCurve3([s, mid, e]);
-      const key = arcKey || `${startLat},${startLng}->${endLat},${endLng}`;
-      if (!boatTemplateRef.current || safeProfileRef.current) {
-        // Queue for GLB spawn once ready; never spawn procedural fallback
-        pendingSpawnsRef.current.push({ curve, arcKey: key });
+      key = arcKey || `${startLat},${startLng}->${endLat},${endLng}`;
+      if (isBoatRegistered(key, type)) return;
+      registerBoatKey(key, type);
+      if (!boatTemplateRef.current || safeProfileRef.current || !glbLoadedRef.current) {
+        pendingSpawnsRef.current.push({ curve, arcKey: key, type });
+        drainPendingSpawns();
         return;
       }
-      spawnBoatFromCurve(curve, key);
-    } catch {}
+      spawnBoatFromCurve(curve, key, type);
+    } catch (err) {
+      if (key) unregisterBoatKey(key, type);
+      console.error('[GlobeNew] spawnBoatAlongArc failed', err);
+    }
   };
 
-  const spawnBoatFromCurve = (curve: THREE.CatmullRomCurve3, arcKey: string) => {
+  const spawnBoatFromCurve = (curve: THREE.CatmullRomCurve3, arcKey: string, type: BoatType) => {
     const scene = sceneRef.current; const globe = globeEl.current; if (!scene || !globe) return;
     try {
       const src = boatTemplateRef.current!;
@@ -1133,14 +1156,20 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
           }
         }
       });
-      // Cap to two boats: remove oldest if exceeding
-      if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
-      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned as unknown as THREE.Mesh, curve, startTime: performance.now(), duration: 15000, isPlaceholder: false });
+      // capacity checks
+      if (boatsRef.current.length >= MAX_BOATS) {
+        const guestIndex = boatsRef.current.findIndex(b => b.type === 'guest');
+        const removeIndex = guestIndex !== -1 ? guestIndex : 0;
+        const [removed] = boatsRef.current.splice(removeIndex, 1);
+        removeBoat(removed);
+      }
+      registerBoatKey(arcKey, type);
+      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned as unknown as THREE.Mesh, curve, arcKey, startTime: performance.now(), duration: 15000, type, isPlaceholder: false });
       scene.add(cloned);
     } catch {}
   };
 
-  const spawnProceduralBoatFromCurve = (curve: THREE.CatmullRomCurve3, arcKey: string) => {
+  const spawnProceduralBoatFromCurve = (curve: THREE.CatmullRomCurve3, arcKey: string, type: BoatType) => {
     const scene = sceneRef.current; if (!scene) return;
     try {
       const mesh = createProceduralBoat();
@@ -1161,11 +1190,131 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         (mesh.material as any).depthTest = false;
         (mesh.material as any).depthWrite = false;
       }
-      if (boatsRef.current.length >= 2) { try { const old = boatsRef.current.shift(); if (old && scene) scene.remove(old.mesh); } catch {} }
-      boatsRef.current.push({ id: Date.now() + Math.random(), mesh, curve, startTime: performance.now(), duration: 15000, isPlaceholder: true });
+      if (boatsRef.current.length >= MAX_BOATS) {
+        const guestIndex = boatsRef.current.findIndex(b => b.type === 'guest');
+        const removeIndex = guestIndex !== -1 ? guestIndex : 0;
+        const [removed] = boatsRef.current.splice(removeIndex, 1);
+        removeBoat(removed);
+      }
+      registerBoatKey(arcKey, type);
+      boatsRef.current.push({ id: Date.now() + Math.random(), mesh, curve, arcKey, startTime: performance.now(), duration: 15000, type, isPlaceholder: true });
       scene.add(mesh);
     } catch {}
   };
+
+  const ensureGuestBoats = useCallback(() => {
+    if (boatsRef.current.filter(b => b.type === 'guest').length >= MAX_GUEST_BOATS) return;
+    const arcs = arcsCacheRef.current;
+    if (!arcs || arcs.length === 0) return;
+
+    const sorted = [...arcs].sort((a, b) => rawArcKey(a).localeCompare(rawArcKey(b)));
+    if (!sorted.length) return;
+
+    const total = sorted.length;
+    let cursor = guestArcCursorRef.current % total;
+    if (cursor < 0) cursor += total;
+
+    let attempts = 0;
+    let spawned = boatsRef.current.filter(b => b.type === 'guest').length;
+
+    while (spawned < MAX_GUEST_BOATS && attempts < total) {
+      const arc = sorted[(cursor + attempts) % total];
+      attempts += 1;
+      if (!arc) continue;
+      if (!arc.startId || !arc.endId) continue;
+      if (arc.startId === arc.endId) continue;
+      const key = rawArcKey(arc);
+      if (isBoatRegistered(key, 'guest')) continue;
+      spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, 'guest', key);
+      spawned += 1;
+    }
+
+    guestArcCursorRef.current = (cursor + attempts) % total;
+  }, [isBoatRegistered, spawnBoatAlongArc]);
+  ensureGuestBoatsRef.current = ensureGuestBoats;
+
+  const hydrateGraph = useCallback((payload: { nodes: GlobeNode[]; links: GlobeLink[] }, identity?: { id: string | null; name: string | null }) => {
+    try {
+      const { nodes, links } = payload;
+
+      linksRef.current = links;
+      adjacencyRef.current = buildAdjacencyFromLinks(links);
+
+      const parentLookup = new Map<string, string>();
+      const childLookup = new Map<string, Set<string>>();
+      links.forEach(({ source, target }) => {
+        parentLookup.set(target, source);
+        if (!childLookup.has(source)) childLookup.set(source, new Set());
+        childLookup.get(source)!.add(target);
+      });
+      parentLookupRef.current = parentLookup;
+      childLookupRef.current = childLookup;
+
+      const nodeMap = new Map<string, NodeData>();
+      nodes.forEach((n) => {
+        const cc = (n.countryCode || '').toUpperCase();
+        const base = resolveLatLngForCode(cc);
+        const name = getCountryNameFromIso2(cc);
+        const spread = getCountrySpreadDeg(name, base[0]);
+        const [lat, lng] = seededJitterAround(base[0], base[1], n.id, spread);
+        nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: NEAR_WHITE, countryCode: cc, name: n.name || null });
+      });
+      nodeMapCacheRef.current = nodeMap;
+
+      identityReadyRef.current = false;
+      identityIdRef.current = null;
+      myIdRef.current = null;
+      isLoggedInRef.current = false;
+      myFirstNameRef.current = '';
+      myConnectionsRef.current = new Set();
+      myChainRef.current = new Set();
+
+      clearBoatsByType('guest');
+      applyGuestView();
+
+      const candidateId = identity?.id || null;
+      if (candidateId) {
+        enableIdentity(candidateId, identity?.name || null);
+      } else if (pendingIdentityRef.current) {
+        enableIdentity(pendingIdentityRef.current);
+      } else {
+        identityReadyRef.current = false;
+        identityIdRef.current = null;
+      }
+
+      ensureGuestBoats();
+    } catch (err) {
+      console.error('[GlobeNew] hydrateGraph failed', err);
+    }
+  }, [applyGuestView, clearBoatsByType, enableIdentity, ensureGuestBoats, getCountryNameFromIso2, getCountrySpreadDeg, resolveLatLngForCode, seededJitterAround]);
+
+  useEffect(() => {
+    if (!initialSnapshot || appliedInitialSnapshotRef.current) return;
+    hydrateGraph({ nodes: initialSnapshot.nodes, links: initialSnapshot.links });
+    appliedInitialSnapshotRef.current = true;
+  }, [hydrateGraph, initialSnapshot]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const shouldFetchIdentity = Boolean(userEmail);
+        const [{ nodes, links }, me] = await Promise.all([
+          fetchGlobeData('all'),
+          fetchMeSafe(shouldFetchIdentity),
+        ]);
+        if (cancelled) return;
+        hydrateGraph({ nodes, links }, me ?? undefined);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('[GlobeNew] data fetch failed', err);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrateGraph, userEmail]);
 
   const arcResolution = useMemo(() => {
     // Dynamic segments by approximate screen scale; clamp for bounds

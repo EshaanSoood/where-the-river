@@ -43,6 +43,10 @@
   min-height: 100vh;
 }
 
+.viewport-cushion {
+  height: clamp(0px, 4vh, 48px);
+}
+
 /* Smooth scrolling for reduced-motion awareness */
 @media (prefers-reduced-motion: no-preference) {
   html {

@@ -17,6 +17,7 @@ import HowToPlayVideo from "@/components/HowToPlayVideo";
 // DashboardSheet is not used directly; inline overlay below owns the layout
 // Client snapshot removed; use server-latched inviter only
 import { refDebug } from "@/lib/refDebug";
+import type { PublicGlobeSnapshot } from "@/types/globe";
 
   const Globe = dynamic(() => import("@/components/GlobeNew"), { ssr: false });
   const RewardsView = dynamic(() => import("@/components/RewardsView"), { ssr: false });
@@ -24,11 +25,14 @@ import { refDebug } from "@/lib/refDebug";
   // Dashboard data bindings removed for overhaul; UI will use placeholders.
 
 type InitialInviter = { code: string | null; fullName: string | null; firstName: string | null; userId: string | null };
-type BelowMapProps = { initialInviter?: InitialInviter | null };
+type BelowMapProps = {
+  initialInviter?: InitialInviter | null;
+  initialGlobeSnapshot?: PublicGlobeSnapshot | null;
+};
 
 // Removed client snapshot merging for server-only inviter UI
 
-export default function BelowMap({ initialInviter }: BelowMapProps) {
+export default function BelowMap({ initialInviter, initialGlobeSnapshot }: BelowMapProps) {
   const router = useRouter();
   const [guestStep, setGuestStep] = useState<"menu" | "signup_email" | "signup_code" | "login_email" | "login_code">("menu");
   const [firstName, setFirstName] = useState("");
@@ -540,7 +544,13 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
               {/* Square globe container */}
               <div className="relative w-full grid place-items-center" style={{ aspectRatio: '1 / 1', padding: '16px' }}>
                 <div className="relative w-full h-full max-w-full max-h-full" style={{ aspectRatio: '1 / 1' }}>
-                  <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
+                  <Globe
+                    describedById="globe-sr-summary"
+                    ariaLabel="Interactive globe showing Dream River connections"
+                    tabIndex={0}
+                    initialSnapshot={initialGlobeSnapshot ?? undefined}
+                    userEmail={user?.email ?? null}
+                  />
                 </div>
               </div>
             </div>
@@ -634,7 +644,13 @@ export default function BelowMap({ initialInviter }: BelowMapProps) {
             <div className="relative w-full rounded-[24px] overflow-hidden flex items-center justify-center globe-container" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)', height: '100%' }}>
               {/* Globe container - square, centered, with equal inset */}
               <div className="relative globe-inner" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Globe describedById="globe-sr-summary" ariaLabel="Interactive globe showing Dream River connections" tabIndex={0} />
+                <Globe
+                  describedById="globe-sr-summary"
+                  ariaLabel="Interactive globe showing Dream River connections"
+                  tabIndex={0}
+                  initialSnapshot={initialGlobeSnapshot ?? undefined}
+                  userEmail={user?.email ?? null}
+                />
               </div>
               {/* Subtle inner glow ring to keep globe away from edges */}
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ boxShadow: 'inset 0 0 0 8px rgba(255,255,255,0.04), inset 0 0 60px rgba(42,167,181,0.08)', zIndex: 0 }} />
