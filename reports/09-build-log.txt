@@ -1,0 +1,148 @@
+
+> web@0.1.0 build
+> next build --turbopack
+
+   ▲ Next.js 15.5.4 (Turbopack)
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Finished writing to disk in 324ms
+ ✓ Compiled successfully in 4.1s
+   Linting and checking validity of types ...
+
+./app/(app)/r/[referral]/page.tsx
+5:1  Warning: Prevent Client Components from being async functions. See: https://nextjs.org/docs/messages/no-async-client-component  @next/next/no-async-client-component
+
+./app/api/globe/route.ts
+23:11  Warning: 'since' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./app/api/invite-context/route.ts
+2:10  Warning: 'supabaseServer' is defined but never used.  @typescript-eslint/no-unused-vars
+23:12  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./app/api/users/upsert/route.ts
+130:9  Warning: 'parentApplied' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+131:9  Warning: 'inviterUserId' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+132:9  Warning: 'attributionSource' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./components/BandcampEmbed.tsx
+3:69  Warning: 'computedHeight' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./components/BelowMap.tsx
+3:21  Warning: 'useMemo' is defined but never used.  @typescript-eslint/no-unused-vars
+10:8  Warning: 'BandcampEmbed' is defined but never used.  @typescript-eslint/no-unused-vars
+32:9  Warning: 'router' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+55:10  Warning: 'shareLoading' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+61:10  Warning: 'refInviterFirst' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+61:27  Warning: 'setRefInviterFirst' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+62:10  Warning: 'refInviterId' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+62:24  Warning: 'setRefInviterId' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+66:19  Warning: 'setInviter' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+125:10  Warning: 'showTopFade' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+127:9  Warning: 'dashboardFetchAttemptsRef' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+128:9  Warning: 'lastReferralUrlRef' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+129:9  Warning: 'autoRefreshedRef' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+152:9  Warning: 'rewardTiers' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+180:15  Warning: 'shouldLock' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+376:12  Warning: 'DashboardContent' is defined but never used.  @typescript-eslint/no-unused-vars
+376:37  Warning: 'onAuthenticated' is defined but never used.  @typescript-eslint/no-unused-vars
+411:23  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+474:25  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+503:21  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+951:34  Warning: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+1009:34  Warning: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+1092:34  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+1140:34  Warning: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+1170:34  Warning: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./components/DashboardSheet.tsx
+42:10  Warning: 'sessionEmail' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+189:18  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+231:17  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+234:21  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+380:32  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./components/Globe.tsx
+107:9  Warning: 'reservedPosRef' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+601:6  Warning: React Hook useEffect has missing dependencies: 'fetchGlobeData', 'focusCameraOnUser', 'resolveLatLngForCode', 'seededJitterAround', 'spawnBoatAlongArc', 'startBurstRotate', and 'startIdleTimer'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+693:9  Warning: 'projectLatLng' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+1095:6  Warning: React Hook useEffect has a missing dependency: 'scheduleOverlayUpdate'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+1233:29  Warning: 'i' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./components/GlobeNew.tsx
+276:6  Warning: React Hook useCallback has a missing dependency: 'rebuildSrCountries'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+339:6  Warning: React Hook useCallback has missing dependencies: 'rebuildSrConnectionsForIdentity', 'rebuildSrCountries', 'scheduleOverlayUpdate', and 'spawnBoatsForIdentity'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+353:6  Warning: React Hook useCallback has a missing dependency: 'clearBoats'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+484:6  Warning: React Hook useEffect has a missing dependency: 'fps'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+537:6  Warning: React Hook useEffect has a missing dependency: 'stopRotateInterval'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+826:6  Warning: React Hook useEffect has missing dependencies: 'buildAdjacencyFromLinks', 'fetchGlobeData', 'resolveLatLngForCode', and 'seededJitterAround'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+890:7  Warning: Unused eslint-disable directive (no problems were reported from 'no-console').
+965:6  Warning: React Hook useEffect has a missing dependency: 'scheduleOverlayUpdate'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+1097:6  Warning: React Hook useEffect has missing dependencies: 'drainPendingSpawns' and 'scheduleOverlayUpdate'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+1128:62  Warning: 'arcKey' is defined but never used.  @typescript-eslint/no-unused-vars
+1164:9  Warning: 'spawnProceduralBoatFromCurve' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+1164:72  Warning: 'arcKey' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./components/HowToPlayVideo.tsx
+5:42  Warning: 'onHeightChange' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./components/MobileSticky.tsx
+17:6  Warning: React Hook useEffect has a missing dependency: 'analytics'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/RewardsView.tsx
+262:23  Warning: 'remaining' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./components/ShareTiles.tsx
+79:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./components/participate/openParticipate.ts
+20:44  Warning: 'm' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./lib/countries.ts
+1:15  Warning: 'FeatureCollection' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./lib/refDebug.ts
+4:7  Warning: Unused eslint-disable directive (no problems were reported from 'no-console').
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/20) ...
+   Generating static pages (5/20) 
+   Generating static pages (10/20) 
+   Generating static pages (15/20) 
+ ✓ Generating static pages (20/20)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                         Size  First Load JS
+┌ ƒ /                                0 B         180 kB
+├ ○ /_not-found                      0 B         158 kB
+├ ○ /admin                           0 B         158 kB
+├ ƒ /api/globe                       0 B            0 B
+├ ƒ /api/invite-context              0 B            0 B
+├ ƒ /api/leaderboard                 0 B            0 B
+├ ƒ /api/me                          0 B            0 B
+├ ƒ /api/my-referral-link            0 B            0 B
+├ ƒ /api/profiles/by-email           0 B            0 B
+├ ƒ /api/referral                    0 B            0 B
+├ ƒ /api/referral/capture            0 B            0 B
+├ ƒ /api/referral/resolve            0 B            0 B
+├ ƒ /api/users/check                 0 B            0 B
+├ ƒ /api/users/upsert                0 B            0 B
+├ ƒ /api/webhooks/user-created       0 B            0 B
+├ ƒ /auth/callback                   0 B            0 B
+├ ○ /dashboard                   44.6 kB         203 kB
+├ ○ /participate                     0 B         158 kB
+└ ƒ /r/[referral]                  687 B         159 kB
++ First Load JS shared by all     167 kB
+  ├ chunks/01944775ca74c9e7.js   40.8 kB
+  ├ chunks/2008ffcf9e5b170c.js     13 kB
+  ├ chunks/24077ccb4fb30d1f.js     75 kB
+  └ other shared chunks (total)  37.8 kB
+
+
+ƒ Middleware                     39.3 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

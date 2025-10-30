@@ -1,0 +1,173 @@
+{
+  "version": "0.1.0",
+  "name": "web",
+  "problems": [
+    "extraneous: @emnapi/core@1.5.0 /Users/eshaansood/Where-the-river/web/node_modules/@emnapi/core",
+    "extraneous: @emnapi/runtime@1.5.0 /Users/eshaansood/Where-the-river/web/node_modules/@emnapi/runtime",
+    "extraneous: @emnapi/wasi-threads@1.1.0 /Users/eshaansood/Where-the-river/web/node_modules/@emnapi/wasi-threads",
+    "extraneous: @napi-rs/wasm-runtime@0.2.12 /Users/eshaansood/Where-the-river/web/node_modules/@napi-rs/wasm-runtime",
+    "extraneous: @tybys/wasm-util@0.10.1 /Users/eshaansood/Where-the-river/web/node_modules/@tybys/wasm-util"
+  ],
+  "dependencies": {
+    "@emnapi/core": {
+      "version": "1.5.0",
+      "resolved": "https://registry.npmjs.org/@emnapi/core/-/core-1.5.0.tgz",
+      "overridden": false,
+      "extraneous": true,
+      "problems": [
+        "extraneous: @emnapi/core@1.5.0 /Users/eshaansood/Where-the-river/web/node_modules/@emnapi/core"
+      ]
+    },
+    "@emnapi/runtime": {
+      "version": "1.5.0",
+      "resolved": "https://registry.npmjs.org/@emnapi/runtime/-/runtime-1.5.0.tgz",
+      "overridden": false,
+      "extraneous": true,
+      "problems": [
+        "extraneous: @emnapi/runtime@1.5.0 /Users/eshaansood/Where-the-river/web/node_modules/@emnapi/runtime"
+      ]
+    },
+    "@emnapi/wasi-threads": {
+      "version": "1.1.0",
+      "resolved": "https://registry.npmjs.org/@emnapi/wasi-threads/-/wasi-threads-1.1.0.tgz",
+      "overridden": false,
+      "extraneous": true,
+      "problems": [
+        "extraneous: @emnapi/wasi-threads@1.1.0 /Users/eshaansood/Where-the-river/web/node_modules/@emnapi/wasi-threads"
+      ]
+    },
+    "@eslint/eslintrc": {
+      "version": "3.3.1",
+      "resolved": "https://registry.npmjs.org/@eslint/eslintrc/-/eslintrc-3.3.1.tgz",
+      "overridden": false
+    },
+    "@napi-rs/wasm-runtime": {
+      "version": "0.2.12",
+      "resolved": "https://registry.npmjs.org/@napi-rs/wasm-runtime/-/wasm-runtime-0.2.12.tgz",
+      "overridden": false,
+      "extraneous": true,
+      "problems": [
+        "extraneous: @napi-rs/wasm-runtime@0.2.12 /Users/eshaansood/Where-the-river/web/node_modules/@napi-rs/wasm-runtime"
+      ]
+    },
+    "@supabase/auth-helpers-nextjs": {
+      "version": "0.10.0",
+      "resolved": "https://registry.npmjs.org/@supabase/auth-helpers-nextjs/-/auth-helpers-nextjs-0.10.0.tgz",
+      "overridden": false
+    },
+    "@supabase/supabase-js": {
+      "version": "2.58.0",
+      "resolved": "https://registry.npmjs.org/@supabase/supabase-js/-/supabase-js-2.58.0.tgz",
+      "overridden": false
+    },
+    "@tailwindcss/postcss": {
+      "version": "4.1.14",
+      "resolved": "https://registry.npmjs.org/@tailwindcss/postcss/-/postcss-4.1.14.tgz",
+      "overridden": false
+    },
+    "@tybys/wasm-util": {
+      "version": "0.10.1",
+      "resolved": "https://registry.npmjs.org/@tybys/wasm-util/-/wasm-util-0.10.1.tgz",
+      "overridden": false,
+      "extraneous": true,
+      "problems": [
+        "extraneous: @tybys/wasm-util@0.10.1 /Users/eshaansood/Where-the-river/web/node_modules/@tybys/wasm-util"
+      ]
+    },
+    "@types/d3": {
+      "version": "7.4.3",
+      "resolved": "https://registry.npmjs.org/@types/d3/-/d3-7.4.3.tgz",
+      "overridden": false
+    },
+    "@types/node": {
+      "version": "20.19.19",
+      "resolved": "https://registry.npmjs.org/@types/node/-/node-20.19.19.tgz",
+      "overridden": false
+    },
+    "@types/react-dom": {
+      "version": "19.2.0",
+      "resolved": "https://registry.npmjs.org/@types/react-dom/-/react-dom-19.2.0.tgz",
+      "overridden": false
+    },
+    "@types/react": {
+      "version": "19.2.0",
+      "resolved": "https://registry.npmjs.org/@types/react/-/react-19.2.0.tgz",
+      "overridden": false
+    },
+    "@types/three": {
+      "version": "0.180.0",
+      "resolved": "https://registry.npmjs.org/@types/three/-/three-0.180.0.tgz",
+      "overridden": false
+    },
+    "@types/topojson-client": {
+      "version": "3.1.5",
+      "resolved": "https://registry.npmjs.org/@types/topojson-client/-/topojson-client-3.1.5.tgz",
+      "overridden": false
+    },
+    "d3": {
+      "version": "7.9.0",
+      "resolved": "https://registry.npmjs.org/d3/-/d3-7.9.0.tgz",
+      "overridden": false
+    },
+    "eslint-config-next": {
+      "version": "15.5.4",
+      "resolved": "https://registry.npmjs.org/eslint-config-next/-/eslint-config-next-15.5.4.tgz",
+      "overridden": false
+    },
+    "eslint": {
+      "version": "9.37.0",
+      "resolved": "https://registry.npmjs.org/eslint/-/eslint-9.37.0.tgz",
+      "overridden": false
+    },
+    "framer-motion": {
+      "version": "12.23.22",
+      "resolved": "https://registry.npmjs.org/framer-motion/-/framer-motion-12.23.22.tgz",
+      "overridden": false
+    },
+    "next-plausible": {
+      "version": "3.12.4",
+      "resolved": "https://registry.npmjs.org/next-plausible/-/next-plausible-3.12.4.tgz",
+      "overridden": false
+    },
+    "next": {
+      "version": "15.5.4",
+      "resolved": "https://registry.npmjs.org/next/-/next-15.5.4.tgz",
+      "overridden": false
+    },
+    "react-dom": {
+      "version": "19.1.0",
+      "resolved": "https://registry.npmjs.org/react-dom/-/react-dom-19.1.0.tgz",
+      "overridden": false
+    },
+    "react-globe.gl": {
+      "version": "2.36.0",
+      "resolved": "https://registry.npmjs.org/react-globe.gl/-/react-globe.gl-2.36.0.tgz",
+      "overridden": false
+    },
+    "react": {
+      "version": "19.1.0",
+      "resolved": "https://registry.npmjs.org/react/-/react-19.1.0.tgz",
+      "overridden": false
+    },
+    "tailwindcss": {
+      "version": "4.1.14",
+      "resolved": "https://registry.npmjs.org/tailwindcss/-/tailwindcss-4.1.14.tgz",
+      "overridden": false
+    },
+    "three": {
+      "version": "0.169.0",
+      "resolved": "https://registry.npmjs.org/three/-/three-0.169.0.tgz",
+      "overridden": false
+    },
+    "topojson-client": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/topojson-client/-/topojson-client-3.1.0.tgz",
+      "overridden": false
+    },
+    "typescript": {
+      "version": "5.9.3",
+      "resolved": "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz",
+      "overridden": false
+    }
+  }
+}

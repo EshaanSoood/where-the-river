@@ -1,0 +1,2 @@
+npm warn exec The following package was not found and will be installed: @cyclonedx/cyclonedx-npm@4.1.0
+error: unknown option '--output'

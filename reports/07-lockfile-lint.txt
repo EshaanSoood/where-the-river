@@ -1,0 +1,2111 @@
+npm warn exec The following package was not found and will be installed: lockfile-lint@4.14.1
+detected invalid host(s) for package: @alloc/quick-lru@5.2.0-c2330b9a95475e152a49773696afca34aeabd420
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @babel/runtime@7.28.4-b83c427e5cf24e756e70201a4c4ec9d31586d3be
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @dimforge/rapier3d-compat@0.12.0-e57fd1bddcb009b8bc6811831b8e49694e3a55b3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @emnapi/core@1.5.0-17b6adff34d7ca544876e6a3e4d90de72e135919
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @emnapi/runtime@1.5.0-c5c9d28aa4a0dd1d51fe4f385939f79c74153f39
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @emnapi/wasi-threads@1.1.0-83d058b19ae82330d0704ad0a6d6c1b30434dea2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @eslint-community/eslint-utils@4.9.0-309f5ebe89ce8f815c9f067141dad731ed98cb48
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-visitor-keys@3.4.3-d8978f6f3287cadf41efdc55246f5bdbe7f2bc3a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @eslint-community/regexpp@4.12.1-9a4f9d04e1c1a84a51876df71d6d495a77361637
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @eslint/config-array@0.21.0-2a8f7f417cf14d00b89897a9a7a8c332fbfe3e41
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @eslint/config-helpers@0.4.0-6730d5bec236ba975096bd9f20abfed9c62d3fec
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @eslint/core@0.16.0-19be1c1709921deb52476dc7773a78818093f0e8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @eslint/eslintrc@3.3.1-a186105cdc37284eb9805888878b7ac9f2d687b3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @eslint/js@9.37.0-8ba8af1ba8f786e2723fdf081706f980ce534828
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @eslint/object-schema@2.1.6-913a33e9b0877226477bc7061c5b1069c6a06bda
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @eslint/plugin-kit@0.4.0-27d725c89067088268f00ec83392401d5c799dcb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @humanfs/core@0.19.1-5be393a4d5dab9bd8f66d7fe0889146ff5157e79
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @humanfs/node@0.16.7-58ef1917d310f02f6ade265ce775a9d182d0613e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @humanwhocodes/module-importer@1.0.1-451b1a62ff48beb182fc3a3a16401bde9dd8ed37
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @humanwhocodes/retry@0.4.3-064f687135743f4e6cccd34356deeb63e4f1ecb8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/colour@1.0.0-d93bb44ae978693a430ee69aeb979b6a8683a957
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-darwin-arm64@0.34.4-38f8cf6d914d7c5814fd7271996a8c364d2db671
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-darwin-x64@0.34.4-0164be821def548ed4f114b28c094b60c87d270f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-libvips-darwin-arm64@1.2.3-a5ae8c22d7219be486909fb35143558769dbe501
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-libvips-darwin-x64@1.2.3-427bcb7d3d91453442516974e1ae08e812bc67a2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-libvips-linux-arm@1.2.3-e25b43ed2be8c62f0be651c976f31d15bb9bba7f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-libvips-linux-arm64@1.2.3-6a4243568a2982e66b771c86300b7c0a3e45a543
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-libvips-linux-ppc64@1.2.3-9043ea1f2bfa5af78ab76d9e47b5c4408ff13809
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-libvips-linux-s390x@1.2.3-08b8d4f4b96882a0378ffd13d071c4390d280644
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-libvips-linux-x64@1.2.3-852e5026fa7e3b0ca0e1e69fc5127cf283e611be
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-libvips-linuxmusl-arm64@1.2.3-1c1dcfef732428663e47f2246d8a396c2edaf73b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-libvips-linuxmusl-x64@1.2.3-549aa53fb2fa3c412a65aaf2dc5a842f7e6d0243
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-linux-arm@0.34.4-1e19e256bad78c7968944adff0a98caa355763c2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-linux-arm64@0.34.4-35acb0c99e709ae7abe0a11d62aefe6d992867d7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-linux-ppc64@0.34.4-b8a39cb8989aa96344674fd263e526f53719d501
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-linux-s390x@0.34.4-b52c28b38511b90ad951535e536ce13996955189
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-linux-x64@0.34.4-2733033b3a2cd9ec8a28c83227a80bc8a9c3565a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-linuxmusl-arm64@0.34.4-0fdc2a7783f42f2dffd1ceb723d952c69c0f586c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-linuxmusl-x64@0.34.4-44693bc21491a6e65e7f37419bc1ed9f762e3984
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-wasm32@0.34.4-abc314e8c1f7df40199efb1008d996bf7f24192c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-win32-arm64@0.34.4-2353fb57393a2a89d1bb98428986762c0c01f998
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-win32-ia32@0.34.4-9a601eecb9333235e93b39bb2419f3cc6f8d0755
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @img/sharp-win32-x64@0.34.4-95d02c1f6f1cea275ab7186213c5cd633a527d18
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @isaacs/fs-minipass@4.0.1-9ca7c01e25828b59d924c9de79156bd2da76bc1f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @jridgewell/gen-mapping@0.3.13-9d043e9056249cdf0e0bd04bc318fd6574c7d824
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @jridgewell/remapping@2.3.5-a17a839396f217b11d3559ae8e47861b8d4a02cf
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @jridgewell/resolve-uri@3.1.2-fe2feeb4799641a0afcbcff2a34e691e0e849d40
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @jridgewell/sourcemap-codec@1.5.5-4dfbc5a3a80ad24dadcc5082ceb664d323d851da
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @jridgewell/trace-mapping@0.3.31-e96c6340c008d85f75854149a1465b58a80db4fe
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @napi-rs/wasm-runtime@0.2.12-c74dc286cad4b9c27ff27d9b01635fb1fa557511
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @next/env@15.5.4-9c0ad8c5685e7020e79963ff037909554b43eb4f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @next/eslint-plugin-next@15.5.4-e3b3685cee3dcab6d3cc3a391921abfd71b845fa
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @next/swc-darwin-arm64@15.5.4-66f68cafb572e92e5aded248f6d10b97c2194a54
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @next/swc-darwin-x64@15.5.4-458eaf02aa09131f7b20c5e93e70f946fdccfd43
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @next/swc-linux-arm64-gnu@15.5.4-a614b12fd60853687b2ef2c75c07ce3b077b5766
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @next/swc-linux-arm64-musl@15.5.4-d6922bff8b38f3c11afdf467f355ccc52788d46c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @next/swc-linux-x64-gnu@15.5.4-36de78fc014d849c53fb01b138acf7e93e70822b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @next/swc-linux-x64-musl@15.5.4-2701976c9b30670bd99b443564785516f7cedfba
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @next/swc-win32-arm64-msvc@15.5.4-d85389bdfda0ff46f4df58e24f7b4994b1fb8ced
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @next/swc-win32-x64-msvc@15.5.4-b420a70f2d7a0094892e7ee86c996b5c0fc2271b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @nodelib/fs.scandir@2.1.5-7d69eb3556817f63d9d3647637d26976fb6b12b0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @nodelib/fs.stat@2.0.5-15cca22e1775b488264fba781dc6e4c88e3062fe
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @nodelib/fs.walk@1.2.8-920589bfb863f1c39b9fc5b85f7671cc4ce25dcf
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @nolyfill/is-core-module@1.0.39-2189eeb638b1efdd3189eb87fdb55b6556d51ecd
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @rtsao/scc@1.1.0-35ed82295ed6f0b880a8d24ce69193991d890cbc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @rushstack/eslint-patch@1.13.0-9fbc430bf6e32b4be858ea568f5b1acfe27fb630
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @supabase/auth-helpers-nextjs@0.10.0-e7f1fd6c35dd2bbcb4046c7c6735fe6dae747dc2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @supabase/auth-helpers-shared@0.7.0-3de2b8111118542351db35abb71bd24b96eef346
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @supabase/auth-js@2.72.0-9e87035b751ae42998c117a8e620356a0b51ba9a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @supabase/functions-js@2.5.0-6d03dcf805b5d9750b8488fadbbd258a85fbb1c7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @supabase/node-fetch@2.6.15-80d7906ab7d1d86fdc0d2f22de74e4166872f772
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @supabase/postgrest-js@1.21.4-711f62017669f7fe183d9f2980e1b3062fff618d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @supabase/realtime-js@2.15.5-226e8752ee839bbb1dbfd422898988e6da7f3c0e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @supabase/storage-js@2.12.2-1cb7ef55d61d6b6ac2c97f0723673a70625533c3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @supabase/supabase-js@2.58.0-adc54329efd9d428a090f5e253296e04bcb4defb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @swc/helpers@0.5.15-98ff4374ef0003b3d971dca1d22c3299d5957062
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/node@4.1.14-400f72db6353f78a03e24818cc942ba7399b17d6
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide@4.1.14-034a86e0e67b9ec4c8fc0321514d53c8f0ac4f31
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-android-arm64@4.1.14-0162fa5c1941ab848cf8bd85de04d9604a8d1074
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-darwin-arm64@4.1.14-124594baf080679ac852ea868202939bc0bf0790
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-darwin-x64@4.1.14-f5b36ead53a00debaf8976292ba057838f73463b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-freebsd-x64@4.1.14-c62ca2432281b8e9179ff75b418603ab35120e1d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-linux-arm-gnueabihf@4.1.14-503f8862017751cb6e72cd4112f8cb4809b78e69
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-linux-arm64-gnu@4.1.14-07e5192b8b83d8c006b9f4a4ccb5999cbfbc2fcf
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-linux-arm64-musl@4.1.14-b74e4bd65d5e5dfee7f5017324378d35facf3cee
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-linux-x64-gnu@4.1.14-39cf0c06350fbab0582e2909d4bdd5653f9b466e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-linux-x64-musl@4.1.14-7f00a5f91190c4ac540e43d245f640be7e925cae
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-wasm32-wasi@4.1.14-8650f7573c5041937efe5239b75757d165f18ec8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-win32-arm64-msvc@4.1.14-b7e4348dc45247254d3ea89898ba35afb64bfa68
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/oxide-win32-x64-msvc@4.1.14-9af382098b8694310145396fd8f70a4e57a49def
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tailwindcss/postcss@4.1.14-bcf8033820078de5d801afdd8611f4c6ba5cd417
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @turf/boolean-point-in-polygon@7.2.0-bc7fccf543532fb204909edde6af1700f0c60b8e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @turf/helpers@7.2.0-5051061c46261cded008e411b62cb828797acde7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @turf/invariant@7.2.0-3a8ae456bb5fb7a1a6d592acd9a25ad07eb56bae
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tweenjs/tween.js@23.1.3-e2b7249baab4ec5f6f3be615a29c0d53dcded9d3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @tybys/wasm-util@0.10.1-dc207b6d8ec176f5164477d8095f177366b1f0e1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3@7.4.3-7d2ca5a04a244671e41e5ce62c3d049c7d372d1f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-array@3.2.2-f989f1d11f77cce945972bbaee932b6bc7507324
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-axis@3.0.6-e637c307a5879635be0c30d84bf700fb52a67330
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-brush@3.0.6-27ef86a567f421043811c1ff3d48902759601b8e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-chord@3.0.6-c781da2a690268c4cc489f10b1c278ef3cce9b76
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-color@3.1.3-5ba8f5bb5e24e27a094cf76f579a886d4cc9e4db
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-contour@3.0.6-b1410d600045628edae61dcfc8d45f7093bf4894
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-delaunay@6.0.4-2b32e56ed8912af7de3448165961634a03a3731a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-dispatch@3.0.7-3f4d15ab7b932423fd7444bc7f9829a93e64c5f6
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-drag@3.0.7-2dc52d6e0aa6c21369b59ea09c72b668fe66720d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-dsv@3.0.7-fcd362eeeafa129bdfc7d40bdc5302916d2c3456
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-ease@3.0.2-528081d95f71314f474fa5b3329ab038dcf342c2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-fetch@3.0.7-055296cc6919d18a8021f80516023e323a60dbe1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-force@3.0.10-9f10d2509eb74f16ce14aa20c5a85eddfad244b3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-format@3.0.4-877b666f5957a325e257e0cc58ddb2ac664319ec
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-geo@3.1.0-c619f9464aee466afccb6457c35fca456e70b5f4
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-hierarchy@3.1.7-5745792df4a8c6e2a60a16bff963f6483d92e8d9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-interpolate@3.0.4-376ad81e4b9efda251357dedd425d8aba52be299
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-path@3.1.1-14522a8f1c9beee6a11a6659157e0539b75c31a0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-polygon@3.0.2-641abd00d874035239cf296cd1537e833335bd21
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-quadtree@3.0.6-72482d4e6b9bdf0bb8244170e698820e63b8af21
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-random@3.0.3-abfb93f1469e955f153ea6d1254ca5eb47b6956f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-scale@4.0.9-bdfb93efc40235b00fdaf859b12f662a7d6781c6
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-scale-chromatic@3.1.0-9b67cd1b20eb5cccce9e447d7bcb7897d8ad368a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-selection@3.0.11-509dfaec98c1cf4e4214cce04136b69f91b2831e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-shape@3.1.7-7e710410685dab2278cdd275d36db579278b01dc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-time@3.0.4-b402bed794af9167acd9c89771c82a4f54b89abb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-time-format@4.0.3-1f176539583218b9caa710ed420c5df34bbb4f89
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-timer@3.0.2-bf3e9dd8d12bd6bbb9d2789459d8d2f68dc6a992
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-transition@3.0.9-77c7f5197f71533332d5ce820d1c88c3d0542578
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/d3-zoom@3.0.8-417573b988892830ed0ee8731786543118acddf6
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/estree@1.0.8-f539474127b6458314758412273b5f6bfe5528e9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/geojson@7946.0.16-269c6e9138d159dd5fc638af916567115ae30321
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/json-schema@7.0.15-fcead690b049b20f2e01356916f334b32083b920
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/json5@0.0.29-bb26bfc4fb01a0cd966e795aa2af07b513136ae5
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/node@20.19.19-d8c78627bd582b558dd861498d42becdcc0e975d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/phoenix@1.6.6-33c8143b89380da22928c2474c3ca9dfb4c64d00
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/react@19.2.0-1a0be478583ace15cfe9c859826e6d403355b211
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/react-dom@19.2.0-ec0bf97248b409e7c7ad266b65d05d8c9e9f3d1b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/stats.js@0.17.4-799b78efe224b46d4e583f691e80813f8b7fa6e7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/three@0.180.0-92ff44ff37b8201f733b38059f557775f8ce3876
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/topojson-client@3.1.5-3cf58ff2cae83b133334a852fd12629de3f35f1e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/topojson-specification@1.0.5-a0352acfea443df3bfb18ebaefd78de05933f360
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/webxr@0.5.24-6a4b836bb5850eccbb7824211aee10158498d918
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @types/ws@8.18.1-1a1582f8bf7b4392431a429036721ced102cfa88
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @typescript-eslint/eslint-plugin@8.45.0-a9fe1e6e6b6ae9491f2efc90ffe2c720acbabb85
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: ignore@7.0.5-866b89f12f081e1815105463a4991f59db8ae7c4
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @typescript-eslint/parser@8.45.0-b5475245a4c029375269a1a04450812bae8fcae7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @typescript-eslint/project-service@8.45.0-45574342a59fdf7b3e9eaa7da36f055c6c7eaa29
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @typescript-eslint/scope-manager@8.45.0-5bfbf33e53ec353883373612ebe3eb6f54caf876
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @typescript-eslint/tsconfig-utils@8.45.0-3df5fd6f391d292f84333fe9cef1975b58990971
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @typescript-eslint/type-utils@8.45.0-076979787fdc65e0b9807696b41807b98a64cbe8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @typescript-eslint/types@8.45.0-ee66029eeac666ec35af335f27c6f9d15c49667c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @typescript-eslint/typescript-estree@8.45.0-f1591215a130a5a27373165877eb90cac01399ff
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: brace-expansion@2.0.2-2936334e5959911ff89ecb927d84ae2cf69802eb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: fast-glob@3.3.3-46745eb2fc4fe28b3ecf5aec9e4540a77dcfd72a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: glob-parent@5.1.2-8b94d126389004eefb78c5a19bed73a999c962db
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: minimatch@9.0.5-6f35cce762527497790ab3940f53abc0daa09db1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @typescript-eslint/utils@8.45.0-69820f3184d9444878fb8655903631d4ac80a898
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @typescript-eslint/visitor-keys@8.45.0-69d7c451858662b482803933534c70818860d789
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-android-arm-eabi@1.11.1-d772b1980ef77aa3be2f51cbce12a88515e411fc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-android-arm64@1.11.1-40a662e7457f6c15069c4967a1ec5852b2d235ac
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-darwin-arm64@1.11.1-4e57f9e59406c18fc921a7f3a2eba4e5c841ad80
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-darwin-x64@1.11.1-9b52c1114d90ef13a92b3653387e75e6bdc2f6c3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-freebsd-x64@1.11.1-18f164141870f5c99cb485a96e37de1b41bb8f60
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-linux-arm-gnueabihf@1.11.1-f01711d9a834b12c96c4da758e1d912788658e88
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-linux-arm-musleabihf@1.11.1-e6a7a864f4cd10c0c21744262ade8b4f6c55f4f9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-linux-arm64-gnu@1.11.1-d5f2f91fbb186a626d0b14a164d76fa91e93cfe0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-linux-arm64-musl@1.11.1-d2e3c02bc432708ab66737c0fc3981595b64b6b0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-linux-ppc64-gnu@1.11.1-0ce6a38876b1a6c480a24dae1116dc9da4f8cf23
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-linux-riscv64-gnu@1.11.1-81aed276e1eacaed06d7324bc66fa4ee1ee23350
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-linux-riscv64-musl@1.11.1-afcffb0e61f1e8d53627562b76eee56be52c4834
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-linux-s390x-gnu@1.11.1-5cd47207c79ab09e596896734ddaa68302599957
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-linux-x64-gnu@1.11.1-4979ce165f3248400e1b24dba6b74e5fac2fa51b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-linux-x64-musl@1.11.1-cb502a5ec8cfd128cfcf514a819e13104b7cefcc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-wasm32-wasi@1.11.1-bf7cdb98dec429025066476c3a04ebb64fa387df
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-win32-arm64-msvc@1.11.1-b46483e45a4087ba2bac10d8a784a296c577391c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-win32-ia32-msvc@1.11.1-4f05ab2bb30402e0f2c8aa9703c24afd7ccec1d7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @unrs/resolver-binding-win32-x64-msvc@1.11.1-d62458bf70747cd100bac54f1a8786d842c88010
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: @webgpu/types@0.1.65-87ab1f9f669bd5fd177adb94cd013d845987138f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: accessor-fn@1.5.3-71ad68c591ec44ddaec42db92e22225b6c71be61
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: acorn@8.15.0-34461d4a0900bbc6dfbdb5a2041bb065beca645a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: acorn-jsx@5.3.2-cc0a8a5ee94c9f25944630c3506994250015f7b2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: ajv@6.12.6-de3c2292c392693fd96000cc37ef215783ca1469
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: ansi-styles@4.3.0-90b9d2a44aee8d8d50f7770a1ec6aeaa45697007
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: argparse@2.0.1-d71b6b43bc0d034f7b86d6d1149d6a43be13f2ed
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: aria-query@5.3.2-4debffc2e913c0b4372289579a61dd073d0ca074
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: array-buffer-byte-length@1.0.2-d0be347d4f20750a3709977d783abda1acd576dc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: array-includes@3.1.9-3b86eeb2b94deb9f8faba49cf5c9d4432a641800
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: array.prototype.findlast@1.2.5-6b7671ae0537d054760e4cd9dc64f92388bb26da
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: array.prototype.findlastindex@1.2.6-e1e1d5be501edb636d055238ff57c4323479c85b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: array.prototype.flat@1.3.3-f551e88532eeb8c1457f1a8163196b133aab814f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: array.prototype.flatmap@1.3.3-f2906f94a1ebdd1cf077ece876fe53d22947a5a0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: array.prototype.tosorted@1.1.4-2a1e1de1e94f2957c7f45d61194c8b5fae370a5c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: arraybuffer.prototype.slice@1.0.4-02adf3a4f2f67de3d32fe2879c5be1dfe6869331
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: ast-types-flow@0.0.8-6810503eba437327660df4246444710659071cee
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: async-function@1.0.0-f9d8ec3ecc9b53b6df0d691fff4880245a27458e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: available-typed-arrays@1.0.7-20c94de2fa2c15f874897ef4cba8c03e49b2a659
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: axe-core@4.10.3-6c130f1c333c7428cb616374ef6c52daee1b7e0f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: axobject-query@4.1.0-6a06d80096f067674673e004a8e5ce8d59a15a34
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: balanced-match@1.0.2-6536eb5112631eccfac19108a338fe41380bdfd1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: brace-expansion@1.1.12-827a810d315c5ad682e115775ca407e9ccb54aa0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: braces@3.0.3-01bc180ca0d88b0906265d43209d3ae830eb508e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: call-bind@1.0.8-9f682d84b8e6eb3f49f5ecbc1726ad523b012b9e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: call-bind-apply-helpers@1.0.2-1b753631325ea503e136fa7b961922a6d29a651d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: call-bound@1.0.4-46938e8bb6c00ef78be14ee939c002632bf75624
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: callsites@3.1.0-265104dacc08ecb0dc48bdc6635a6a617cb59c89
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: caniuse-lite@1.0.30001748-8e00cd94b2a7bab1bf5db6eed5ce4937ae16a7e2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: chalk@4.1.2-d95378653561a965532a48784f793dd3b0dda9b1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: chownr@3.0.0-4921013d1b42ec5fa3e9e9abc68214d456c23e97
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: client-only@0.0.1-b82bc6c3422ade66cfc8779af6242639fef36299
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: color-convert@2.0.1-0dc6d7f2cf0a99ab222e4ab8b3d8aa3941c7d722
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: color-name@1.1.4-d363ff18e821bd7fb6d598798b03142fb887f0cc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: commander@7.2.0-f6d228119858483fdc0366d14b7e229cf683e01f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: concat-map@0.0.1-15d77a2949860308cb683ac2a18b56901760d3c1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: cross-spawn@7.0.6-4ae3a626551207d92cd3c1ee8849f814c03312eb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: csstype@3.1.3-88ef1518f2c5c33763f8b882b154a81d26309560
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3@7.9.0-26bdc7f417d0e04741f450eda284988307ebe6bc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-array@3.2.4-3d68d09769f61561db5ed0ecded927a9e13690bc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-axis@3.0.0-522fffcc67c5699e3c57ccb506833cd86d746538
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-brush@3.0.0-c5d60e7255c4c808ef34a8ab81c6f06db7708445
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-chord@3.0.1-823515d6d595927b0715aeb15a00ceaabffc2f55
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-color@3.1.0-15d91afe784530bbef75a6073ce6482071251ecd
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-contour@4.0.2-f4e84ce36803f1c0aecc751484e5c9d5b634e097
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-delaunay@6.0.4-cec0000781554cd417448116c39e5caaad9ea1a1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-dispatch@3.0.1-b3e37bb4171b82d73142a8e24f335b0bba899341
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-drag@3.0.0-479f1067271f8f8cb4911040d9183d28eecb828a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-dsv@3.0.1-fb54b9dbb28aab8c96bc4be5894141ba193f47ba
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-ease@3.0.1-8c6a2d8c01320ff83d4032c47975ae49c3134573
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-fetch@3.0.1-6541140b3da32e9553b70c82d039086c5c3c7a4a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-force@3.0.0-fde1a26a58d066a92af94344ba7eb36ea2597a05
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-format@3.1.0-188bb7983d02a4700421a881f13849117fc27907
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-geo@3.1.1-32689f767a40e4a6a0ed204ea2bd771f82cc9ee8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-geo-voronoi@2.1.0-674b5b6d9987a3b98701ed389768a3a13518cff7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-hierarchy@3.1.2-a860bd5c960728029e821d6be804c513eba701a1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-interpolate@3.0.1-79fcb131bbcadd40850f3d2d503b5c97f33d2132
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-octree@1.1.0-5a63e9cca2c95534f4c82923b7bfcd7d691c63e6
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-path@3.1.0-b995d5ebb6120cdaa90d14fe9b542ecd1b64a7d5
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-polygon@3.0.1-58fbedf73014b5b33e633c548cc754d477e50391
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-quadtree@3.0.1-748508ca369c7ef3fd3dca28db384b23af3bbcae
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-random@3.0.1-85c075499deb50dbfaa87b8af31de8f6b05e6add
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-scale@4.0.2-5fa37b32034d1009e8a1945b4a681458914b10a3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-scale-chromatic@3.1.0-e9cbddcc77b6592a94335bc5c88fa62c6ca10b5b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-selection@3.0.0-a038f4782afd78c016be9271cdf8a223ac503990
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-shape@3.2.0-c6eb0c1977836560ccbeb6cf21ee5c5cbc428fe0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-time@3.1.0-d365e2c5c738ce369e7f1540418eac2035ea3c67
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-time-format@4.1.0-c32660705b1f11b36f71f0d5ded14d98eaefc9ce
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-timer@3.0.1-a4b0641112bc11bca0568e59ec09fb3f6c9af346
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-transition@3.0.1-8479fc016efc0b8470d38f60d94f007826e4ac56
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-tricontour@1.1.0-4c2c95b210b0e552c2c59b2a5272bfb882990f82
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: d3-zoom@3.0.0-d8feadae99f04a6aacf808e79a9aacbf6b4df7e9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: damerau-levenshtein@1.0.8-2ff56ceef14f80c2841073ee9c3677acda9cba1c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: data-bind-mapper@1.0.3-72b8f171ea016732200d1b484e661d51a9da6dbd
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: data-view-buffer@1.0.2-b31427533715ba3a1df1e282e7800b37f86c3fc9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: data-view-byte-length@1.0.2-fbe41ecbe07232301f9fe831cff314158df21c76
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: data-view-byte-offset@1.0.1-8555be2511d65ac6bbcaca1e583f07b6310ea2f3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: debug@4.4.3-a1cfba552d4c34c3e6c6bf3fe676e03bec717b87
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: deep-is@0.1.4-401536a3085e0de01575e43832bc5ca291ce2a39
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: define-data-property@1.1.4-24a3b0dc427d9d95ec1c8aec5c33fe31a4f8de19
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: define-properties@1.2.1-2047d9267842653f2f337ac644d669c82c0a01f9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: delaunator@5.0.1-57f1519a4b024c9466fa983a5317c918c548dd7e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: detect-libc@2.1.2-1cfc862531753e6fcc006f39df61eae46e19c6b9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: doctrine@2.1.0-239614dd269edf210e7c882b7f312b9bbeac9a98
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: dunder-proto@1.0.1-e74d7691156b39ceb918ce4f26fa84902dfb84c8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: earcut@3.0.2-6e0da9da490c48e3769240f19d8dec7449ea5ed9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: emoji-regex@9.2.2-1c934a48f22e068bc5399e0ad6666ac0ffda5d70
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: enhanced-resolve@5.18.3-be038e7355441cae4aa03dea90b649ec741a3468
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: es-abstract@1.24.0-4694747e7b75e7d6ff288b40d7042dcd551a6e38
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: es-define-property@1.0.1-d623d81916b27bfbb3a362e66d9fbbe369790766
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: es-errors@1.3.0-4a51eefcc829440e01266c1ba47253d5bfcb0ba9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: es-iterator-helpers@1.2.1-f5939c31bdd97327c3195ee326a4277b3de4cf44
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: es-object-atoms@1.1.1-a3992d830156044ec05dbd2edc4d8773128d63f3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: es-set-tostringtag@2.1.0-97c5f960c28d2600436078e75758b5e2ce8f1b1b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: es-shim-unscopables@1.1.0-cf0f3ddc3f21642d1da19ebec93bfbb102312663
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: es-to-primitive@1.3.0-2b437765d5abe3dec1072657a91d2af5df4da85c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: escape-string-regexp@4.0.0-b2a8c7343d191e36f6e20b2d30c72b78f2436c6b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint@9.37.0-f020f8c9a1f2693b50a8961f4802e10c52c51f63
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-config-next@15.5.4-9965181a7326a4920f38ae9c97b0b045ba9dc07c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-import-resolver-node@0.3.9-46767f00bb00770c4fca9a6ddac6dd1be81ae062
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: debug@3.2.7-501d33d4605d97398584168cc0bfe11cce9aeefa
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-import-resolver-typescript@3.10.1-d2bd9b47a036a6d82a381b8f39126ca15a040671
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-module-utils@2.12.1-4b25f8164be1041fc4d62b17e932c9e9b2c920be
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-plugin-import@2.32.0-46b80368c6b9928767fc30b7a18a0a00aeed81b2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: semver@6.3.1-8ff62115c25bd7eb93de1224432cb279ed10d901
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-plugin-jsx-a11y@6.10.2-16adf4f897ce56a99f3d6adcb6d2932e80f21a60
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-plugin-react@7.37.5-f0f3cd85446023547b1fe8afeaf652d28860de7b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-plugin-react-hooks@5.2.0-47ae574c5e92b25fe7c5eebfa7ebb2230c8e4b7b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: resolve@2.0.0-next.5-59d2b64553a36a800344a3bf0d9b1ec0a7d83595
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-scope@8.4.0-40826ed93f58be57b9ff3970fe3c884341ff6f82
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: eslint-visitor-keys@4.2.1-82e68fb3fab589c9d075119bcb45724cb2fd7885
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: espree@10.4.0-c031e963b145650246c277f28060bc099c7b8ece
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: esquery@1.6.0-d3cbf845df9100a36aeedff37b0ff00407261235
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: esrecurse@4.3.0-e41305f7d0f11fa63f27cd9fa30baef3cd72bc8a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: estraverse@5.3.0-6bed356a5e55a21b652b15112df392c06a9bf5e2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: esutils@2.0.3-7b42233f72208f975a18e88f32e54a63aecf35d4
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: fast-deep-equal@3.1.3-326717aac925cdcb44d3279e85b0c540de7f9d2e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: fast-glob@3.3.1-9d5a76fcbf014f23e1d2d8ac6b2bf673b46ccd03
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: fast-json-stable-stringify@2.1.0-8c157dd9d60029c514b6e91b41eb2dd628cf5a00
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: fast-levenshtein@2.0.6-8435383a3567ff06a70dad30833f6d3dbb89d0bf
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: fastq@1.19.1-e5b5c152401435d4d104c0899aac5148ef7d9085
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: fflate@0.8.2-ab2faaad580d2ee073beaa63a7614199d01adbd7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: file-entry-cache@8.0.0-556555e21f2c2e0884f32410226bfb78cbe3eedb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: fill-range@7.1.1-966dc7003642f1f98a141a883c99cc2411732b12
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: find-up@5.0.0-349d51e0c34f23acee15faf6d884d1c67c800ded
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: flat-cache@4.0.1-4ea850acfbe1425a19c82885adb5c6c0d8ead167
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: flatted@3.3.3-7ea06f55660ff272f9a771dbddbc0d4d96cd79a9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: float-tooltip@1.7.5-c393013683d363eec13211f59e577fca34d497fd
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: for-each@0.3.5-97887f5c20d0ed3fb203997955cc13fba8f22e73
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: frame-ticker@1.0.3-2cb43c1809de3efcf6d5e14b05d962915a0a02dc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: framer-motion@12.23.22-928cd3d8c69db608cc2ebd468ec158310adb5f3e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: function-bind@1.1.2-c670031b996993dbf17107497ec716e6d5d81fe7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: function.prototype.name@1.1.8-02108a11fa8b3baa7b827256901f02f93023acfa
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: functions-have-names@1.2.3-dbdce8aaae52e298e8948f1eb09f02bfea8c9bef
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: generator-function@2.0.1-06faa91c77b367947af30101cf49c7d44bea7e10
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: get-intrinsic@1.3.0-623be39db78b48a9abcb8e0c66abceb348354023
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: get-proto@1.0.1-748361f4323759ecc08b797c956ef50f30913666
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: get-symbol-description@1.1.0-324e242adec269521741ade7cdfdfe593fa94e40
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: get-tsconfig@4.10.1-56c5525041c3620cf4f98813294f6188d8a28e8d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: glob-parent@6.0.2-d4b817da6223b645238988a7bdefc1e399cb1f1c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: globals@14.0.0-1700e3e49e16dfb307e57bb15b78b081bccb5b2e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: globalthis@1.0.4-9a63efe2bd7cf976355fd819a014a5458efe16c2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: globe.gl@2.44.1-3a41e765375e6a3dabff2b6da59061da86b192d5
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: gopd@1.2.0-bae8ae8bf01e30f2531eb6904a4b18628b1f2616
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: graceful-fs@4.2.11-fddf20e8d4d952dd48304336224520072c376e75
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: graphemer@1.4.0-a875fa472507bd8c395ec38d08ffe80c9af836a8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: h3-js@4.3.0-4f82e3a4f136818297a7a38090f193471db3f5d5
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: has-bigints@1.1.0-2ae12be92c42d08054f1e535f25775ddbaaef2d7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: has-flag@4.0.0-31f78f408cd3b6250578f68c73f26d2ddd6c214b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: has-property-descriptors@1.0.2-7fc775315251224254bb47d479994eddb8bcc2eb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: has-proto@1.2.0-88c3758ff3210583d9153409dbae7520fba22356
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: has-symbols@1.1.0-80aa42b354efea0cd6264a0ae7d82a48c2f66832
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: has-tostringtag@1.0.2-19f09fd8989f52198c34935edd160abec87a44cb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: hasown@2.0.2-46bd22cf8ddd81f6ad75fd4a7fdd3746d414de53
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: iconv-lite@0.6.3-1d77cdd79bc6725deca8a24922d0078f3303a561
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: ignore@5.3.2-10dbdbf4f69edc13a3405c9541e43310fd21ed96
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: import-fresh@3.3.1-6a791bdfa46a9f861fbce6b956025c665b575158
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: imurmurhash@0.1.4-c3d9a8084a1e0822a2a0edb867221b4880488860
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: index-array-by@1.4.2-c78b935e9da9b8057b20beb726e60d0d6b2ce3c5
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: internal-slot@1.1.0-8ab3721b88d9b9a2a32a56fcb06f4f2b756b1fb5
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: internmap@2.0.3-2ef4ba49df165a4cf9e2dad74f58886946956544
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-array-buffer@3.0.5-f2b4fc0f72b765ef538bf4f67c9193903a7565bb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-async-function@2.1.1-1f7ad0635ebb2a9a4c036268f0a19543bcf439c9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-bigint@1.1.0-58c5abfcd1c20221c3cc0d3f133888252afd8e4d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-boolean-object@1.2.2-1be3d86c43504ddfbed94a11880426579e90c8df
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-bun-module@2.0.0-abcf8568a379dff6e237611c4b2f87c5684d3c6f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-callable@1.2.7-01e9719b1f5005bee8d1d3ffe49739ca092ceb78
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-core-module@2.16.1-71e2b022ba02fe507e292411c3550be4824a1b8d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-data-view@1.0.2-6d79f1926917a72d2aaf6cf4fefa5736be2e19ce
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-date-object@1.1.0-083528f618fea612112460f76cdbace41cda6341
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-extglob@2.1.1-fa7a196b32f653ba1acdad1d3520dfd0321bb560
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-finalizationregistry@1.1.1-508cac7a6fe3dafed784ddd0c47cadb6b683bb8f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-generator-function@1.1.2-91fce27eb58942cb8b08c9e008dc9cda4e243d63
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-glob@4.0.3-985ecdca0805dd24925df615b5a4df5149866910
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-map@2.0.3-32684c0b780272e60efaaaeaf28596a3c09854d6
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-negative-zero@2.0.3-14f796ae22b818592861054f8dd916126f0b75eb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-number@7.0.0-50a55d8d6d875ec572b82d8a622a52bdf63f74b0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-number-object@1.1.1-e20c2ac72c4d05c3d3459a1e9892d1c26e3b1a8c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-regex@1.2.1-a81fa078daf924c83be7ff16182ae73a5adf0cd0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-set@2.0.3-ac3a7d8e55320b3f60ccb83065d6f3e44ee92777
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-shared-array-buffer@1.0.4-d097177e890281ee55e7d6c0bd4994851bdc74ca
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-string@1.1.1-c543e9fd864f6e81f6c3acbfd71cac0a11b78214
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-symbol@1.1.1-8c40b361e573bc0e2401fdbdd14fab4ec2e4ce99
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-typed-array@1.1.15-5465afe42145426ab90411dde290b98014e7dac3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-weakmap@2.0.2-5e5e71d2650f6f6c315e18f7666f60592cb50d75
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-weakref@1.1.1-5108b991fdb8694e6b1c181095037837f6c01e2a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: is-weakset@2.0.4-ab57da86ca7e254471fcae245dc555505939e4f8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: isarray@2.0.5-1852bc397387800e68430428e5f405c4b05c8a7c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: isexe@2.0.0-ff20b1287fd4a98e5eecd388cc3c77976d7bb0a3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: iterator.prototype@1.1.5-c5590039cbe916020115b3ffb8368b75178bd47f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: jerrypick@1.1.2-78a5ac7e113d97ce0d567c0ecfb3e85a818b9f59
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: jiti@2.6.1-a3202cd2d2d43c492dc1b7280d27680653d97cca
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: jose@4.15.9-695dd0f23968fd4308f406c11c7e546eec556e2d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: js-tokens@4.0.0-9d054db456a3693e3836fe62cf63a0af3b7e3ae8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: js-yaml@4.1.0-acc86f5a973aa6f96fdd09c656d1059ad60df9fc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: json-buffer@3.0.1-b594b2da13ee8d5332fe99fac9e5e9fc51709e48
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: json-schema-traverse@0.4.1-a5ad0dbe386bf5a8308db8dcdab286ec92de4f1e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: json-stable-stringify-without-jsonify@1.0.1-9e73c605e3b0f4faf9f8b2b23e6cb6b97aad5ef7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: json5@1.0.2-b4a9b93d7de58c57881060bc5122246529464d92
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: jsx-ast-utils@3.3.5-cc94a9a7cf7013716fd825ee68e35c6da3ae3a22
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: kapsule@1.16.3-7ca22af1a9024b557f5c6332d1e5d0f5e962b2c8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: keyv@4.5.4-ece2c234de9476a42bc0eb6cb917d80fbe2ffc97
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: language-subtag-registry@0.3.23-fcc6464329cca9d1316fa8546c0592ec4789c336
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: language-tags@1.0.9-82a18bc1c8512e5dc3369f7ed9dd25e66ec6acc6
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: levn@0.4.1-119200627462daef63798e30a74422b5baf855e0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss@1.30.1-c57ccdaea4615fa7e4e760547afe5d3a229f26e9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss-darwin-arm64@1.30.1-85809842cb3ac1accb9bc95d5bcb7faf939421f3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss-darwin-x64@1.30.1-760e8237d6a726eab3766c5ef8c5aeaf98557c86
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss-freebsd-x64@1.30.1-c3984e5fd308b252bf83c40ad1c5b9d9f146598a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss-linux-arm-gnueabihf@1.30.1-f36044b6a70f6fcf91b0c26b2c7d9b79c98e380d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss-linux-arm64-gnu@1.30.1-56e89d12d5de80a7100d6e203dea00ba0b315053
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss-linux-arm64-musl@1.30.1-f05d0fdd7f6fdf12445b69f3dbdf024cf8dacbe0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss-linux-x64-gnu@1.30.1-123738e17a424171f8e9efb16ba305a8b314b893
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss-linux-x64-musl@1.30.1-03cafe2c97d106f73cc50090b5270f8b26036c03
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss-win32-arm64-msvc@1.30.1-f27712e60c13d048da5d1f36bd7ba75120009940
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lightningcss-win32-x64-msvc@1.30.1-f5491b21a6e6a06941a9abee0a1f37deef10f002
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: locate-path@6.0.0-8770986d07c552cec6a87f1938389225e0d42cc0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lodash-es@4.17.21-574782e84fe495d12a147108fd4ce81311b0776c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: lodash.merge@4.6.2-14832a6e9a61909e9b5305311f0c2d490e032efb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: loose-envify@1.4.0-1da67f4db8caa0c7b50ff9ac22ae8b524ecd478a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: magic-string@0.30.19-fe7c440fc1186626a22a4de681b666719a3d3bc2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: math-intrinsics@1.1.0-7d275b60bc5aa64083dadb02fa859b7f58e90f44
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: merge2@1.4.1-b1ed64483c030bb3c1ec4458b1a56855582f6733
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: meshoptimizer@0.22.0-d658caaa56a09379fa0998e1f0c408a186265dc8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: micromatch@4.0.8-198b23821d4361fbb31b1d28077fc5cdb434bdbf
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: minimatch@3.1.2-4df4de253815f7da005f26590441ad4bcaff6033
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: minimist@1.2.8-89f1794e56c20dfffd0b42b334777079aca862f6
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: minipass@7.1.2-b134ba3cc0083f5586c840cfb6401d906d1240fd
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: minizlib@3.1.0-e93596e722649f91ababadb2373230b50c35b42c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: motion-dom@12.23.21-77fae4d38afce821ff333926dca94ef1c02c8be9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: motion-utils@12.23.6-5c6200c2ada9adbbb6eee1f50dfdfffb5fca4a41
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: ms@2.1.3-ac24064ad545cc364e0a46fcd7b9b6b3d1840248
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: nanoid@3.3.11-e3e4c822de3eb9d99bab3fbde9f206b4641c61b8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: napi-postinstall@0.3.4-e21c606abeae58f999cadc46a570a86d8f8afeae
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: natural-compare@1.4.0-1526439c1094c48ac424f3579502b14f39054ca2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: next@15.5.4-2946aa3ad1da43b9fe54b1b51cb2f8f8e47d439e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: next-plausible@3.12.4-398976bc5c12c37dbf1c1529880ba2306464ba48
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: postcss@8.4.31-be638b5a4e12542aff84dbf206b84807bba88a74
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: object-assign@4.1.1-05c39256071e04c2cb9e2bfad2df076ec6aab467
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: object-inspect@1.13.4-81512c4633bfd32d52607cfe9405fe95e2528b7a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: object-keys@1.1.1-ca80e457079f39d0a03d5b9bec85e2f3aa609fd1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: object.assign@4.1.7-88fd6d9e6ee02d53f138aad8d63f750000e726b9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: object.entries@1.1.9-36aa1fd96c69cc8b5750a79d72bb93edaba15b22
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: object.fromentries@2.0.8-d0a87264f66de636bdf037e5770ce71a20fbc166
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: object.groupby@1.0.3-28ff179022358365b27aa03823d7dd96014f45de
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: object.values@1.2.1-cc2a51c9824779332f205ad6b3de9614d80e130d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: optionator@0.9.4-ec1a059251f56778ef51204133b606c1d8cb3daf
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: own-keys@1.0.1-84a77e2e0bb3b5720f69cdd5348cbaf99b1e1761
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: p-limit@3.1.0-4120e6886d1e0b5fe4150fcf8c5a508938734127
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: p-locate@5.0.0-3c17d450f5a27b7bd923f634ae23f496f9e0e443
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: parent-module@1.0.1-3e81a9c339a43e36cb7f26d19f3bdadeb488c11f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: path-exists@4.0.0-eca0c1a0f28b66221de7f360f315221a944ffdc2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: path-key@3.1.1-01ba79660081731e590fb3ea485cce93909536c8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: path-parse@1.0.7-4c66d3c0728cca715204bf88c113ee3aa5ab5d78
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: picocolors@1.1.1-915362b57b32a2614ca385e52ebe08030eb68c44
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: picomatch@2.3.1-177f70a5524e823bd8d7e34c7148c43e01614852
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: point-in-polygon-hao@1.2.4-9c7264ac60b9e42e18926f5273a8ac4ab50ef048
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: polished@4.3.1-6fcf53367bb311ac5eacaf85b824578e61a87741
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: possible-typed-array-names@1.1.0-db6dcf51953d875155fd6846d4f54c9aa6114e06
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: postcss@8.5.6-c1b408effcbcb8b8b52a77401f1e787d8206d7f2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: preact@10.27.2-208849d8009afd65af1ad5d65bebde11f7c1fb1c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: prelude-ls@1.2.1-3c5075879c19370a1bc307206b7c125e5e2f241b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: prop-types@15.8.1-6fdd93f813cf1faff23b74951f227e7fcb0da68c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: punycode@2.3.1-a24f090c367ab0852abacf2438c80ff3971b8ccb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: queue-microtask@1.2.3-961f6f63b5bfbddff9a7a698b280e3e37ed1e41c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: react@19.1.0-142ef416a5ad1425dd5d78c16e8f26ccd065a0ff
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: react-dom@19.1.0-060c09d8ebb1be21000176e5205c43332a3642ff
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: react-globe.gl@2.36.0-714ae05aaa6fa7cf8752a208dfacd41784146f3c
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: react-is@16.13.1-a538422c7b706bc32aa4a314f474ee39c7c32566
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: react-kapsule@2.5.7-ee5f0940267d71f27e498afb5a97cb8910091759
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: reflect.getprototypeof@1.0.10-626e6d1ad2b0745fbceafe7ccd84166da6968d0b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: regexp.prototype.flags@1.5.4-7e7ea1b8030355bebd16cddd839dd5327a8d87d4
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: resolve@1.22.10-99fe530fdec6bb9f159e9e6cfc07b2d53cd5b7cd
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: resolve-from@4.0.0-f732f4b02a272ade1f562b4b49e47b6e02dfc671
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: resolve-pkg-maps@1.0.0-bbfc5e9fe1dbcc08ed3c8ce8941c94945bb562ed
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: reusify@1.1.0-3d921ac98adcbed152131609763d9eda03edf052
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: robust-predicates@3.0.2-b4c825a2dc6f7aaedead693ce93c97162e702ed1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: run-parallel@1.2.0-bfdb50bc2e611617a6465a2499ad1372480ed416
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: rw@1.3.3-cd0ee984641b7eb74dcdad48f44a90640d21c4d9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: safe-array-concat@1.1.3-a6544fcbca97de35392ec3ef611a4ec24c2a7ba4
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: safe-push-apply@1.0.0-1e2cc523d79e304c33f02ef08045454fc1cac3cc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: safe-regex-test@1.1.0-bcad8f2cffba41cbeb374bb91beb221f08cd1294
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: safer-buffer@2.1.2-d3c1a51c99ab73528e5f013a7ab70dfe91aa47a7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: scheduler@0.26.0-ebcf61135632f5208f39e6cf65c3adec0282a80f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: semver@7.7.2-7dcdb35aa0eb44af818b91b72955e81c865972aa
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: set-cookie-parser@2.7.1-b0bc8b6d8057d85481b31bf19bd411eaaaf0af24
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: set-function-length@1.2.2-798762bacd670dc67bc91114fbf308c9b224cd82
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: set-function-name@2.0.2-befb65fd1493d9197faae064de28a181b66bdd4f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: set-proto@1.0.0-cb42073ec8396210974275ed91874e089e46c2da
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: sharp@0.34.4-e9cf16d3fa2d73729a2bdabedee6c8d38ca4e9d7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: shebang-command@2.0.0-27df5c76eebaabcb72dd2dbf060ef3bb9b00b7ef
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: shebang-regex@3.0.0-e4e9b93a44dfd3d50e5f0109063ff44d2acb17af
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: side-channel@1.1.0-89c0f6b6dddffe9b93bbc4250bb849db69329e02
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: side-channel-list@1.0.0-6db5e86ee9fb435126f682440aa4507b0a426fc5
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: side-channel-map@1.0.1-70cb02cdfee01873784b448d321233d700638e6b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: side-channel-weakmap@1.0.2-57efcd39fc556bb4ef15548796445eb769d660a7
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: simplesignal@2.1.7-95c07d4f6c325e490659312e1f3330b3a679eba5
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: source-map-js@1.2.1-8f46c54cb75c3275a9da4e6caccd09d96124b727
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: stable-hash@0.0.5-aa436dc3a9faabe78f0d9327d29e6beb308dda82
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: stop-iteration-iterator@1.1.0-17780963e4bcb4bd18b09581098bf5f0d739cdd8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: string.prototype.includes@2.0.1-4947245d063745d8eb1396119391e7b86fc9d4b0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: string.prototype.matchall@4.0.12-b138f7a0beeb7da12b38d8a5d9afc41aff51f362
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: string.prototype.repeat@1.0.0-40ed5f93aa24a1ea5792c114b6e74495dc2b470a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: string.prototype.trim@1.2.10-2c9a8382d6cb9ce39dee5965e7a9b2aa6cd809d0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: string.prototype.trimend@1.0.9-a2c54892e51970da2d710c3bf91c77dcfe2f6a30
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: string.prototype.trimstart@1.0.8-3d7839d69c1ac63d4a3db89a3161a4d9dd0bba14
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: strip-bom@3.0.0-390755d4a1e4e01e539f027e2e4c259286733fe6
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: strip-json-comments@3.1.1-71c938765bbac6ccfd444c8383314378e6138f54
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: styled-jsx@5.1.6-0d970ac3b43780c59df137018fa91febbccf4faa
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: supports-color@7.2.0-3494afb189a584a4053a61098a0abd0c0e7f475d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: supports-preserve-symlinks-flag@1.0.0-ec6665e7f3a6847c24dd6c4491717fc36b943fec
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: tailwindcss@4.1.14-5c9995e056fec94de5901d5ca6e93aa5672c36d9
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: tapable@2.3.0-a2c06fe2a9d715b96fcde8feb8e58e3cb7b46ab4
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: tar@7.5.1-bf22abad4c7019d23649f220bca2a9b08f816ee2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: three@0.169.0-a626d57b6f021bda370501fe03338a80087745ba
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: three-conic-polygon-geometry@2.1.2-4704dadbf37bb61f027b836998f421ea55aec5cb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: three-geojson-geometry@2.1.1-9311eed00e3fce47610309e935f0e343af27522f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: three-globe@2.44.1-0ce9f004b6b24b68ee55dd37450a4b06cc52498d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: three-render-objects@1.40.4-d593889b322ba4639376e8c1bdea3886c4c5bc80
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: three-slippy-map-globe@1.0.3-22bbe92f6ecc5c195d23b71e57d879eaf0b7461d
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: tinycolor2@1.6.0-547a390248107b0796d3fed3abf3e0efa90232b2
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: tinyglobby@0.2.15-a330b97ffc1effc3bd4925e2091f33e5871d260b
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: fdir@6.5.0-e2e2c1e0d6771afee31a83094b7ee54a592906b3
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: picomatch@4.0.3-7446f1b59fbfbcf65317ede457f985ee00c10663
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: to-regex-range@5.0.1-6f5acf65a260d457c2f48723c16541e7f64c8546
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: topojson-client@3.1.0-f025ba73e5e500b95058cb43f04eb7c3227f0ef1
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: commander@2.20.3-6dfc314a3ca501bb1868d8bdaff396193ea519ab
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: tr46@0.0.3-dd8926a019c3f8aeade6a1c926217c366c8d7e49
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: ts-api-utils@2.1.0-390207d454cf3f8400739f399514b4833cba4d10
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: tsconfig-paths@3.15.0-b4ff03d7818901fae876d50fff92e5fe5dc8cf8f
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: tslib@2.8.1-2abbb957fd9e4f514d3b3b085e29242ca016aba8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: type-check@0.4.0-6c6e06de63c131f3b73f630ea676b95e1b620562
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: typed-array-buffer@1.0.3-bd86932d2ddbd5813dd2ef793f66e28530b10b00
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: typed-array-byte-length@1.0.3-062a4e81cc66c54dddd2cf98eab4b640f6b31c35
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: typed-array-byte-offset@1.0.4-8eb7e88f6e55177b210858b876e34b487e64d495
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: typed-array-length@1.0.7-c2a71e3047aea9dc6240aeb0374d380bd0272f9a
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: typescript@5.9.3-d08e4e988900961fad8102f335ce205d8c428756
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: unbox-primitive@1.1.0-9cedd5eaaa4b09dd09148cd7bd267158826874bb
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: undici-types@6.21.0-7f6ed48eb6caac0703aa2e0054ad5350d61bdc98
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: unrs-resolver@1.11.1-40946fda085176953947637883f66ed5783a66b8
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: uri-js@4.4.1-b90891a8914a87d849f8cf0568a86b5618318adc
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: webidl-conversions@3.0.1-2993ec3ad8b0183ead4e272527d8e1bac95dc0d0
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: whatwg-url@5.0.0-9ae638511a8dad0ed325172bc113f0fb2e27ab02
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: which@2.0.2-1c105be86a5a61fc37713b0ffd893f99cb10d221
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: which-boxed-primitive@1.1.1-c74c4ddc676cbf0078ca26824af70241bb7c0463
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: which-builtin-type@1.2.1-91196de00c482c1f794c7c6553197049216c8e58
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: which-collection@1.0.2-672bb88112343023604ef7cc72d10bf6d8622a96
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: which-typed-array@1.1.19-e02f9e4de16f5e02b4380e2de4ac52961ada377e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: word-wrap@1.2.5-14920c76c67bdad6f95f91ca3cb5d31ffbd25036
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: ws@8.18.3-6f5bc028473886beb7de1aba01eedb9028183231
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: yallist@5.0.0-333ed3818fc2c60acba6a5d225189dd432f7730e
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+detected invalid host(s) for package: yocto-queue@0.1.0-b9039cf1372bfd8825aa5d6f3f38026f06a28bee
+    expected: npmjs.org,registry.npmjs.org
+    actual: registry.npmjs.org
+
+[31m ✖ Error: security issues detected! 
+ [0m

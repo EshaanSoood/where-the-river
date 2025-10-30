@@ -1,0 +1,37 @@
+[
+  {
+    "name": "sharp",
+    "version": "0.34.4",
+    "path": "node_modules/sharp/package.json",
+    "scriptType": "install",
+    "script": "node install/check.js"
+  },
+  {
+    "name": "unrs-resolver",
+    "version": "1.11.1",
+    "path": "node_modules/unrs-resolver/package.json",
+    "scriptType": "postinstall",
+    "script": "napi-postinstall unrs-resolver 1.11.1 check"
+  },
+  {
+    "name": "@tailwindcss/oxide",
+    "version": "4.1.14",
+    "path": "node_modules/@tailwindcss/oxide/package.json",
+    "scriptType": "postinstall",
+    "script": "node ./scripts/install.js"
+  },
+  {
+    "name": "ljharb-monorepo-symlink-test",
+    "version": "0.0.0",
+    "path": "node_modules/resolve/test/resolver/multirepo/package.json",
+    "scriptType": "postinstall",
+    "script": "lerna bootstrap"
+  },
+  {
+    "name": "ljharb-monorepo-symlink-test",
+    "version": "0.0.0",
+    "path": "node_modules/eslint-plugin-react/node_modules/resolve/test/resolver/multirepo/package.json",
+    "scriptType": "postinstall",
+    "script": "lerna bootstrap"
+  }
+]
