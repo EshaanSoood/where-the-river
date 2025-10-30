@@ -308,7 +308,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     const json = await resp.json();
     return { nodes: json?.nodes || [], links: json?.links || [] };
   };
-  const fetchMeSafe = async (): Promise<{ id: string | null; name: string | null } | null> => {
+  const fetchMeSafe = async (): Promise<{ id: string; name: string | null } | null> => {
     try {
       const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || '';
       if (!guessedBase) return null;
@@ -317,9 +317,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       if (!resp.ok) return null;
       const j = await resp.json();
       const userId = j?.me?.id || null;
-      const ref = j?.me?.referral_code || j?.me?.ref_code_8 || null;
       const name = j?.me?.name || null;
-      return { id: userId || ref || null, name };
+      if (!userId) return null;
+      return { id: userId as string, name };
     } catch {
       return null;
     }
@@ -1244,8 +1244,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
         arcDashGap={0}
         arcDashAnimateTime={0}
         arcCircularResolution={arcResolution}
-        pointsData={useMemo(() => nodesData.map(n => ({ lat: n.lat, lng: n.lng, size: n.size, color: n.color })), [nodesData])}
-        pointAltitude={0.201}
+        pointsData={useMemo(() => nodesData.map(n => ({ lat: n.lat, lng: n.lng, size: n.size, color: n.color, id: n.id })), [nodesData])}
+        pointAltitude={(d: any) => {
+          const id = d?.id as string | undefined;
+          if (id && myIdRef.current && id === myIdRef.current) return 0.205;
+          if (id && myConnectionsRef.current.has(id)) return 0.203;
+          return 0.201;
+        }}
         pointRadius={useCallback((d: any) => (d?.size || 0.20) * zoomScale, [zoomScale])}
         pointColor={useCallback((d: any) => d?.color || 'rgba(255,255,255,0.95)', [])}
         pointsMerge={true}
@@ -1268,10 +1273,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
           <div
             key={`ux-${p.id}`}
             ref={(el) => { if (el) overlayRefs.current.set(p.id, el); else overlayRefs.current.delete(p.id); }}
-            style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 60, opacity: 0 }}
+            style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 200, opacity: 0 }}
             aria-hidden="true"
           >
-            <div className="font-seasons" style={{ position: 'absolute', left: '50%', top: 18, transform: 'translate(-50%, 0)', color: 'var(--ink, #e6e6e6)', fontSize: 12, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}>
+            <div
+              className="font-seasons"
+              style={{ position: 'absolute', left: '50%', top: '100%', transform: 'translate(-50%, 6px)', color: 'var(--ink, #e6e6e6)', fontSize: 12, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}
+            >
               {isMe ? (myFirstNameRef.current || '') : (p.name ? String(p.name).split(/\s+/)[0] || '' : '')}
             </div>
           </div>

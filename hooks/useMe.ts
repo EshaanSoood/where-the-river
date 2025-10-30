@@ -5,6 +5,7 @@ import { getSupabase } from "@/lib/supabaseClient";
 import { useUser } from "@/hooks/useUser";
 
 export type MeData = {
+  id: string | null;
   email: string;
   name: string | null;
   country_code: string | null;
@@ -58,9 +59,11 @@ export function useMe(): UseMeResult {
       const json = await resp.json();
       const m = json?.me as Partial<MeData> | undefined;
       if (!m) throw new Error("Malformed response");
+      const id = (m.id ?? null) as string | null;
       const referral_url = (m.referral_url ?? null) as string | null;
       const boats_total = typeof m.boats_total === "number" ? m.boats_total : 0;
       setMe({
+        id,
         email: String(m.email || ''),
         name: (m.name ?? null) as string | null,
         country_code: (m.country_code ?? null) as string | null,
@@ -73,6 +76,11 @@ export function useMe(): UseMeResult {
         referral_code: (m.referral_code ?? null) as string | null,
         referral_url,
       });
+      try {
+        if (typeof window !== 'undefined' && id) {
+          window.dispatchEvent(new CustomEvent('profile:revalidate', { detail: { source: 'useMe', hasId: true } }));
+        }
+      } catch {}
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
       setMe(null);
