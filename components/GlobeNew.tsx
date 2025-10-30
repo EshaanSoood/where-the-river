@@ -823,7 +823,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     };
   }, [enableIdentity, disableIdentity]);
 
-  const globeMaterial = useMemo(() => new THREE.MeshPhongMaterial({ color: '#a8c5cd', opacity: 0.6, transparent: true }), []);
+  const globeMaterial = useMemo(() => new THREE.MeshPhongMaterial({ color: '#1D7C87', opacity: 0.6, transparent: true }), []);
   useEffect(() => { try { (globeMaterial as any).toneMapped = false; } catch {} }, [globeMaterial]);
 
   const rendererConfig = useMemo(() => {
