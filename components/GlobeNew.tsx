@@ -6,6 +6,7 @@ import ReactGlobe from 'react-globe.gl';
 import * as THREE from 'three';
 import * as topojson from 'topojson-client';
 import { geoCentroid, geoBounds } from 'd3-geo';
+import { getSupabase } from '@/lib/supabaseClient';
 // GLB support (instantiate only in onGlobeReady)
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
@@ -313,7 +314,19 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || '';
       if (!guessedBase) return null;
       const base = guessedBase.replace(/\/$/, '');
-      const resp = await fetch(`${base}/api/me`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      try {
+        const supabase = getSupabase();
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess?.session?.access_token;
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {}
+      const resp = await fetch(`${base}/api/me`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({}),
+      });
       if (!resp.ok) return null;
       const j = await resp.json();
       const userId = j?.me?.id || null;
