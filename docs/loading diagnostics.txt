@@ -32,3 +32,5 @@ Recommended mitigation steps (no code applied yet):
 
 Next steps: align on the SSR approach, then implement the above mitigations systematically to restore acceptable first paint times.
 
+
+

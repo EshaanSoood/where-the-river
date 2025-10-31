@@ -1132,7 +1132,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     try {
       const src = boatTemplateRef.current!;
       const cloned = (cloneFnRef.current ? cloneFnRef.current(src) : src.clone(true)) as THREE.Object3D;
-      cloned.traverse((child: any) => { if (child.isMesh) { if (boatTemplateMaterialRef.current) child.material = boatTemplateMaterialRef.current; child.castShadow = false; child.receiveShadow = false; } });
+      cloned.traverse((child: any) => {
+        if (child.isMesh) {
+          if (boatTemplateMaterialRef.current) child.material = boatTemplateMaterialRef.current;
+          child.castShadow = false;
+          child.receiveShadow = false;
+        }
+      });
       cloned.scale.set(6, 6, 6);
       // Initial placement & orientation at t=0 for immediate visibility
       const pos0 = curve.getPointAt(0);
@@ -1145,13 +1151,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const upAxis = pos0.clone().normalize();
       cloned.rotateOnWorldAxis(upAxis, Math.PI / 2);
       // Rotate boat 90° on X-axis so it sails forward instead of sideways
-      cloned.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+      cloned.rotateOnWorldAxis(new THREE.Vector3(0, 0, 0), Math.PI / 2);
       // Draw above arcs: high render order + disable depth test on materials
       (cloned as any).traverse?.((child: any) => {
         if (child.isMesh) {
           child.renderOrder = 9999;
           if (child.material) {
-            child.material.depthTest = false;
+            child.material.depthTest = true;
             child.material.depthWrite = false;
           }
         }
@@ -1183,11 +1189,11 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const upAxis = pos0.clone().normalize();
       mesh.rotateOnWorldAxis(upAxis, Math.PI / 2);
       // Rotate boat 90° on X-axis so it sails forward instead of sideways
-      mesh.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+      mesh.rotateOnWorldAxis(new THREE.Vector3(0, 0, 0), Math.PI / 2);
       // Draw above arcs: high render order + disable depth test
       mesh.renderOrder = 9999;
       if (mesh.material) {
-        (mesh.material as any).depthTest = false;
+        (mesh.material as any).depthTest = true;
         (mesh.material as any).depthWrite = false;
       }
       if (boatsRef.current.length >= MAX_BOATS) {
