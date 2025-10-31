@@ -48,7 +48,10 @@ export async function POST(req: Request) {
     
     let authUser: AuthUserRow | null = null;
     try {
-      const { data: { users }, error: adminErr } = await supabaseServer.auth.admin.listUsers();
+      const { data: { users }, error: adminErr } = await supabaseServer.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
       if (adminErr) throw adminErr;
       // Find user by email (listUsers doesn't support filters, so search in memory)
       authUser = (users && users.length > 0) 

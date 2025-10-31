@@ -1158,7 +1158,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
           child.renderOrder = 9999;
           if (child.material) {
             child.material.depthTest = true;
-            child.material.depthWrite = false;
+            child.material.depthWrite = true;
           }
         }
       });
@@ -1194,7 +1194,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       mesh.renderOrder = 9999;
       if (mesh.material) {
         (mesh.material as any).depthTest = true;
-        (mesh.material as any).depthWrite = false;
+        (mesh.material as any).depthWrite = true;
       }
       if (boatsRef.current.length >= MAX_BOATS) {
         const guestIndex = boatsRef.current.findIndex(b => b.type === 'guest');
