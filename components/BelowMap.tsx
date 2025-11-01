@@ -1044,19 +1044,26 @@ export default function BelowMap({ initialInviter, initialGlobeSnapshot }: Below
                         try {
                           const supabase = getSupabase();
                           const emailNorm = email.trim().toLowerCase();
+                          const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
                           const codeParam2 = inviterCode ? `?ref=${encodeURIComponent(inviterCode)}` : '';
                           const redirectTo2 = (typeof window !== 'undefined') ? `${window.location.origin}/auth/callback${codeParam2}` : undefined;
+                          const sanitizedRefCode = (() => {
+                            const code = inviterCode || '';
+                            const match = code.match(/(\d{6,12})/);
+                            return match ? match[1] : '';
+                          })();
                           const { error: signUpErr } = await supabase.auth.signInWithOtp({
                             email: emailNorm,
                             options: {
                               shouldCreateUser: true,
                               data: {
-                                name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+                                name: fullName,
                                 first_name: firstName.trim(),
                                 last_name: lastName.trim(),
                                 country_code: country,
                                 boat_color: boatColor,
                                 message: favoriteSong,
+                                referred_by: sanitizedRefCode,
                               },
                               emailRedirectTo: redirectTo2,
                             },

@@ -1438,12 +1438,12 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
           <div
             key={`ux-${p.id}`}
             ref={(el) => { if (el) overlayRefs.current.set(p.id, el); else overlayRefs.current.delete(p.id); }}
-            style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 200, opacity: 0 }}
+            style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 1200, opacity: 0, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }}
             aria-hidden="true"
           >
             <div
               className="font-seasons"
-              style={{ position: 'absolute', left: '50%', top: '100%', transform: 'translate(-50%, 6px)', color: 'var(--ink, #e6e6e6)', fontSize: 12, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}
+              style={{ position: 'absolute', left: '50%', top: '-10px', transform: 'translate(-50%, -100%)', color: 'rgba(248, 249, 250, 0.98)', fontSize: 12, fontWeight: 600, textShadow: '0 1px 3px rgba(0,0,0,0.6)', background: 'rgba(11, 13, 26, 0.75)', padding: '2px 6px', borderRadius: 6, whiteSpace: 'nowrap' }}
             >
               {isMe ? (myFirstNameRef.current || '') : (p.name ? String(p.name).split(/\s+/)[0] || '' : '')}
             </div>
