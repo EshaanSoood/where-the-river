@@ -448,7 +448,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const boatTemplateRef = useRef<THREE.Object3D | null>(null);
   const boatTemplateMaterialRef = useRef<THREE.Material | null>(null);
   const glbLoadedRef = useRef<boolean>(false);
-  const boatsRef = useRef<{ id: number; mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; startTime: number; duration: number; type: BoatType; arcKey: string; isPlaceholder?: boolean }[]>([]);
+  const boatsRef = useRef<{ id: number; mesh: THREE.Object3D; curve: THREE.CatmullRomCurve3; startTime: number; duration: number; type: BoatType; arcKey: string }[]>([]);
   const boatArcKeysRef = useRef<Set<string>>(new Set());
   const pendingSpawnsRef = useRef<{ curve: THREE.CatmullRomCurve3; arcKey: string; type: BoatType }[]>([]);
   const drainingPendingRef = useRef<boolean>(false);
@@ -461,16 +461,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const drainPendingSpawns = () => {
     if (drainingPendingRef.current) return;
     if (!pendingSpawnsRef.current.length) return;
+    if (!glbLoadedRef.current || !boatTemplateRef.current) return;
     drainingPendingRef.current = true;
     try {
       const queue = pendingSpawnsRef.current.splice(0);
       queue.forEach(({ curve, arcKey, type }) => {
         try {
-          if (!safeProfileRef.current && glbLoadedRef.current && boatTemplateRef.current) {
-            spawnBoatFromCurve(curve, arcKey, type);
-          } else {
-            spawnProceduralBoatFromCurve(curve, arcKey, type);
-          }
+          spawnBoatFromCurve(curve, arcKey, type);
         } catch (err) {
           unregisterBoatKey(arcKey, type);
           console.error('[GlobeNew] pending boat spawn failed', err);
@@ -804,7 +801,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     return waypoints;
   };
 
-  const removeBoat = useCallback((boat: { mesh: THREE.Mesh; arcKey: string; type: BoatType } | undefined) => {
+  const removeBoat = useCallback((boat: { mesh: THREE.Object3D; arcKey: string; type: BoatType } | undefined) => {
     if (!boat) return;
     try {
       const scene = sceneRef.current;
@@ -1113,20 +1110,11 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     };
   }, []);
 
-  const proceduralBoatMaterialRef = useRef<THREE.Material | null>(null);
-  const createProceduralBoat = () => {
-    const geom = new THREE.ConeGeometry(2.5, 6, 3);
-    if (!proceduralBoatMaterialRef.current) proceduralBoatMaterialRef.current = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const mesh = new THREE.Mesh(geom, proceduralBoatMaterialRef.current);
-    mesh.castShadow = false; (mesh as any).receiveShadow = false;
-    return mesh as THREE.Mesh;
-  };
-
   const spawnBoatAlongArc = (startLat: number, startLng: number, endLat: number, endLng: number, type: BoatType, arcKey?: string) => {
     let key = '';
     try {
       const globe = globeEl.current; const scene = sceneRef.current || (globe ? globe.scene() : null); if (!globe || !scene) return;
-      const ARC_ALTITUDE = 0.2; const BOAT_PATH_ALTITUDE = 0.07; const GLOBE_RADIUS = 100;
+      const ARC_ALTITUDE = 0.07; const BOAT_PATH_ALTITUDE = ARC_ALTITUDE; const GLOBE_RADIUS = 100;
       const sC = globe.getCoords(startLat, startLng); const eC = globe.getCoords(endLat, endLng); if (!sC || !eC) return;
       const s = new THREE.Vector3(sC.x, sC.y, sC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
       const e = new THREE.Vector3(eC.x, eC.y, eC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
@@ -1135,7 +1123,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       key = arcKey || `${startLat},${startLng}->${endLat},${endLng}`;
       if (isBoatRegistered(key, type)) return;
       registerBoatKey(key, type);
-      if (!boatTemplateRef.current || safeProfileRef.current || !glbLoadedRef.current) {
+      if (!boatTemplateRef.current || !glbLoadedRef.current) {
         pendingSpawnsRef.current.push({ curve, arcKey: key, type });
         drainPendingSpawns();
         return;
@@ -1163,15 +1151,11 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       // Initial placement & orientation at t=0 for immediate visibility
       const pos0 = curve.getPointAt(0);
       cloned.position.copy(pos0);
-      // Offset boat above arcs (arcs are at 1.07x, boats at 1.10x to ensure z-ordering)
-      cloned.position.multiplyScalar(1.10);
       const tan0 = curve.getTangentAt(0);
       cloned.up.copy(pos0).normalize();
-      cloned.lookAt(pos0.clone().add(tan0));
-      const upAxis = pos0.clone().normalize();
-      cloned.rotateOnWorldAxis(upAxis, Math.PI / 2);
-      // Rotate boat 90° on X-axis so it sails forward instead of sideways
-      cloned.rotateOnWorldAxis(new THREE.Vector3(0, 0, 0), Math.PI / 2);
+      const forward0 = new THREE.Vector3().copy(tan0).normalize();
+      const lookTarget0 = new THREE.Vector3().copy(cloned.position).add(forward0);
+      cloned.lookAt(lookTarget0);
       // Draw above arcs: high render order + disable depth test on materials
       (cloned as any).traverse?.((child: any) => {
         if (child.isMesh) {
@@ -1190,41 +1174,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         removeBoat(removed);
       }
       registerBoatKey(arcKey, type);
-      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned as unknown as THREE.Mesh, curve, arcKey, startTime: performance.now(), duration: 15000, type, isPlaceholder: false });
+      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned, curve, arcKey, startTime: performance.now(), duration: 15000, type });
       scene.add(cloned);
-    } catch {}
-  };
-
-  const spawnProceduralBoatFromCurve = (curve: THREE.CatmullRomCurve3, arcKey: string, type: BoatType) => {
-    const scene = sceneRef.current; if (!scene) return;
-    try {
-      const mesh = createProceduralBoat();
-      const pos0 = curve.getPointAt(0);
-      const tan0 = curve.getTangentAt(0);
-      mesh.position.copy(pos0);
-      // Offset boat slightly away from globe center (radially outward) to keep it above arcs/land
-      mesh.position.multiplyScalar(1.10);
-      (mesh as any).up.copy(pos0).normalize();
-      (mesh as any).lookAt(pos0.clone().add(tan0));
-      const upAxis = pos0.clone().normalize();
-      mesh.rotateOnWorldAxis(upAxis, Math.PI / 2);
-      // Rotate boat 90° on X-axis so it sails forward instead of sideways
-      mesh.rotateOnWorldAxis(new THREE.Vector3(0, 0, 0), Math.PI / 2);
-      // Draw above arcs: high render order + disable depth test
-      mesh.renderOrder = 9999;
-      if (mesh.material) {
-        (mesh.material as any).depthTest = true;
-        (mesh.material as any).depthWrite = true;
-      }
-      if (boatsRef.current.length >= MAX_BOATS) {
-        const guestIndex = boatsRef.current.findIndex(b => b.type === 'guest');
-        const removeIndex = guestIndex !== -1 ? guestIndex : 0;
-        const [removed] = boatsRef.current.splice(removeIndex, 1);
-        removeBoat(removed);
-      }
-      registerBoatKey(arcKey, type);
-      boatsRef.current.push({ id: Date.now() + Math.random(), mesh, curve, arcKey, startTime: performance.now(), duration: 15000, type, isPlaceholder: true });
-      scene.add(mesh);
     } catch {}
   };
 
