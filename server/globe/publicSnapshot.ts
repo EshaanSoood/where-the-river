@@ -36,9 +36,10 @@ type AdminClient = {
   };
 };
 
-const SNAPSHOT_TTL_MS = 60 * 1000;
+const SNAPSHOT_TTL_MS = 10 * 60 * 1000;
 
 let cachedSnapshot: { filter: "all" | "30d" | "7d"; data: PublicGlobeSnapshot; expiresAt: number } | null = null;
+let inflightBuild: Promise<PublicGlobeSnapshot> | null = null;
 
 async function buildSnapshot(filter: "all" | "30d" | "7d" = "all"): Promise<PublicGlobeSnapshot> {
   const since = filter === "all" ? null : new Date(Date.now() - (filter === "30d" ? 30 : 7) * 24 * 3600 * 1000);
@@ -120,9 +121,25 @@ export async function getPublicGlobeSnapshot(filter: "all" | "30d" | "7d" = "all
   if (cachedSnapshot && cachedSnapshot.filter === filter && cachedSnapshot.expiresAt > now) {
     return cachedSnapshot.data;
   }
-  const data = await buildSnapshot(filter);
-  cachedSnapshot = { filter, data, expiresAt: now + SNAPSHOT_TTL_MS };
-  return data;
+  if (inflightBuild) {
+    return inflightBuild;
+  }
+  inflightBuild = buildSnapshot(filter)
+    .then((data) => {
+      cachedSnapshot = { filter, data, expiresAt: Date.now() + SNAPSHOT_TTL_MS };
+      return data;
+    })
+    .finally(() => {
+      inflightBuild = null;
+    });
+  return inflightBuild;
+}
+
+export function getCachedGlobeSnapshot(filter: "all" | "30d" | "7d" = "all") {
+  if (cachedSnapshot && cachedSnapshot.filter === filter && cachedSnapshot.expiresAt > Date.now()) {
+    return cachedSnapshot;
+  }
+  return null;
 }
 
 

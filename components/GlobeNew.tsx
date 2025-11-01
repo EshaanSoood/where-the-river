@@ -85,8 +85,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const DARK_TEAL = '#6D2B79';
   const AQUA = '#6E0E0A';
   const NEAR_WHITE = 'rgba(255,255,255,0.95)';
-  const ARC_ENDPOINT_ALTITUDE = 0.01;
-  const ARC_BASE_ALTITUDE = 0.05;
+  const ARC_ENDPOINT_ALTITUDE = 0.06;
+  const ARC_BASE_ALTITUDE = 0.07;
   const ARC_AUTO_SCALE = 0.25;
   const MY_NODE_ALTITUDE = 0.255;
   const CONNECTION_NODE_ALTITUDE = 0.253;
@@ -455,7 +455,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const boatTemplateRef = useRef<THREE.Object3D | null>(null);
   const boatTemplateMaterialRef = useRef<THREE.Material | null>(null);
   const glbLoadedRef = useRef<boolean>(false);
-  const boatsRef = useRef<{ id: number; mesh: THREE.Object3D; curve: THREE.CatmullRomCurve3; startTime: number; duration: number; type: BoatType; arcKey: string }[]>([]);
+  const boatsRef = useRef<{ id: number; mesh: THREE.Object3D; curve: THREE.CatmullRomCurve3; startTime: number; duration: number; type: BoatType; arcKey: string; materials: THREE.Material[] }[]>([]);
   const boatArcKeysRef = useRef<Set<string>>(new Set());
   const pendingSpawnsRef = useRef<{ curve: THREE.CatmullRomCurve3; arcKey: string; type: BoatType }[]>([]);
   const drainingPendingRef = useRef<boolean>(false);
@@ -841,7 +841,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     return waypoints;
   };
 
-  const removeBoat = useCallback((boat: { mesh: THREE.Object3D; arcKey: string; type: BoatType } | undefined) => {
+  const removeBoat = useCallback((boat: { mesh: THREE.Object3D; arcKey: string; type: BoatType; materials?: THREE.Material[] } | undefined) => {
     if (!boat) return;
     try {
       const scene = sceneRef.current;
@@ -853,6 +853,15 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
           if (child.material?.dispose) child.material.dispose();
         }
       });
+      if (boat.materials) {
+        boat.materials.forEach((mat) => {
+          try {
+            if (typeof mat.dispose === 'function') {
+              mat.dispose();
+            }
+          } catch {}
+        });
+      }
     } catch {}
   }, [unregisterBoatKey]);
 
@@ -1128,10 +1137,25 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
           } catch {}
           boat.mesh.position.copy(pos);
           // Offset boat slightly away from globe center (radially outward) to keep it above arcs/land
-          boat.mesh.position.multiplyScalar(1.10);
+          boat.mesh.position.multiplyScalar(1.02);
           boat.curve.getTangentAt(t, tan);
           boat.mesh.up.copy(pos).normalize();
           boat.mesh.lookAt(pos.clone().add(tan));
+
+          const fadeStart = 0.9;
+          const fade = t < fadeStart ? 1 : Math.max(0, 1 - (t - fadeStart) / (1 - fadeStart));
+          if (boat.materials && boat.materials.length) {
+            boat.materials.forEach((mat) => {
+              if (typeof (mat as any).opacity === 'number') {
+                const material = mat as any;
+                if (material.opacity !== fade) {
+                  material.opacity = fade;
+                  material.transparent = true;
+                  material.needsUpdate = true;
+                }
+              }
+            });
+          }
         });
         // Keep overlay labels pinned to nodes every frame
         scheduleOverlayUpdate();
@@ -1168,7 +1192,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const angle = baseStart.angleTo(baseEnd);
       const distanceAltitude = (angle / 2) * ARC_AUTO_SCALE;
       const arcAltitude = ARC_BASE_ALTITUDE + distanceAltitude;
-      const boatPathAltitude = arcAltitude + (type === 'user' ? 0.015 : 0.03);
+      const boatPathAltitude = arcAltitude + (type === 'user' ? 0.008 : 0.016);
       const boatRadius = GLOBE_RADIUS * (1 + boatPathAltitude);
       const s = baseStart.clone().multiplyScalar(boatRadius);
       const e = baseEnd.clone().multiplyScalar(boatRadius);
@@ -1204,19 +1228,34 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const src = boatTemplateRef.current!;
       const cloned = (cloneFnRef.current ? cloneFnRef.current(src) : src.clone(true)) as THREE.Object3D;
       const userBoatColor = type === 'user' ? (myBoatColorRef.current || '').trim() : '';
+      const materials: THREE.Material[] = [];
       cloned.traverse((child: any) => {
         if (child.isMesh) {
-          if (boatTemplateMaterialRef.current) child.material = boatTemplateMaterialRef.current;
+          if (boatTemplateMaterialRef.current) {
+            try {
+              child.material = boatTemplateMaterialRef.current.clone();
+            } catch {
+              child.material = boatTemplateMaterialRef.current;
+            }
+          }
           child.castShadow = false;
           child.receiveShadow = false;
           if (userBoatColor) {
-            const materials = Array.isArray(child.material) ? child.material : [child.material];
-            materials.forEach((mat: any) => {
+            const matsWithColor = Array.isArray(child.material) ? child.material : [child.material];
+            matsWithColor.forEach((mat: any) => {
               if (mat?.color && typeof mat.color.set === 'function') {
                 try { mat.color.set(userBoatColor); } catch {}
               }
             });
           }
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((mat: any) => {
+            if (mat && typeof mat === 'object') {
+              mat.transparent = true;
+              mat.opacity = 1;
+              materials.push(mat as THREE.Material);
+            }
+          });
         }
       });
       cloned.scale.set(6, 6, 6);
@@ -1246,7 +1285,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         removeBoat(removed);
       }
       registerBoatKey(arcKey, type);
-      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned, curve, arcKey, startTime: performance.now(), duration: 15000, type });
+      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned, curve, arcKey, startTime: performance.now(), duration: 15000, type, materials });
       scene.add(cloned);
     } catch {}
   };
