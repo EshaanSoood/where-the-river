@@ -1114,7 +1114,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     let key = '';
     try {
       const globe = globeEl.current; const scene = sceneRef.current || (globe ? globe.scene() : null); if (!globe || !scene) return;
-      const ARC_ALTITUDE = 0.07; const BOAT_PATH_ALTITUDE = ARC_ALTITUDE; const GLOBE_RADIUS = 100;
+      const ARC_ALTITUDE = 0.1; const BOAT_PATH_ALTITUDE = type === 'user' ? ARC_ALTITUDE : 0.55; const GLOBE_RADIUS = 100;
       const sC = globe.getCoords(startLat, startLng); const eC = globe.getCoords(endLat, endLng); if (!sC || !eC) return;
       const s = new THREE.Vector3(sC.x, sC.y, sC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
       const e = new THREE.Vector3(eC.x, eC.y, eC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
@@ -1393,8 +1393,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
             aria-hidden="true"
           >
             <div
-              className="font-seasons"
-              style={{ position: 'absolute', left: '50%', top: '-10px', transform: 'translate(-50%, -100%)', color: 'rgba(248, 249, 250, 0.98)', fontSize: 12, fontWeight: 600, textShadow: '0 1px 3px rgba(0,0,0,0.6)', background: 'rgba(11, 13, 26, 0.75)', padding: '2px 6px', borderRadius: 6, whiteSpace: 'nowrap' }}
+              className={isMe ? 'font-seasons' : undefined}
+              style={{ position: 'absolute', left: '50%', top: '6px', transform: 'translate(-50%, 0)', color: isMe ? 'var(--white-soft)' : 'rgba(248, 249, 250, 0.95)', fontSize: 12, fontWeight: 600, textShadow: '0 1px 3px rgba(0,0,0,0.6)', background: 'rgba(11, 13, 26, 0.75)', padding: '2px 6px', borderRadius: 6, whiteSpace: 'nowrap' }}
             >
               {isMe ? (myFirstNameRef.current || '') : (p.name ? String(p.name).split(/\s+/)[0] || '' : '')}
             </div>
