@@ -1114,11 +1114,14 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     let key = '';
     try {
       const globe = globeEl.current; const scene = sceneRef.current || (globe ? globe.scene() : null); if (!globe || !scene) return;
-      const ARC_ALTITUDE = 0.1; const BOAT_PATH_ALTITUDE = type === 'user' ? ARC_ALTITUDE : 0.55; const GLOBE_RADIUS = 100;
+      const ARC_ALTITUDE = 0.05; const BOAT_PATH_ALTITUDE = type === 'user' ? ARC_ALTITUDE : 0.07; const GLOBE_RADIUS = 100;
       const sC = globe.getCoords(startLat, startLng); const eC = globe.getCoords(endLat, endLng); if (!sC || !eC) return;
-      const s = new THREE.Vector3(sC.x, sC.y, sC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
-      const e = new THREE.Vector3(eC.x, eC.y, eC.z).normalize().multiplyScalar(GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE));
-      const mid = new THREE.Vector3().addVectors(s, e).multiplyScalar(0.5).normalize().multiplyScalar(GLOBE_RADIUS * (1 + ARC_ALTITUDE));
+      const baseStart = new THREE.Vector3(sC.x, sC.y, sC.z).normalize();
+      const baseEnd = new THREE.Vector3(eC.x, eC.y, eC.z).normalize();
+      const boatRadius = GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE);
+      const s = baseStart.clone().multiplyScalar(boatRadius);
+      const e = baseEnd.clone().multiplyScalar(boatRadius);
+      const mid = baseStart.clone().add(baseEnd).normalize().multiplyScalar(boatRadius);
       const curve = new THREE.CatmullRomCurve3([s, mid, e]);
       key = arcKey || `${startLat},${startLng}->${endLat},${endLng}`;
       if (isBoatRegistered(key, type)) return;
@@ -1140,11 +1143,20 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     try {
       const src = boatTemplateRef.current!;
       const cloned = (cloneFnRef.current ? cloneFnRef.current(src) : src.clone(true)) as THREE.Object3D;
+      const userBoatColor = type === 'user' ? (myBoatColorRef.current || '').trim() : '';
       cloned.traverse((child: any) => {
         if (child.isMesh) {
           if (boatTemplateMaterialRef.current) child.material = boatTemplateMaterialRef.current;
           child.castShadow = false;
           child.receiveShadow = false;
+          if (userBoatColor) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((mat: any) => {
+              if (mat?.color && typeof mat.color.set === 'function') {
+                try { mat.color.set(userBoatColor); } catch {}
+              }
+            });
+          }
         }
       });
       cloned.scale.set(6, 6, 6);
@@ -1353,9 +1365,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         atmosphereColor="#66c2ff"
         atmosphereAltitude={0.25}
         arcsData={arcsData}
-        arcColor={useCallback((d: any) => { try { const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)'; const midLat = (d.startLat + d.endLat) / 2; const midLng = (d.startLng + d.endLng) / 2; const c = globe.getCoords(midLat, midLng); if (!c) return 'rgba(102, 194, 255, 0.8)'; const cam = globe.camera(); const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); const isPri = !!d.primary; const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); const basePrimary = isUserArc ? '200, 255, 255' : '140, 220, 255'; const baseSecondary = '102, 194, 255'; const alpha = dot >= 0 ? (isPri ? (isUserArc ? 0.99 : 0.98) : 0.64) : (isPri ? 0.42 : 0.10); const base = isPri ? basePrimary : baseSecondary; return `rgba(${base}, ${alpha})`; } catch { return 'rgba(102, 194, 255, 0.8)'; } }, [])}
+        arcColor={useCallback((d: any) => { try { const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)'; const midLat = (d.startLat + d.endLat) / 2; const midLng = (d.startLng + d.endLng) / 2; const c = globe.getCoords(midLat, midLng); if (!c) return 'rgba(102, 194, 255, 0.8)'; const cam = globe.camera(); const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); const isPri = !!d.primary; const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); const basePrimary = isUserArc ? '200, 255, 255' : '140, 220, 255'; const baseSecondary = '102, 194, 255'; const alpha = dot >= 0 ? (isPri ? (isUserArc ? 0.99 : 0.98) : 0.64) : (isPri ? 0.42 : 0.10); const adjustedAlpha = Math.max(0, alpha * 0.75); const base = isPri ? basePrimary : baseSecondary; return `rgba(${base}, ${adjustedAlpha})`; } catch { return 'rgba(102, 194, 255, 0.8)'; } }, [])}
         arcStroke={useCallback((d: any) => { const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); return isUserArc ? 3.2 : (d?.primary ? 2.2 : 2); }, [])}
-        arcAltitude={0.5}
+        arcAltitude={0.12}
         arcDashLength={1}
         arcDashGap={0}
         arcDashAnimateTime={0}
@@ -1363,9 +1375,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         pointsData={useMemo(() => nodesData.map(n => ({ lat: n.lat, lng: n.lng, size: n.size, color: n.color, id: n.id })), [nodesData])}
         pointAltitude={(d: any) => {
           const id = d?.id as string | undefined;
-          if (id && myIdRef.current && id === myIdRef.current) return 0.205;
-          if (id && myConnectionsRef.current.has(id)) return 0.203;
-          return 0.201;
+          if (id && myIdRef.current && id === myIdRef.current) return 0.255;
+          if (id && myConnectionsRef.current.has(id)) return 0.253;
+          return 0.251;
         }}
         pointRadius={useCallback((d: any) => (d?.size || 0.20) * zoomScale, [zoomScale])}
         pointColor={useCallback((d: any) => d?.color || 'rgba(255,255,255,0.95)', [])}
