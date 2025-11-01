@@ -41,6 +41,7 @@ interface NodeData {
   color: string;
   countryCode?: string;
   name?: string | null;
+  boatColor?: string | null;
 }
 
 interface ArcData {
@@ -301,21 +302,31 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     setSrCountries(rebuildSrCountries(nodeMap));
   }, []);
 
-  const enableIdentity = useCallback((identityId: string, firstName?: string | null) => {
+  const enableIdentity = useCallback((identityId: string, options?: { firstName?: string | null; boatColor?: string | null }) => {
     const nodeMap = nodeMapCacheRef.current;
+    const rawColor = options?.boatColor ? String(options.boatColor).trim() : '';
+    const normalizedColor = rawColor || null;
     if (!nodeMap || nodeMap.size === 0) {
       pendingIdentityRef.current = identityId;
+      pendingIdentityColorRef.current = normalizedColor;
       identityIdRef.current = identityId;
+      if (normalizedColor) myBoatColorRef.current = normalizedColor;
       return;
     }
     pendingIdentityRef.current = null;
+    pendingIdentityColorRef.current = null;
     identityIdRef.current = identityId;
     identityReadyRef.current = true;
     myIdRef.current = identityId;
     isLoggedInRef.current = true;
 
-    if (firstName && firstName.trim()) {
-      myFirstNameRef.current = firstName.trim().split(/\s+/)[0] || '';
+    if (normalizedColor) {
+      myBoatColorRef.current = normalizedColor;
+    }
+
+    const incomingFirstName = options?.firstName;
+    if (incomingFirstName && incomingFirstName.trim()) {
+      myFirstNameRef.current = incomingFirstName.trim().split(/\s+/)[0] || '';
     } else {
       const selfNode = nodeMap.get(identityId);
       if (selfNode?.name) {
@@ -333,9 +344,11 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     myChainRef.current = chain;
 
     resetNodeStyles(nodeMap);
+    const preferredColor = (myBoatColorRef.current && myBoatColorRef.current.trim()) || null;
     nodeMap.forEach((node) => {
       if (node.id === identityId) {
-        node.color = DARK_TEAL;
+        node.color = preferredColor || DARK_TEAL;
+        node.boatColor = preferredColor || DARK_TEAL;
         node.size = 0.35;
       } else if (connections.has(node.id)) {
         node.color = AQUA;
@@ -369,8 +382,10 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     identityReadyRef.current = false;
     identityIdRef.current = null;
     pendingIdentityRef.current = null;
+    pendingIdentityColorRef.current = null;
     myIdRef.current = null;
     myFirstNameRef.current = '';
+    myBoatColorRef.current = null;
     myConnectionsRef.current = new Set();
     myChainRef.current = new Set();
     isLoggedInRef.current = false;
@@ -388,6 +403,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const overlayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const myIdRef = useRef<string | null>(null);
   const myFirstNameRef = useRef<string>("");
+  const myBoatColorRef = useRef<string | null>(null);
   const myConnectionsRef = useRef<Set<string>>(new Set());
   const myChainRef = useRef<Set<string>>(new Set());
   const guestArcCursorRef = useRef<number>(0);
@@ -400,6 +416,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const identityIdRef = useRef<string | null>(null);
   const identityReadyRef = useRef<boolean>(false);
   const pendingIdentityRef = useRef<string | null>(null);
+  const pendingIdentityColorRef = useRef<string | null>(null);
   const rotateIntervalRef = useRef<number | null>(null);
   const isLoggedInRef = useRef<boolean>(false);
   const countryCentroidsRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
@@ -657,7 +674,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     const json = await resp.json();
     return { nodes: json?.nodes || [], links: json?.links || [] };
   };
-  const fetchMeSafe = async (shouldFetchIdentity: boolean): Promise<{ id: string; name: string | null } | null> => {
+  const fetchMeSafe = async (shouldFetchIdentity: boolean): Promise<{ id: string; name: string | null; boatColor: string | null } | null> => {
     if (!shouldFetchIdentity) return null;
     try {
       const guessedBase = (typeof window !== 'undefined' ? window.location.origin : '') || '';
@@ -681,8 +698,10 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const j = await resp.json();
       const userId = j?.me?.id || null;
       const name = j?.me?.name || null;
+      const boatColorRaw = j?.me?.boat_color;
+      const boatColor = typeof boatColorRaw === 'string' && boatColorRaw.trim() ? boatColorRaw.trim() : null;
       if (!userId) return null;
-      return { id: userId as string, name };
+      return { id: userId as string, name, boatColor };
     } catch {
       return null;
     }
@@ -828,8 +847,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const detail = (event as CustomEvent).detail || {};
       const id = typeof detail.id === 'string' ? detail.id : undefined;
       const name = typeof detail.name === 'string' ? detail.name : undefined;
+      const boatColor = typeof detail.boatColor === 'string' ? detail.boatColor : undefined;
       if (id) {
-        enableIdentity(id, name ?? null);
+        enableIdentity(id, { firstName: name ?? null, boatColor: boatColor ?? null });
       }
     };
     const onLogout = () => {
@@ -1239,7 +1259,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   }, [isBoatRegistered, spawnBoatAlongArc]);
   ensureGuestBoatsRef.current = ensureGuestBoats;
 
-  const hydrateGraph = useCallback((payload: { nodes: GlobeNode[]; links: GlobeLink[] }, identity?: { id: string | null; name: string | null }) => {
+  const hydrateGraph = useCallback((payload: { nodes: GlobeNode[]; links: GlobeLink[] }, identity?: { id: string | null; name: string | null; boatColor?: string | null }) => {
     try {
       const { nodes, links } = payload;
 
@@ -1263,7 +1283,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         const name = getCountryNameFromIso2(cc);
         const spread = getCountrySpreadDeg(name, base[0]);
         const [lat, lng] = seededJitterAround(base[0], base[1], n.id, spread);
-        nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: NEAR_WHITE, countryCode: cc, name: n.name || null });
+        nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: NEAR_WHITE, countryCode: cc, name: n.name || null, boatColor: null });
       });
       nodeMapCacheRef.current = nodeMap;
 
@@ -1272,6 +1292,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       myIdRef.current = null;
       isLoggedInRef.current = false;
       myFirstNameRef.current = '';
+      myBoatColorRef.current = null;
       myConnectionsRef.current = new Set();
       myChainRef.current = new Set();
 
@@ -1280,9 +1301,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
 
       const candidateId = identity?.id || null;
       if (candidateId) {
-        enableIdentity(candidateId, identity?.name || null);
+        enableIdentity(candidateId, { firstName: identity?.name || null, boatColor: identity?.boatColor || null });
       } else if (pendingIdentityRef.current) {
-        enableIdentity(pendingIdentityRef.current);
+        enableIdentity(pendingIdentityRef.current, { boatColor: pendingIdentityColorRef.current });
       } else {
         identityReadyRef.current = false;
         identityIdRef.current = null;
