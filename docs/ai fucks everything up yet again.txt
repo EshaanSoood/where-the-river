@@ -1,0 +1,99 @@
+Dream River – Postmortem After Commit 9eca4d9
+================================================
+
+Context
+-------
+- Restored workspace to commit `9eca4d97e101f60718253b0664f37312e0f5340a` and redeployed to Vercel: `https://riverflows-o1jfij28q-eshaans-projects-d91d58e1.vercel.app` (aliased to `https://riverflowseshaan.vercel.app`).
+- Compared the restored state against subsequent commits on `origin/main` (through `8a88ab8`) to understand why the later head “broke the app”.
+- All findings below are read-only diagnostics; no fixes applied beyond the rollback.
+
+Key Regressions Introduced After 9eca4d9
+----------------------------------------
+
+1. Logged-in users stopped getting boats on their own arcs when they had no chain data.
+   - Change: `spawnBoatsForIdentity` now falls back to the *entire* arc list when a user has no direct arcs.
+   - Effect: First two global arcs are treated as “user” arcs, so random strangers’ paths animate with the logged-in styling, confusing the overlay logic and accessibility narration.
+
+```438:465:components/GlobeNew.tsx
+    const myArcs = arcs.filter((arc) => arc.startId === identityId || arc.endId === identityId);
+    const candidateArcs = myArcs.length > 0 ? myArcs : arcs;
+
+    candidateArcs.slice(0, 2).forEach((arc, index) => {
+      const key = `user-arc-${arc.startId}->${arc.endId}-${index}`;
+      spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, 'user', key);
+    });
+```
+
+2. Color tokens regressed, erasing the “I am here” affordance.
+   - Change: `AQUA` was inadvertently set to the same hex as `DARK_TEAL`, and node reset now blindly trusts `node.boatColor`.
+   - Effect: Me and my direct connections render with the same plum tone; contrast in both the globe and screen-reader summary disappears.
+
+```83:101:components/GlobeNew.tsx
+  const DARK_TEAL = '#6D2B79';
+  const AQUA = '#6D2B79';
+  const NEAR_WHITE = 'rgba(255,255,255,0.95)';
+
+  const resetNodeStyles = (nodeMap: Map<string, NodeData>) => {
+    nodeMap.forEach((node) => {
+      node.color = node.boatColor || NEAR_WHITE;
+      node.size = 0.20;
+    });
+  };
+```
+
+3. Boats disappeared for every “safe profile” (prefers-reduced-motion / data saver / low-end hardware) visitor.
+   - Change: `drainPendingSpawns` now aborts unless the GLB asset is loaded *and* we are not in the safe profile.
+   - Previously the cone fallback ensured at least one boat rendered; now the queue never drains for these users, so no motion or visual feedback remains.
+
+```451:471:components/GlobeNew.tsx
+    const canUseGlb = !safeProfileRef.current && glbLoadedRef.current && boatTemplateRef.current;
+    if (!safeProfileRef.current && !canUseGlb) {
+      // Wait until the GLB template finishes loading so we can spawn real boats.
+      return;
+    }
+    drainingPendingRef.current = true;
+    try {
+      const queue = pendingSpawnsRef.current.splice(0);
+      queue.forEach(({ curve, arcKey, type }) => {
+        try {
+          spawnBoatFromCurve(curve, arcKey, type);
+        } catch (err) {
+          unregisterBoatKey(arcKey, type);
+          console.error('[GlobeNew] pending boat spawn failed', err);
+```
+
+4. Globe data went stale for signed-in users.
+   - Change: when `initialSnapshot` exists, the client never calls `/api/globe`; it reuses the cached snapshot forever.
+   - Combined with the new 60s CDN cache, logged-in viewers stopped seeing fresh joins or updated boat totals until a full reload after the cache expired.
+
+```1392:1413:components/GlobeNew.tsx
+        const shouldFetchIdentity = Boolean(userEmail);
+        const snapshot = initialSnapshot ?? (await fetchGlobeData('all'));
+        if (cancelled) return;
+        let identity: { id: string | null; name: string | null } | null = null;
+        if (shouldFetchIdentity) {
+          identity = await fetchMeSafe(true);
+          if (cancelled) return;
+        }
+        hydrateGraph({ nodes: snapshot.nodes, links: snapshot.links }, identity ?? undefined);
+```
+
+5. Safe-profile users also lose screen-reader narration accuracy.
+   - Because issues (1)–(3) alter the overlay and arc bookkeeping, the SR summaries (“Your connections”, “Countries”) are now populated with incorrect data: boats never spawn, identity arcs point to strangers, and color-based role tagging collapses.
+
+Additional Observations
+-----------------------
+- `/api/globe` caching now keys solely on cookie substring checks; if the Supabase cookies are unset due to first load, an authenticated fetch can still hit the edge cache before session cookies arrive.
+- Object pooling code introduced new states (`dataReadyRef`, `globeReadyRef`) that defer autorotation until both are true; when data fetch fails even once, `dataReadyRef` never flips back and the controls remain inert.
+- Extensive instrumentation and profiling blocks shipped alongside the regressions, so console noise masks the functional bugs during testing.
+
+Recommended Recovery Path
+-------------------------
+1. Reinstate the 9eca4d9 behaviour for `spawnBoatsForIdentity` (only use actual user arcs, keep guest fallback separate).
+2. Restore distinct color tokens (`DARK_TEAL` vs `AQUA`) and make `boatColor` opt-in rather than overriding defaults.
+3. Bring back a procedural / low-power boat fallback so safe-profile visitors still see motion cues.
+4. Always fetch fresh `/api/globe` data for logged-in sessions—even when an SSR snapshot exists—and bypass the CDN cache whenever auth headers/cookies are detected.
+5. Re-test SR summaries once the above is fixed; remove the profiling-only console logs before redeploying.
+
+Documented by GPT-5 Codex on 2025-11-01 after rollback and redeploy.
+
