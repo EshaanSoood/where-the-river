@@ -164,7 +164,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
     };
     lowPowerRef.current = computeLowPower();
     // Fetch low-res data first for fast initial load
-    fetch('//unpkg.com/world-atlas@2/countries-110m.json')
+    fetch('/world-atlas/countries-110m.json')
       .then(res => res.json())
       .then((countriesTopo) => {
         const lowResFeatures = topojson.feature(countriesTopo, countriesTopo.objects.countries);
@@ -173,7 +173,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex }) => 
       .catch(() => setCountriesLOD(prev => ({ ...prev, low: { features: [] } })));
 
     // Fetch high-res data in the background for zoom-in
-    fetch('//unpkg.com/world-atlas@2/countries-50m.json')
+    fetch('/world-atlas/countries-50m.json')
       .then(res => res.json())
       .then((countriesTopo) => {
         const highResFeatures = topojson.feature(countriesTopo, countriesTopo.objects.countries);

@@ -607,10 +607,10 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const highDpr = (typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1) > 2.5;
       lowPowerRef.current = prefersReduced || saveData || slowNet || (cores > 0 && cores <= 4) || (mem > 0 && mem <= 4) || (highDpr && cores > 0 && cores <= 4);
     } catch { lowPowerRef.current = false; }
-    fetch('//unpkg.com/world-atlas@2/countries-110m.json')
+    fetch('/world-atlas/countries-110m.json')
       .then(res => res.json())
       .then((countriesTopo) => { const lowResFeatures = topojson.feature(countriesTopo, countriesTopo.objects.countries); setCountriesLOD(prev => ({ ...prev, low: lowResFeatures as any })); });
-    fetch('//unpkg.com/world-atlas@2/countries-50m.json')
+    fetch('/world-atlas/countries-50m.json')
       .then(res => res.json())
       .then((countriesTopo) => { const highResFeatures = topojson.feature(countriesTopo, countriesTopo.objects.countries); setCountriesLOD(prev => ({ ...prev, high: highResFeatures as any })); });
   }, []);
