@@ -85,7 +85,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const DARK_TEAL = '#6D2B79';
   const AQUA = '#6E0E0A';
   const NEAR_WHITE = 'rgba(255,255,255,0.95)';
-  const ARC_ALTITUDE = 0.18;
+  const ARC_ENDPOINT_ALTITUDE = 0.01;
+  const ARC_BASE_ALTITUDE = 0.05;
+  const ARC_AUTO_SCALE = 0.25;
   const MY_NODE_ALTITUDE = 0.255;
   const CONNECTION_NODE_ALTITUDE = 0.253;
   const GUEST_NODE_SIZE = 0.20 * 0.8; // 20% thinner than previous default
@@ -1159,16 +1161,27 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     let key = '';
     try {
       const globe = globeEl.current; const scene = sceneRef.current || (globe ? globe.scene() : null); if (!globe || !scene) return;
-      const arcAltitude = ARC_ALTITUDE;
-      const boatPathAltitude = type === 'user' ? arcAltitude : arcAltitude + 0.02;
       const GLOBE_RADIUS = 100;
       const sC = globe.getCoords(startLat, startLng); const eC = globe.getCoords(endLat, endLng); if (!sC || !eC) return;
       const baseStart = new THREE.Vector3(sC.x, sC.y, sC.z).normalize();
       const baseEnd = new THREE.Vector3(eC.x, eC.y, eC.z).normalize();
+      const angle = baseStart.angleTo(baseEnd);
+      const distanceAltitude = (angle / 2) * ARC_AUTO_SCALE;
+      const arcAltitude = ARC_BASE_ALTITUDE + distanceAltitude;
+      const boatPathAltitude = arcAltitude + (type === 'user' ? 0.015 : 0.03);
       const boatRadius = GLOBE_RADIUS * (1 + boatPathAltitude);
       const s = baseStart.clone().multiplyScalar(boatRadius);
       const e = baseEnd.clone().multiplyScalar(boatRadius);
-      const mid = baseStart.clone().add(baseEnd).normalize().multiplyScalar(boatRadius);
+      const midDirection = baseStart.clone().add(baseEnd);
+      if (midDirection.lengthSq() === 0) {
+        midDirection.copy(baseStart.clone().cross(new THREE.Vector3(0, 1, 0)).normalize());
+        if (midDirection.lengthSq() === 0) {
+          midDirection.copy(baseStart.clone().cross(new THREE.Vector3(1, 0, 0)).normalize());
+        }
+      } else {
+        midDirection.normalize();
+      }
+      const mid = midDirection.multiplyScalar(boatRadius);
       const curve = new THREE.CatmullRomCurve3([s, mid, e]);
       key = arcKey || `${startLat},${startLng}->${endLat},${endLng}`;
       if (isBoatRegistered(key, type)) return;
@@ -1358,9 +1371,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     const rect = rendererRef.current?.domElement?.getBoundingClientRect?.();
     const width = rect?.width || (typeof window !== 'undefined' ? window.innerWidth : 1200);
     const pxScale = Math.min(1.6, Math.max(0.7, (dprRef.current || 1) * (width / 1200)));
-    let seg = Math.round(16 + 8 * Math.min(1, zoomScale * pxScale));
-    if (lowPowerRef.current || safeProfileRef.current) seg -= 4;
-    seg = Math.max(12, Math.min(24, seg));
+    let seg = Math.round(10 + 6 * Math.min(1, zoomScale * pxScale));
+    if (lowPowerRef.current || safeProfileRef.current) seg = Math.max(8, seg - 2);
+    seg = Math.max(8, Math.min(16, seg));
     return seg;
   }, [zoomScale]);
 
@@ -1414,11 +1427,11 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         arcsData={arcsData}
         arcColor={useCallback((d: any) => { try { const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)'; const midLat = (d.startLat + d.endLat) / 2; const midLng = (d.startLng + d.endLng) / 2; const c = globe.getCoords(midLat, midLng); if (!c) return 'rgba(102, 194, 255, 0.8)'; const cam = globe.camera(); const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); const isPri = !!d.primary; const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); const basePrimary = isUserArc ? '200, 255, 255' : '140, 220, 255'; const baseSecondary = '102, 194, 255'; const alpha = dot >= 0 ? (isPri ? (isUserArc ? 0.99 : 0.98) : 0.64) : (isPri ? 0.42 : 0.10); const adjustedAlpha = Math.max(0, alpha * 0.75); const base = isPri ? basePrimary : baseSecondary; return `rgba(${base}, ${adjustedAlpha})`; } catch { return 'rgba(102, 194, 255, 0.8)'; } }, [])}
         arcStroke={useCallback((d: any) => { const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); return isUserArc ? 3.2 : (d?.primary ? 2.2 : 2); }, [])}
-        arcStartAltitude={ARC_ALTITUDE}
-        arcEndAltitude={ARC_ALTITUDE}
-        arcAltitude={ARC_ALTITUDE}
-        arcAltitudeAutoScale={0}
-        arcCurveResolution={1}
+        arcStartAltitude={ARC_ENDPOINT_ALTITUDE}
+        arcEndAltitude={ARC_ENDPOINT_ALTITUDE}
+        arcAltitude={ARC_BASE_ALTITUDE}
+        arcAltitudeAutoScale={ARC_AUTO_SCALE}
+        arcCurveResolution={arcResolution}
         arcDashLength={1}
         arcDashGap={0}
         arcDashAnimateTime={0}
