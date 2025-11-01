@@ -85,11 +85,16 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const DARK_TEAL = '#6D2B79';
   const AQUA = '#6E0E0A';
   const NEAR_WHITE = 'rgba(255,255,255,0.95)';
+  const ARC_ALTITUDE = 0.18;
+  const MY_NODE_ALTITUDE = 0.255;
+  const CONNECTION_NODE_ALTITUDE = 0.253;
+  const GUEST_NODE_SIZE = 0.20 * 0.8; // 20% thinner than previous default
+  const GUEST_NODE_ALTITUDE = 0.251 * 0.6; // 40% lower than previous default
 
   const resetNodeStyles = (nodeMap: Map<string, NodeData>) => {
     nodeMap.forEach((node) => {
       node.color = NEAR_WHITE;
-      node.size = 0.20;
+      node.size = GUEST_NODE_SIZE;
     });
   };
 
@@ -355,7 +360,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         node.size = 0.28;
       } else {
         node.color = NEAR_WHITE;
-        node.size = 0.20;
+        node.size = GUEST_NODE_SIZE;
       }
     });
 
@@ -477,6 +482,39 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       drainingPendingRef.current = false;
     }
   };
+
+  const updateArcMaterials = useCallback(() => {
+    try {
+      const scene = sceneRef.current;
+      if (!scene) return;
+      scene.traverse((obj: any) => {
+        if (!obj) return;
+        if ((obj as any).__globeObjType === 'arc' && Array.isArray(obj.children)) {
+          obj.children.forEach((child: any) => {
+            if (!child) return;
+            const mat = child.material as THREE.Material | undefined;
+            if (mat) {
+              if (mat.depthTest !== false) {
+                mat.depthTest = false;
+                mat.needsUpdate = true;
+              }
+              if (mat.depthWrite !== false) {
+                mat.depthWrite = false;
+                mat.needsUpdate = true;
+              }
+              if (mat.transparent !== true) {
+                mat.transparent = true;
+                mat.needsUpdate = true;
+              }
+            }
+            if (typeof child.renderOrder !== 'number' || child.renderOrder < 9999) {
+              child.renderOrder = 9999;
+            }
+          });
+        }
+      });
+    } catch {}
+  }, []);
 
   // Data versioning & caching (deterministic, spawn-once pattern)
   const nodeMapCacheRef = useRef<Map<string, NodeData>>(new Map());
@@ -898,6 +936,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     const scene = sceneRef.current; if (scene) scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     refitCameraRef.current = () => { try { if (!globeEl.current) return; const newFit = getFitDistance(); const prevFit = baselineDistanceRef.current || newFit; const dist = camera.position.length(); const ratio = Math.max(0.0001, dist / prevFit); baselineDistanceRef.current = newFit; controls.maxDistance = newFit; controls.minDistance = Math.max(newFit / 3, 80); const dir = camera.position.clone().normalize(); camera.position.copy(dir.multiplyScalar(newFit * ratio)); camera.updateProjectionMatrix(); } catch {} };
     setIsGlobeReady(true);
+    requestAnimationFrame(() => updateArcMaterials());
     // One-time log of chosen caps
     try {
       const nav: any = typeof navigator !== 'undefined' ? navigator : {};
@@ -1027,6 +1066,12 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
 
   useEffect(() => { const update = () => { try { const users = nodesData.length; const countries = (() => { const s = new Set<string>(); nodesData.forEach(n => { if (n.countryCode) s.add((n.countryCode || '').toUpperCase()); }); return s.size; })(); const connections = arcsData.length; setSrSummary(`Dream River globe: ${users} people across ${countries} countries with ${connections} connections.`); } catch { setSrSummary('An interactive 3D globe showing countries of the world.'); } }; update(); window.addEventListener('focus', update); return () => window.removeEventListener('focus', update); }, [nodesData, arcsData]);
 
+  useEffect(() => {
+    if (!isGlobeReady) return;
+    const frame = requestAnimationFrame(() => { updateArcMaterials(); });
+    return () => cancelAnimationFrame(frame);
+  }, [arcsData, isGlobeReady, updateArcMaterials]);
+
   // Project helpers for overlays
   const projectLatLngIfFront = (lat: number, lng: number): { x: number; y: number } | null => { try { const globe = globeEl.current; if (!globe) return null; const cam = globe.camera(); const c = globe.getCoords(lat, lng); if (!c) return null; const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); if (dot <= 0) return null; const v = world.project(cam); const rect = globe.renderer()?.domElement?.getBoundingClientRect?.() || { width: window.innerWidth, height: window.innerHeight } as any; const x = (v.x * 0.5 + 0.5) * rect.width; const y = (-v.y * 0.5 + 0.5) * rect.height; return { x, y }; } catch { return null; } };
   const overlayUpdatePendingRef = useRef<boolean>(false);
@@ -1114,11 +1159,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     let key = '';
     try {
       const globe = globeEl.current; const scene = sceneRef.current || (globe ? globe.scene() : null); if (!globe || !scene) return;
-      const ARC_ALTITUDE = 0.05; const BOAT_PATH_ALTITUDE = type === 'user' ? ARC_ALTITUDE : 0.07; const GLOBE_RADIUS = 100;
+      const arcAltitude = ARC_ALTITUDE;
+      const boatPathAltitude = type === 'user' ? arcAltitude : arcAltitude + 0.02;
+      const GLOBE_RADIUS = 100;
       const sC = globe.getCoords(startLat, startLng); const eC = globe.getCoords(endLat, endLng); if (!sC || !eC) return;
       const baseStart = new THREE.Vector3(sC.x, sC.y, sC.z).normalize();
       const baseEnd = new THREE.Vector3(eC.x, eC.y, eC.z).normalize();
-      const boatRadius = GLOBE_RADIUS * (1 + BOAT_PATH_ALTITUDE);
+      const boatRadius = GLOBE_RADIUS * (1 + boatPathAltitude);
       const s = baseStart.clone().multiplyScalar(boatRadius);
       const e = baseEnd.clone().multiplyScalar(boatRadius);
       const mid = baseStart.clone().add(baseEnd).normalize().multiplyScalar(boatRadius);
@@ -1367,7 +1414,11 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         arcsData={arcsData}
         arcColor={useCallback((d: any) => { try { const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)'; const midLat = (d.startLat + d.endLat) / 2; const midLng = (d.startLng + d.endLng) / 2; const c = globe.getCoords(midLat, midLng); if (!c) return 'rgba(102, 194, 255, 0.8)'; const cam = globe.camera(); const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); const isPri = !!d.primary; const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); const basePrimary = isUserArc ? '200, 255, 255' : '140, 220, 255'; const baseSecondary = '102, 194, 255'; const alpha = dot >= 0 ? (isPri ? (isUserArc ? 0.99 : 0.98) : 0.64) : (isPri ? 0.42 : 0.10); const adjustedAlpha = Math.max(0, alpha * 0.75); const base = isPri ? basePrimary : baseSecondary; return `rgba(${base}, ${adjustedAlpha})`; } catch { return 'rgba(102, 194, 255, 0.8)'; } }, [])}
         arcStroke={useCallback((d: any) => { const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); return isUserArc ? 3.2 : (d?.primary ? 2.2 : 2); }, [])}
-        arcAltitude={0.12}
+        arcStartAltitude={ARC_ALTITUDE}
+        arcEndAltitude={ARC_ALTITUDE}
+        arcAltitude={ARC_ALTITUDE}
+        arcAltitudeAutoScale={0}
+        arcCurveResolution={1}
         arcDashLength={1}
         arcDashGap={0}
         arcDashAnimateTime={0}
@@ -1375,9 +1426,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         pointsData={useMemo(() => nodesData.map(n => ({ lat: n.lat, lng: n.lng, size: n.size, color: n.color, id: n.id })), [nodesData])}
         pointAltitude={(d: any) => {
           const id = d?.id as string | undefined;
-          if (id && myIdRef.current && id === myIdRef.current) return 0.255;
-          if (id && myConnectionsRef.current.has(id)) return 0.253;
-          return 0.251;
+          if (id && myIdRef.current && id === myIdRef.current) return MY_NODE_ALTITUDE;
+          if (id && myConnectionsRef.current.has(id)) return CONNECTION_NODE_ALTITUDE;
+          return GUEST_NODE_ALTITUDE;
         }}
         pointRadius={useCallback((d: any) => (d?.size || 0.20) * zoomScale, [zoomScale])}
         pointColor={useCallback((d: any) => d?.color || 'rgba(255,255,255,0.95)', [])}
