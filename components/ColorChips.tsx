@@ -6,7 +6,6 @@ type Props = { boatColor: string; setBoatColor: (c: string) => void };
 
 const COLORS = [
   { name: "Red", light: "#f7b0a5", dark: "#d87d76" },
-  { name: "Orange", light: "#f8c8a0", dark: "#d89b6a" },
   { name: "Yellow", light: "#f8e6a0", dark: "#d7c46b" },
   { name: "Green", light: "#b7e3b1", dark: "#7cb68e" },
   { name: "Blue", light: "#b7d7f5", dark: "#6fa1c6" },
