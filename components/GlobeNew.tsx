@@ -8,6 +8,11 @@ import * as topojson from 'topojson-client';
 import { geoCentroid, geoBounds } from 'd3-geo';
 import type { PublicGlobeSnapshot } from '@/types/globe';
 
+const DEG_TO_RAD = Math.PI / 180;
+const degToRad = (deg: number): number => deg * DEG_TO_RAD;
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
 let supabaseClientPromise: Promise<any> | null = null;
 
 async function loadSupabaseClient() {
@@ -87,11 +92,54 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const NEAR_WHITE = 'rgba(255,255,255,0.95)';
   const ARC_ENDPOINT_ALTITUDE = 0.06;
   const ARC_BASE_ALTITUDE = 0.07;
-  const ARC_AUTO_SCALE = 0.25;
   const MY_NODE_ALTITUDE = 0.255;
   const CONNECTION_NODE_ALTITUDE = 0.253;
   const GUEST_NODE_SIZE = 0.20 * 0.8; // 20% thinner than previous default
   const GUEST_NODE_ALTITUDE = 0.251 * 0.6; // 40% lower than previous default
+  const ARC_MIN_ENDPOINT_ALTITUDE = Math.max(GUEST_NODE_ALTITUDE + 0.02, ARC_ENDPOINT_ALTITUDE + 0.08);
+  const ARC_MIN_PEAK_ALTITUDE = Math.max(ARC_BASE_ALTITUDE + 0.12, ARC_MIN_ENDPOINT_ALTITUDE + 0.06);
+  const ARC_MAX_PEAK_ALTITUDE = 0.9;
+
+  const computeArcMetrics = useCallback((startLat: number, startLng: number, endLat: number, endLng: number) => {
+    const lat1 = degToRad(startLat);
+    const lat2 = degToRad(endLat);
+    const deltaLng = degToRad(Math.abs(startLng - endLng));
+    const cosAngle =
+      Math.sin(lat1) * Math.sin(lat2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.cos(deltaLng);
+    const angle = Math.acos(clamp(cosAngle, -1, 1));
+    const normalized = angle / Math.PI;
+
+    const peak = clamp(
+      ARC_MIN_PEAK_ALTITUDE + normalized * 0.55,
+      ARC_MIN_PEAK_ALTITUDE,
+      ARC_MAX_PEAK_ALTITUDE
+    );
+
+    const endpointBase = ARC_MIN_ENDPOINT_ALTITUDE + normalized * 0.25;
+    const endpoint = clamp(
+      endpointBase,
+      ARC_MIN_ENDPOINT_ALTITUDE,
+      Math.max(ARC_MIN_ENDPOINT_ALTITUDE, peak - 0.05)
+    );
+
+    return { peak, endpoint, angle };
+  }, [ARC_MIN_ENDPOINT_ALTITUDE, ARC_MIN_PEAK_ALTITUDE, ARC_MAX_PEAK_ALTITUDE]);
+
+  const arcPeakAltitudeAccessor = useCallback(
+    (arc: any) => {
+      if (!arc) return ARC_MIN_PEAK_ALTITUDE;
+      return computeArcMetrics(arc.startLat, arc.startLng, arc.endLat, arc.endLng).peak;
+    },
+    [computeArcMetrics, ARC_MIN_PEAK_ALTITUDE]
+  );
+  const arcEndpointAltitudeAccessor = useCallback(
+    (arc: any) => {
+      if (!arc) return ARC_MIN_ENDPOINT_ALTITUDE;
+      return computeArcMetrics(arc.startLat, arc.startLng, arc.endLat, arc.endLng).endpoint;
+    },
+    [computeArcMetrics, ARC_MIN_ENDPOINT_ALTITUDE]
+  );
 
   const resetNodeStyles = (nodeMap: Map<string, NodeData>) => {
     nodeMap.forEach((node) => {
@@ -1189,13 +1237,13 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const sC = globe.getCoords(startLat, startLng); const eC = globe.getCoords(endLat, endLng); if (!sC || !eC) return;
       const baseStart = new THREE.Vector3(sC.x, sC.y, sC.z).normalize();
       const baseEnd = new THREE.Vector3(eC.x, eC.y, eC.z).normalize();
-      const angle = baseStart.angleTo(baseEnd);
-      const distanceAltitude = (angle / 2) * ARC_AUTO_SCALE;
-      const arcAltitude = ARC_BASE_ALTITUDE + distanceAltitude;
-      const boatPathAltitude = arcAltitude + (type === 'user' ? 0.008 : 0.016);
-      const boatRadius = GLOBE_RADIUS * (1 + boatPathAltitude);
-      const s = baseStart.clone().multiplyScalar(boatRadius);
-      const e = baseEnd.clone().multiplyScalar(boatRadius);
+      const { peak, endpoint } = computeArcMetrics(startLat, startLng, endLat, endLng);
+      const lift = type === 'user' ? 0.012 : 0.02;
+      const startRadius = GLOBE_RADIUS * (1 + endpoint + lift);
+      const endRadius = GLOBE_RADIUS * (1 + endpoint + lift);
+      const peakRadius = GLOBE_RADIUS * (1 + peak + lift);
+      const s = baseStart.clone().multiplyScalar(startRadius);
+      const e = baseEnd.clone().multiplyScalar(endRadius);
       const midDirection = baseStart.clone().add(baseEnd);
       if (midDirection.lengthSq() === 0) {
         midDirection.copy(baseStart.clone().cross(new THREE.Vector3(0, 1, 0)).normalize());
@@ -1205,7 +1253,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       } else {
         midDirection.normalize();
       }
-      const mid = midDirection.multiplyScalar(boatRadius);
+      const mid = midDirection.multiplyScalar(peakRadius);
       const curve = new THREE.CatmullRomCurve3([s, mid, e]);
       key = arcKey || `${startLat},${startLng}->${endLat},${endLng}`;
       if (isBoatRegistered(key, type)) return;
@@ -1466,10 +1514,10 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         arcsData={arcsData}
         arcColor={useCallback((d: any) => { try { const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)'; const midLat = (d.startLat + d.endLat) / 2; const midLng = (d.startLng + d.endLng) / 2; const c = globe.getCoords(midLat, midLng); if (!c) return 'rgba(102, 194, 255, 0.8)'; const cam = globe.camera(); const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); const isPri = !!d.primary; const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); const basePrimary = isUserArc ? '200, 255, 255' : '140, 220, 255'; const baseSecondary = '102, 194, 255'; const alpha = dot >= 0 ? (isPri ? (isUserArc ? 0.99 : 0.98) : 0.64) : (isPri ? 0.42 : 0.10); const adjustedAlpha = Math.max(0, alpha * 0.75); const base = isPri ? basePrimary : baseSecondary; return `rgba(${base}, ${adjustedAlpha})`; } catch { return 'rgba(102, 194, 255, 0.8)'; } }, [])}
         arcStroke={useCallback((d: any) => { const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); return isUserArc ? 3.2 : (d?.primary ? 2.2 : 2); }, [])}
-        arcStartAltitude={ARC_ENDPOINT_ALTITUDE}
-        arcEndAltitude={ARC_ENDPOINT_ALTITUDE}
-        arcAltitude={ARC_BASE_ALTITUDE}
-        arcAltitudeAutoScale={ARC_AUTO_SCALE}
+        arcStartAltitude={arcEndpointAltitudeAccessor}
+        arcEndAltitude={arcEndpointAltitudeAccessor}
+        arcAltitude={arcPeakAltitudeAccessor}
+        arcAltitudeAutoScale={0}
         arcCurveResolution={arcResolution}
         arcDashLength={1}
         arcDashGap={0}
