@@ -44,6 +44,7 @@ interface NodeData {
   lng: number;
   size: number;
   color: string;
+  altitude?: number;
   countryCode?: string;
   name?: string | null;
   boatColor?: string | null;
@@ -56,6 +57,8 @@ interface ArcData {
   endLng: number;
   startId: string;
   endId: string;
+  startAltitude?: number;
+  endAltitude?: number;
   primary?: boolean;
 }
 
@@ -96,11 +99,11 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const CONNECTION_NODE_ALTITUDE = 0.253;
   const GUEST_NODE_SIZE = 0.20 * 0.8; // 20% thinner than previous default
   const GUEST_NODE_ALTITUDE = 0.251 * 0.6; // 40% lower than previous default
-  const ARC_MIN_ENDPOINT_ALTITUDE = Math.max(GUEST_NODE_ALTITUDE + 0.02, ARC_ENDPOINT_ALTITUDE + 0.08);
+  const ARC_MIN_ENDPOINT_ALTITUDE = Math.max(GUEST_NODE_ALTITUDE, ARC_ENDPOINT_ALTITUDE);
   const ARC_MIN_PEAK_ALTITUDE = Math.max(ARC_BASE_ALTITUDE + 0.12, ARC_MIN_ENDPOINT_ALTITUDE + 0.06);
   const ARC_MAX_PEAK_ALTITUDE = 0.9;
 
-  const computeArcMetrics = useCallback((startLat: number, startLng: number, endLat: number, endLng: number) => {
+  const computeArcMetrics = useCallback((startLat: number, startLng: number, endLat: number, endLng: number, startAltitude: number, endAltitude: number) => {
     const lat1 = degToRad(startLat);
     const lat2 = degToRad(endLat);
     const deltaLng = degToRad(Math.abs(startLng - endLng));
@@ -110,41 +113,40 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     const angle = Math.acos(clamp(cosAngle, -1, 1));
     const normalized = angle / Math.PI;
 
+    const baseline = Math.max(startAltitude, endAltitude);
+    const desiredPeak = ARC_MIN_PEAK_ALTITUDE + normalized * 0.55;
     const peak = clamp(
-      ARC_MIN_PEAK_ALTITUDE + normalized * 0.55,
-      ARC_MIN_PEAK_ALTITUDE,
+      Math.max(baseline + 0.08, desiredPeak),
+      baseline + 0.05,
       ARC_MAX_PEAK_ALTITUDE
     );
 
-    const endpointBase = ARC_MIN_ENDPOINT_ALTITUDE + normalized * 0.25;
-    const endpoint = clamp(
-      endpointBase,
-      ARC_MIN_ENDPOINT_ALTITUDE,
-      Math.max(ARC_MIN_ENDPOINT_ALTITUDE, peak - 0.05)
-    );
-
-    return { peak, endpoint, angle };
-  }, [ARC_MIN_ENDPOINT_ALTITUDE, ARC_MIN_PEAK_ALTITUDE, ARC_MAX_PEAK_ALTITUDE]);
+    return { peak, angle };
+  }, [ARC_MIN_PEAK_ALTITUDE, ARC_MAX_PEAK_ALTITUDE]);
 
   const arcPeakAltitudeAccessor = useCallback(
     (arc: any) => {
       if (!arc) return ARC_MIN_PEAK_ALTITUDE;
-      return computeArcMetrics(arc.startLat, arc.startLng, arc.endLat, arc.endLng).peak;
+      const startAltitude = typeof arc.startAltitude === 'number' ? arc.startAltitude : ARC_MIN_ENDPOINT_ALTITUDE;
+      const endAltitude = typeof arc.endAltitude === 'number' ? arc.endAltitude : ARC_MIN_ENDPOINT_ALTITUDE;
+      return computeArcMetrics(arc.startLat, arc.startLng, arc.endLat, arc.endLng, startAltitude, endAltitude).peak;
     },
-    [computeArcMetrics, ARC_MIN_PEAK_ALTITUDE]
+    [computeArcMetrics, ARC_MIN_ENDPOINT_ALTITUDE, ARC_MIN_PEAK_ALTITUDE]
   );
-  const arcEndpointAltitudeAccessor = useCallback(
-    (arc: any) => {
-      if (!arc) return ARC_MIN_ENDPOINT_ALTITUDE;
-      return computeArcMetrics(arc.startLat, arc.startLng, arc.endLat, arc.endLng).endpoint;
-    },
-    [computeArcMetrics, ARC_MIN_ENDPOINT_ALTITUDE]
+  const arcStartAltitudeAccessor = useCallback(
+    (arc: any) => (typeof arc?.startAltitude === 'number' ? arc.startAltitude : ARC_MIN_ENDPOINT_ALTITUDE),
+    [ARC_MIN_ENDPOINT_ALTITUDE]
+  );
+  const arcEndAltitudeAccessor = useCallback(
+    (arc: any) => (typeof arc?.endAltitude === 'number' ? arc.endAltitude : ARC_MIN_ENDPOINT_ALTITUDE),
+    [ARC_MIN_ENDPOINT_ALTITUDE]
   );
 
   const resetNodeStyles = (nodeMap: Map<string, NodeData>) => {
     nodeMap.forEach((node) => {
       node.color = NEAR_WHITE;
       node.size = GUEST_NODE_SIZE;
+      node.altitude = GUEST_NODE_ALTITUDE;
     });
   };
 
@@ -204,6 +206,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const b = nodeMap.get(target);
       if (!a || !b) return;
       const isPrimary = chain.has(source) && chain.has(target);
+      const startAltitude = typeof a.altitude === 'number' ? a.altitude : GUEST_NODE_ALTITUDE;
+      const endAltitude = typeof b.altitude === 'number' ? b.altitude : GUEST_NODE_ALTITUDE;
       arcs.push({
         startLat: a.lat,
         startLng: a.lng,
@@ -211,6 +215,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         endLng: b.lng,
         startId: source,
         endId: target,
+        startAltitude,
+        endAltitude,
         primary: isPrimary,
       });
     });
@@ -317,7 +323,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     myArcs.slice(0, 2).forEach((arc, index) => {
       const key = `my-arc-${arc.startId}->${arc.endId}-${index}`;
       if (!isBoatRegistered(key, 'user')) {
-        spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, 'user', key);
+        const startAltitude = typeof arc.startAltitude === 'number' ? arc.startAltitude : GUEST_NODE_ALTITUDE;
+        const endAltitude = typeof arc.endAltitude === 'number' ? arc.endAltitude : GUEST_NODE_ALTITUDE;
+        spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, startAltitude, endAltitude, 'user', key);
       }
     });
   };
@@ -405,12 +413,15 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         node.color = preferredColor || DARK_TEAL;
         node.boatColor = preferredColor || DARK_TEAL;
         node.size = 0.35;
+        node.altitude = MY_NODE_ALTITUDE;
       } else if (connections.has(node.id)) {
         node.color = AQUA;
         node.size = 0.28;
+        node.altitude = CONNECTION_NODE_ALTITUDE;
       } else {
         node.color = NEAR_WHITE;
         node.size = GUEST_NODE_SIZE;
+        node.altitude = GUEST_NODE_ALTITUDE;
       }
     });
 
@@ -1229,7 +1240,16 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     };
   }, []);
 
-  const spawnBoatAlongArc = (startLat: number, startLng: number, endLat: number, endLng: number, type: BoatType, arcKey?: string) => {
+  const spawnBoatAlongArc = (
+    startLat: number,
+    startLng: number,
+    endLat: number,
+    endLng: number,
+    startAltitude: number,
+    endAltitude: number,
+    type: BoatType,
+    arcKey?: string
+  ) => {
     let key = '';
     try {
       const globe = globeEl.current; const scene = sceneRef.current || (globe ? globe.scene() : null); if (!globe || !scene) return;
@@ -1237,11 +1257,14 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const sC = globe.getCoords(startLat, startLng); const eC = globe.getCoords(endLat, endLng); if (!sC || !eC) return;
       const baseStart = new THREE.Vector3(sC.x, sC.y, sC.z).normalize();
       const baseEnd = new THREE.Vector3(eC.x, eC.y, eC.z).normalize();
-      const { peak, endpoint } = computeArcMetrics(startLat, startLng, endLat, endLng);
+      const safeStartAltitude = Math.max(startAltitude, ARC_MIN_ENDPOINT_ALTITUDE);
+      const safeEndAltitude = Math.max(endAltitude, ARC_MIN_ENDPOINT_ALTITUDE);
+      const { peak } = computeArcMetrics(startLat, startLng, endLat, endLng, safeStartAltitude, safeEndAltitude);
       const lift = type === 'user' ? 0.012 : 0.02;
-      const startRadius = GLOBE_RADIUS * (1 + endpoint + lift);
-      const endRadius = GLOBE_RADIUS * (1 + endpoint + lift);
-      const peakRadius = GLOBE_RADIUS * (1 + peak + lift);
+      const startRadius = GLOBE_RADIUS * (1 + safeStartAltitude + lift);
+      const endRadius = GLOBE_RADIUS * (1 + safeEndAltitude + lift);
+      const peakAltitude = Math.max(peak, Math.max(safeStartAltitude, safeEndAltitude) + 0.05);
+      const peakRadius = GLOBE_RADIUS * (1 + peakAltitude + lift);
       const s = baseStart.clone().multiplyScalar(startRadius);
       const e = baseEnd.clone().multiplyScalar(endRadius);
       const midDirection = baseStart.clone().add(baseEnd);
@@ -1361,7 +1384,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       if (arc.startId === arc.endId) continue;
       const key = rawArcKey(arc);
       if (isBoatRegistered(key, 'guest')) continue;
-      spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, 'guest', key);
+      const startAltitude = typeof arc.startAltitude === 'number' ? arc.startAltitude : GUEST_NODE_ALTITUDE;
+      const endAltitude = typeof arc.endAltitude === 'number' ? arc.endAltitude : GUEST_NODE_ALTITUDE;
+      spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, startAltitude, endAltitude, 'guest', key);
       spawned += 1;
     }
 
@@ -1393,7 +1418,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         const name = getCountryNameFromIso2(cc);
         const spread = getCountrySpreadDeg(name, base[0]);
         const [lat, lng] = seededJitterAround(base[0], base[1], n.id, spread);
-        nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: NEAR_WHITE, countryCode: cc, name: n.name || null, boatColor: null });
+        nodeMap.set(n.id, { id: n.id, lat, lng, size: 0.20, color: NEAR_WHITE, altitude: GUEST_NODE_ALTITUDE, countryCode: cc, name: n.name || null, boatColor: null });
       });
       nodeMapCacheRef.current = nodeMap;
 
@@ -1514,8 +1539,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         arcsData={arcsData}
         arcColor={useCallback((d: any) => { try { const globe = globeEl.current; if (!globe) return 'rgba(102, 194, 255, 0.8)'; const midLat = (d.startLat + d.endLat) / 2; const midLng = (d.startLng + d.endLng) / 2; const c = globe.getCoords(midLat, midLng); if (!c) return 'rgba(102, 194, 255, 0.8)'; const cam = globe.camera(); const world = new THREE.Vector3(c.x, c.y, c.z); const dot = world.clone().normalize().dot(cam.position.clone().normalize()); const isPri = !!d.primary; const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); const basePrimary = isUserArc ? '200, 255, 255' : '140, 220, 255'; const baseSecondary = '102, 194, 255'; const alpha = dot >= 0 ? (isPri ? (isUserArc ? 0.99 : 0.98) : 0.64) : (isPri ? 0.42 : 0.10); const adjustedAlpha = Math.max(0, alpha * 0.75); const base = isPri ? basePrimary : baseSecondary; return `rgba(${base}, ${adjustedAlpha})`; } catch { return 'rgba(102, 194, 255, 0.8)'; } }, [])}
         arcStroke={useCallback((d: any) => { const isUserArc = myIdRef.current && (d.startId === myIdRef.current || d.endId === myIdRef.current); return isUserArc ? 3.2 : (d?.primary ? 2.2 : 2); }, [])}
-        arcStartAltitude={arcEndpointAltitudeAccessor}
-        arcEndAltitude={arcEndpointAltitudeAccessor}
+        arcStartAltitude={arcStartAltitudeAccessor}
+        arcEndAltitude={arcEndAltitudeAccessor}
         arcAltitude={arcPeakAltitudeAccessor}
         arcAltitudeAutoScale={0}
         arcCurveResolution={arcResolution}
@@ -1523,13 +1548,21 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         arcDashGap={0}
         arcDashAnimateTime={0}
         arcCircularResolution={arcResolution}
-        pointsData={useMemo(() => nodesData.map(n => ({ lat: n.lat, lng: n.lng, size: n.size, color: n.color, id: n.id })), [nodesData])}
-        pointAltitude={(d: any) => {
-          const id = d?.id as string | undefined;
-          if (id && myIdRef.current && id === myIdRef.current) return MY_NODE_ALTITUDE;
-          if (id && myConnectionsRef.current.has(id)) return CONNECTION_NODE_ALTITUDE;
-          return GUEST_NODE_ALTITUDE;
-        }}
+        pointsData={useMemo(
+          () =>
+            nodesData.map((n) => ({
+              lat: n.lat,
+              lng: n.lng,
+              size: n.size,
+              color: n.color,
+              id: n.id,
+              altitude: typeof n.altitude === 'number' ? n.altitude : GUEST_NODE_ALTITUDE,
+            })),
+          [nodesData]
+        )}
+        pointAltitude={(d: any) =>
+          typeof d?.altitude === 'number' ? d.altitude : GUEST_NODE_ALTITUDE
+        }
         pointRadius={useCallback((d: any) => (d?.size || 0.20) * zoomScale, [zoomScale])}
         pointColor={useCallback((d: any) => d?.color || 'rgba(255,255,255,0.95)', [])}
         pointsMerge={true}
