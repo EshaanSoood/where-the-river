@@ -544,13 +544,17 @@ export default function BelowMap({ initialInviter, initialGlobeSnapshot }: Below
               {/* Square globe container */}
               <div className="relative w-full grid place-items-center" style={{ aspectRatio: '1 / 1', padding: '16px' }}>
                 <div className="relative w-full h-full max-w-full max-h-full" style={{ aspectRatio: '1 / 1' }}>
-                  <Globe
-                    describedById="globe-sr-summary"
-                    ariaLabel="Interactive globe showing Dream River connections"
-                    tabIndex={0}
-                    initialSnapshot={initialGlobeSnapshot ?? undefined}
-                    userEmail={user?.email ?? null}
-                  />
+                  <div className="globe-container mobile-globe-container w-full h-full">
+                    <div className="globe-inner mobile-globe-inner w-full h-full">
+                      <Globe
+                        describedById="globe-sr-summary"
+                        ariaLabel="Interactive globe showing Dream River connections"
+                        tabIndex={0}
+                        initialSnapshot={initialGlobeSnapshot ?? undefined}
+                        userEmail={user?.email ?? null}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
