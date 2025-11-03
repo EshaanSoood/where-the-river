@@ -50,12 +50,6 @@ export default function FooterBar() {
               <span className="footer-mask spotify" aria-hidden="true" />
             </a>
           </div>
-          <div className="footer-marquee-container" aria-hidden="true">
-            <div className="footer-marquee">
-              <span>{marqueeText}</span>
-              <span aria-hidden="true">{marqueeText}</span>
-            </div>
-          </div>
         </div>
         <div className="h-px" style={{ background: '#0b0d1a', opacity: 0.6 }} />
       </div>
@@ -173,16 +167,7 @@ export default function FooterBar() {
         .footer-mask.spotify { -webkit-mask-image: url('/Streaming/pngs/spotify.png'); mask-image: url('/Streaming/pngs/spotify.png'); }
         .footer-mask.instagram { -webkit-mask-image: url('/logos/instagram-.png'); mask-image: url('/logos/instagram-.png'); }
         .footer-mask.mail { -webkit-mask-image: url('/logos/email.png'); mask-image: url('/logos/email.png'); }
-        .footer-marquee-container {
-          flex: 1;
-          display: none;
-          justify-content: flex-end;
-          align-items: center;
-          overflow: hidden;
-          min-width: 0;
-        }
         @media (min-width: 1024px) {
-          .footer-marquee-container { display: flex; }
           .footer-mobile-marquee { display: none; }
           .footer-shell { min-height: 40px; }
         }

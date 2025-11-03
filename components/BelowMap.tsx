@@ -113,7 +113,6 @@ export default function BelowMap({ initialInviter, initialGlobeSnapshot }: Below
     } catch {}
   }, [me?.referral_url, isLoadingReferral, referralUrl]);
   const anyPanelOpen = dashboardOpen || leaderboardOpen;
-  const [accOpen, setAccOpen] = useState<{ how: boolean; why: boolean; who: boolean }>({ how: false, why: false, who: false });
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const privacyRef = useRef<HTMLDivElement | null>(null);
   const privacyLinkRef = useRef<HTMLButtonElement | null>(null);
@@ -574,60 +573,7 @@ export default function BelowMap({ initialInviter, initialGlobeSnapshot }: Below
             </div>
           </section>
 
-          {/* Accordions for remaining sections */}
-          <div className="space-y-3">
-            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
-              <button
-                className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
-                aria-expanded={accOpen.how}
-                aria-controls="acc-how"
-                onClick={() => setAccOpen((o) => ({ ...o, how: !o.how }))}
-              >
-                How it works
-              </button>
-              {accOpen.how && (
-                <div id="acc-how" role="region" aria-labelledby="acc-how-btn" className="px-3 pb-3 text-sm">
-                  <p>
-                    When you sign up, you&apos;ll get a unique link to share with your friends. Each time someone joins through your link, your river grows. When they listen to the album and invite their own friends, their river connects to yours. Together, we can trace where the music flows — and as your chain grows, you collect paper boats that unlock exclusive perks.
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
-              <button
-                className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
-                aria-expanded={accOpen.why}
-                aria-controls="acc-why"
-                onClick={() => setAccOpen((o) => ({ ...o, why: !o.why }))}
-              >
-                Why
-              </button>
-              {accOpen.why && (
-                <div id="acc-why" role="region" aria-labelledby="acc-why-btn" className="px-3 pb-3 text-sm">
-                  <p>
-                    I might be old school, but most of the music I treasure came from friends who shared it with me. While the internet keeps getting louder, I want to bring back that simple joy: discovering music from someone you know and trust.
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="rounded-[24px] border overflow-hidden" style={{ background: 'rgba(19, 94, 102, 0.25)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
-              <button
-                className="w-full text-left px-3 py-3 font-semibold rounded-[24px]"
-                aria-expanded={accOpen.who}
-                aria-controls="acc-who"
-                onClick={() => setAccOpen((o) => ({ ...o, who: !o.who }))}
-              >
-                Who I am
-              </button>
-              {accOpen.who && (
-                <div id="acc-who" role="region" aria-labelledby="acc-who-btn" className="px-3 pb-3 text-sm">
-                  <p>
-                    I&apos;m Eshaan Sood, a storyteller from New Delhi now in New York. My debut album &lsquo;Dream River&rsquo; is out everywhere — and this is my way of sending the boat sailing to every corner of the world.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Accordion sections removed on mobile to keep pane content concise */}
         </div>
 
         {/* Desktop layout (≥1024px): 3 columns 1:2:1 over fluid container */}
