@@ -32,7 +32,7 @@ export default function FooterBar() {
             <span aria-hidden="true">{marqueeText}</span>
           </div>
         </div>
-        <div className="h-full flex items-center justify-between gap-4" style={{ paddingInline: '8px' }}>
+        <div className="h-full flex flex-wrap items-center justify-center gap-4 lg:flex-nowrap lg:justify-between" style={{ paddingInline: '8px' }}>
           <div className="flex items-center gap-2 socials-cluster">
             <a href="https://www.instagram.com/thejumpymonkey" aria-label="Instagram" className="footer-btn" target="_blank" rel="noopener noreferrer">
               <span className="footer-mask instagram" aria-hidden="true" />
