@@ -166,7 +166,11 @@ button, .btn {
     border-top-right-radius: var(--card-radius) !important;
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
-    background-color: var(--teal) !important;
+    background: var(--card-frost) !important;
+    backdrop-filter: var(--card-blur);
+    -webkit-backdrop-filter: var(--card-blur);
+    border: var(--card-border) !important;
+    border-bottom: none !important;
   }
   
   /* Prevent any child from overriding footer rounding */

@@ -24,20 +24,16 @@ export default function FooterBar() {
   return (
     <footer aria-label="Site footer" className="lg:sticky bottom-0 z-30">
       <div
-        className="w-full"
-        style={{
-          height: 40,
-          background: 'var(--teal)',
-          backdropFilter: 'blur(12px)',
-          borderTop: '1.5px solid rgba(255,255,255,0.25)',
-          borderBottom: 'none',
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          borderRadius: '24px 24px 0 0'
-        }}
+        className="w-full footer-shell"
       >
+        <div className="footer-mobile-marquee" aria-hidden="true">
+          <div className="footer-marquee">
+            <span>{marqueeText}</span>
+            <span aria-hidden="true">{marqueeText}</span>
+          </div>
+        </div>
         <div className="h-full flex items-center justify-between gap-4" style={{ paddingInline: '8px' }}>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 socials-cluster">
             <a href="https://www.instagram.com/thejumpymonkey" aria-label="Instagram" className="footer-btn" target="_blank" rel="noopener noreferrer">
               <span className="footer-mask instagram" aria-hidden="true" />
             </a>
@@ -64,9 +60,10 @@ export default function FooterBar() {
         <div className="h-px" style={{ background: '#0b0d1a', opacity: 0.6 }} />
       </div>
       <div className="footer-meta" aria-label="Site information links">
-        <details ref={privacyDetailsRef} className="footer-privacy">
-          <summary>Privacy Policy</summary>
-          <div className="privacy-copy" id="privacy-policy">
+        <div className="footer-meta-row">
+          <details ref={privacyDetailsRef} className="footer-privacy">
+            <summary>Privacy Policy</summary>
+            <div className="privacy-copy" id="privacy-policy">
             <h2>Privacy Policy</h2>
             <p><strong>Last updated:</strong> November 1, 2025</p>
             <p>This Privacy Policy explains how dreamriver.eshaansood.in collects, uses, and shares information when you visit <strong>https://dreamriver.in</strong> or use our services.</p>
@@ -142,16 +139,31 @@ export default function FooterBar() {
             <p>We may update this policy from time to time. We’ll post the new date at the top. If changes are material, we’ll take reasonable steps to notify you.</p>
             <h3>12) Contact us</h3>
             <p>Questions or requests? Email <strong>eshaan@eshaansood.in</strong>.</p>
-          </div>
-        </details>
-        <a className="footer-link" href="https://www.eshaansood.in" target="_blank" rel="noopener noreferrer">
-          Go Home
-        </a>
+            </div>
+          </details>
+          <a className="footer-link" href="https://www.eshaansood.in" target="_blank" rel="noopener noreferrer">
+            Go Home
+          </a>
+        </div>
       </div>
       <style jsx>{`
         .footer-btn {
           width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
           border-radius: 6px; background: rgba(11,13,26,0.75);
+        }
+        .footer-shell {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          min-height: 40px;
+          justify-content: center;
+          background: var(--card-frost);
+          backdrop-filter: var(--card-blur);
+          -webkit-backdrop-filter: var(--card-blur);
+          border-top-left-radius: 24px;
+          border-top-right-radius: 24px;
+          border: var(--card-border);
+          border-bottom: none;
         }
         .footer-icon { display: none; }
         .footer-mask { display: inline-block; width: 20px; height: 20px; background-color: white; -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
@@ -171,21 +183,35 @@ export default function FooterBar() {
         }
         @media (min-width: 640px) {
           .footer-marquee-container { display: flex; }
+          .footer-mobile-marquee { display: none; }
+          .footer-shell { min-height: 40px; }
+        }
+        .footer-mobile-marquee {
+          display: block;
+          width: 100%;
+          padding: 8px 16px 0;
+          overflow: hidden;
+        }
+        .socials-cluster {
+          width: auto;
         }
         .footer-marquee {
           display: inline-flex;
-          gap: 40px;
           white-space: nowrap;
-          animation: marquee-scroll 24s linear infinite;
+          animation: marquee-scroll 30s linear infinite;
           font-size: 12px;
           font-weight: 500;
           color: rgba(255,255,255,0.85);
           font-family: "Helvetica", "Arial", sans-serif;
+          will-change: transform;
         }
-        .footer-marquee span { display: inline-block; }
+        .footer-marquee span {
+          display: inline-block;
+          padding-right: 48px;
+        }
         @keyframes marquee-scroll {
           0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+          100% { transform: translateX(-100%); }
         }
         .footer-meta {
           margin-top: 12px;
@@ -200,6 +226,14 @@ export default function FooterBar() {
           color: rgba(255,255,255,0.75);
           font-family: "Helvetica", "Arial", sans-serif;
         }
+        .footer-meta-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: center;
+          gap: 14px;
+          width: 100%;
+        }
         .footer-meta .footer-link,
         .footer-meta summary {
           color: rgba(255,255,255,0.9);
@@ -213,17 +247,18 @@ export default function FooterBar() {
           display: none;
         }
         .footer-privacy {
-          width: 100%;
           max-width: 920px;
+          text-align: center;
         }
         .privacy-copy {
-          margin-top: 8px;
+          margin: 8px auto 0;
           text-align: left;
           background: rgba(11,13,26,0.55);
           border-radius: 12px;
           padding: 16px 18px;
           max-height: 260px;
           overflow-y: auto;
+          width: min(100%, 920px);
         }
         .privacy-copy h2 {
           margin-top: 0;

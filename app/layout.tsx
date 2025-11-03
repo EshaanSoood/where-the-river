@@ -31,8 +31,6 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased page-frame page-viewport`}>
         <Background />
-        {/* Desktop-only top/bottom subtle cushions; hidden on mobile */}
-        <div className="viewport-cushion" aria-hidden="true" />
         <div className="page-container">
           <Providers>{children}</Providers>
         </div>
