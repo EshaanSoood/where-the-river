@@ -136,37 +136,20 @@ export default function FooterBar() {
       <div
         className="w-full footer-shell"
       >
-        <div className="footer-mobile-marquee" aria-hidden="true">
-          <div className="footer-marquee">
-            <span>{marqueeText}</span>
-            <span aria-hidden="true">{marqueeText}</span>
-          </div>
-        </div>
-        <div className="lg:hidden h-full flex flex-wrap items-center justify-center gap-4" style={{ paddingInline: '8px' }}>
+        <div className="footer-top" style={{ paddingInline: '8px' }}>
           <div className="flex items-center gap-2 socials-cluster">
             {socialLinks}
           </div>
-        </div>
-        <div className="hidden lg:flex footer-desktop-bar" style={{ paddingInline: '12px' }}>
-          <div className="flex items-center gap-2 socials-cluster">
-            {socialLinks}
-          </div>
-          <div className="footer-desktop-marquee" aria-hidden="true">
+          <div className="footer-marquee-container" aria-hidden="true">
             <div className="footer-marquee">
               <span>{marqueeText}</span>
               <span aria-hidden="true">{marqueeText}</span>
             </div>
           </div>
-          <div className="footer-desktop-meta" aria-label="Site information links">
-            <PrivacyDetails contentId="privacy-policy-desktop" />
-            <a className="footer-link" href="https://www.eshaansood.in" target="_blank" rel="noopener noreferrer">
-              Go Home
-            </a>
-          </div>
         </div>
         <div className="h-px" style={{ background: '#0b0d1a', opacity: 0.6 }} />
       </div>
-      <div className="footer-meta lg:hidden" aria-label="Site information links">
+      <div className="footer-meta" aria-label="Site information links">
         <div className="footer-meta-row">
           <PrivacyDetails contentId="privacy-policy" />
           <a className="footer-link" href="https://www.eshaansood.in" target="_blank" rel="noopener noreferrer">
@@ -201,50 +184,36 @@ export default function FooterBar() {
         .footer-mask.spotify { -webkit-mask-image: url('/Streaming/pngs/spotify.png'); mask-image: url('/Streaming/pngs/spotify.png'); }
         .footer-mask.instagram { -webkit-mask-image: url('/logos/instagram-.png'); mask-image: url('/logos/instagram-.png'); }
         .footer-mask.mail { -webkit-mask-image: url('/logos/email.png'); mask-image: url('/logos/email.png'); }
-        .footer-desktop-bar {
+        .footer-top {
           width: 100%;
-          align-items: center;
-          gap: 24px;
-        }
-        .footer-desktop-marquee {
-          flex: 1;
-          background: #2F6A75;
-          border-radius: 18px;
-          padding: 10px 24px;
           display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+        }
+        .footer-marquee-container {
+          flex: 1;
+          display: none;
+          justify-content: flex-end;
           align-items: center;
           overflow: hidden;
           min-width: 0;
+          background: #2F6A75;
+          border-radius: 18px;
+          padding: 10px 24px;
           box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
         }
-        .footer-desktop-meta {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          justify-content: flex-end;
-          color: rgba(255,255,255,0.9);
+        .footer-marquee {
+          display: inline-flex;
+          gap: 40px;
+          white-space: nowrap;
+          font-size: 12px;
+          font-weight: 500;
+          color: rgba(255,255,255,0.85);
+          font-family: "Helvetica", "Arial", sans-serif;
         }
-        .footer-desktop-meta .footer-link,
-        .footer-desktop-meta summary {
-          color: rgba(255,255,255,0.9);
-          text-decoration: underline;
-          cursor: pointer;
-        }
-        .footer-desktop-meta summary {
-          list-style: none;
-        }
-        .footer-desktop-meta summary::-webkit-details-marker {
-          display: none;
-        }
-        @media (min-width: 1024px) {
-          .footer-mobile-marquee { display: none; }
-          .footer-shell { min-height: 40px; }
-          .footer-desktop-meta .privacy-copy {
-            margin: 8px 0 0 auto;
-          }
-          .footer-desktop-meta .footer-privacy {
-            text-align: right;
-          }
+        .footer-marquee span {
+          display: inline-block;
         }
         .footer-mobile-marquee {
           display: block;
@@ -252,31 +221,21 @@ export default function FooterBar() {
           padding: 8px 16px 0;
           overflow: hidden;
         }
-        .socials-cluster {
+        .footer-top .socials-cluster {
           width: auto;
         }
         @media (max-width: 1023px) {
-          .socials-cluster {
-            margin: 0 auto;
+          .footer-marquee-container {
+            display: none;
+          }
+          .footer-top {
+            justify-content: center;
           }
         }
-        .footer-marquee {
-          display: inline-flex;
-          white-space: nowrap;
-          animation: marquee-scroll 30s linear infinite;
-          font-size: 12px;
-          font-weight: 500;
-          color: rgba(255,255,255,0.85);
-          font-family: "Helvetica", "Arial", sans-serif;
-          will-change: transform;
-        }
-        .footer-marquee span {
-          display: inline-block;
-          padding-right: 48px;
-        }
-        @keyframes marquee-scroll {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-100%); }
+        @media (min-width: 1024px) {
+          .footer-mobile-marquee { display: none; }
+          .footer-shell { min-height: 40px; }
+          .footer-marquee-container { display: flex; }
         }
         .footer-meta {
           margin-top: 12px;
