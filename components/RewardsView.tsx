@@ -304,7 +304,29 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                             {claimingId === tier.id ? 'Claiming…' : 'Claim Reward'}
                           </button>
                         )}
-                        {status === "claimed" && (tier.id === 'r20' || tier.id === 'r50' || tier.id === 'r100') && (
+                        {status === "claimed" && tier.id === 'r20' ? (
+                          <a
+                            href="https://www.eshaansood.in/dream-river"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-md btn px-4 py-2 font-seasons focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]"
+                            style={{ background: '#0E3E45', border: '2px solid rgba(19,94,102,0.9)' }}
+                          >
+                            Watch Now
+                          </a>
+                        ) : null}
+                        {status === "claimed" && tier.id === 'r50' ? (
+                          <a
+                            href="https://youtu.be/s29hw8VduGc?si=aqCLGeLQ_OyfgEMG"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-md btn px-4 py-2 font-seasons focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]"
+                            style={{ background: '#0E3E45', border: '2px solid rgba(19,94,102,0.9)' }}
+                          >
+                            Watch Now
+                          </a>
+                        ) : null}
+                        {status === "claimed" && tier.id === 'r100' && (
                           <button
                             type="button"
                             className="rounded-md btn px-4 py-2 font-seasons focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]"
@@ -468,7 +490,7 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                   <p className="mb-2 text-base leading-relaxed">This is a recording of our show from the Dream River Launch Tour in Boston. We collaborated with an amazing singer- Aditi Malhotra.</p>
                   <p className="mb-4 text-sm italic opacity-80">You can now watch this concert from the comfort of your home.</p>
                   <a
-                    href="https://www.eshaansood.in/dream-river"
+                    href="https://youtu.be/s29hw8VduGc?si=aqCLGeLQ_OyfgEMG"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center bg-[#0b0d1a] hover:brightness-110 text-white font-seasons text-lg px-6 py-2 rounded-xl transition-all"
