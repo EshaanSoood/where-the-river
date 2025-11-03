@@ -10,7 +10,7 @@ export default function HowToPlayVideo({ onHeightChange }: Props) {
         <iframe
           width="560"
           height="315"
-          src="https://www.youtube.com/embed/AlvMCxaiIno?si=ZkyjiCvfv2IRvSZ0"
+          src="https://www.youtube.com/embed/iDjtL9hFlQw?si=ADol5GFFZbDa3wU2"
           title="YouTube video player"
           frameBorder={0}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

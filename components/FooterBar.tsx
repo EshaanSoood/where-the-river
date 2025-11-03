@@ -181,7 +181,7 @@ export default function FooterBar() {
           overflow: hidden;
           min-width: 0;
         }
-        @media (min-width: 640px) {
+        @media (min-width: 1024px) {
           .footer-marquee-container { display: flex; }
           .footer-mobile-marquee { display: none; }
           .footer-shell { min-height: 40px; }
@@ -194,6 +194,11 @@ export default function FooterBar() {
         }
         .socials-cluster {
           width: auto;
+        }
+        @media (max-width: 1023px) {
+          .socials-cluster {
+            margin: 0 auto;
+          }
         }
         .footer-marquee {
           display: inline-flex;

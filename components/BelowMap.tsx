@@ -504,7 +504,7 @@ export default function BelowMap({ initialInviter, initialGlobeSnapshot }: Below
                     onClick={() => setLeaderboardOpen(v => !v)}
                     onKeyDown={(e) => { if (e.key === 'Escape') setLeaderboardOpen(false); }}
                   >
-                    <img src="/logos/trophy.svg" alt="" width="18" height="18" aria-hidden="true" className="header-icon" />
+                    <img src="/logos/trophy.svg" alt="" width="18" height="18" aria-hidden="true" className="header-icon" style={{ filter: 'invert(1)' }} />
                   </button>
                 </div>
               </div>

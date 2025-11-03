@@ -110,16 +110,30 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
         setTimeout(()=>{ container.remove(); }, 1200);
       } catch {}
     };
-    if (tier.id === "r150") {
+    if (tier.id === "r20" || tier.id === "r50" || tier.id === "r100") {
+      try {
+        setClaimingId(tier.id);
+        setClaimedIds((ids) => (ids.includes(tier.id) ? ids : [...ids, tier.id]));
+        setClaimedAt((m) => ({ ...m, [tier.id]: new Date().toISOString() }));
+        fireConfetti(itemRefs.current[tier.id] || null);
+        setActiveRewardModal(tier.id);
+        setAnnounce("Reward claimed. Details available in View Reward.");
+      } finally {
+        setClaimingId(null);
+      }
+      return;
+    }
+    if (tier.id === "r150" || tier.id === "r250" || tier.id === "r400") {
       try {
         setClaimingId(tier.id);
         const { data: userRes } = await supabase.auth.getUser();
         const userId = userRes.user?.id;
         if (!userId) throw new Error("Not authenticated");
-        const payload: BronzePayload = { code: "BRONZE12" };
+        const rewardId = tier.id === "r150" ? 150 : tier.id === "r250" ? 250 : 400;
+        const payload = tier.id === "r150" ? { code: "BRONZE12" } : null;
         const { error } = await supabase
           .from("user_rewards")
-          .upsert({ user_id: userId, reward_id: 150, payload }, { onConflict: "user_id,reward_id" });
+          .upsert({ user_id: userId, reward_id: rewardId, payload }, { onConflict: "user_id,reward_id" });
         if (error) throw error;
         setClaimedIds((ids) => (ids.includes(tier.id) ? ids : [...ids, tier.id]));
         setClaimedAt((m) => ({ ...m, [tier.id]: new Date().toISOString() }));
@@ -127,7 +141,6 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
         setActiveRewardModal(tier.id);
         setAnnounce("Reward claimed. Details available in View Reward.");
       } catch {
-        // Silently ignore for now; keep UI responsive
         setAnnounce("Sorry, we couldn't claim that reward. Please try again.");
       } finally {
         setClaimingId(null);
@@ -291,7 +304,23 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                             {claimingId === tier.id ? 'Claiming…' : 'Claim Reward'}
                           </button>
                         )}
-                        {status === "claimed" && (
+                        {status === "claimed" && (tier.id === 'r20' || tier.id === 'r50' || tier.id === 'r100') && (
+                          <button
+                            type="button"
+                            className="rounded-md btn px-4 py-2 font-seasons focus-visible:ring-2 focus-visible:ring-[color:var(--teal)]"
+                            onClick={() => setActiveRewardModal(tier.id)}
+                            style={{ background: '#0E3E45', border: '2px solid rgba(19,94,102,0.9)' }}
+                          >
+                            View Reward
+                          </button>
+                        )}
+                        {status === "claimed" && tier.id === 'r250' && (
+                          <button type="button" className="rounded-md btn px-4 py-2 font-seasons opacity-70 cursor-not-allowed" disabled aria-disabled="true">Claimed</button>
+                        )}
+                        {status === "claimed" && tier.id === 'r400' && (
+                          <button type="button" className="rounded-md btn px-4 py-2 font-seasons opacity-70 cursor-not-allowed" disabled aria-disabled="true">Claimed</button>
+                        )}
+                        {status === "claimed" && tier.id !== 'r20' && tier.id !== 'r50' && tier.id !== 'r100' && tier.id !== 'r250' && tier.id !== 'r400' && (
                           <button type="button" className="rounded-md btn px-4 py-2 font-seasons opacity-70 cursor-not-allowed" disabled aria-disabled="true">Claimed</button>
                         )}
                       </div>
@@ -395,6 +424,182 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
           </div>
         </>
       )}
+      {(activeRewardModal === 'r20' || activeRewardModal === 'r50' || activeRewardModal === 'r100' || activeRewardModal === 'r250' || activeRewardModal === 'r400') && (
+        <>
+          <div className="fixed inset-0 z-[85] bg-black/45" aria-hidden="true" onClick={() => setActiveRewardModal(null)} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={
+              activeRewardModal === 'r20'
+                ? 'r20-title'
+                : activeRewardModal === 'r50'
+                  ? 'r50-title'
+                  : activeRewardModal === 'r100'
+                    ? 'r100-title'
+                    : activeRewardModal === 'r250'
+                      ? 'r250-title'
+                      : 'r400-title'
+            }
+            tabIndex={-1}
+            className="fixed z-[90] inset-x-0 bottom-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 w-full sm:max-w-xl rounded-[24px] shadow-md p-6 outline-none"
+            style={{ background: 'rgba(210,245,250,0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+            onKeyDown={(e) => { if (e.key === 'Escape') setActiveRewardModal(null); trapFocus(e as unknown as React.KeyboardEvent<HTMLDivElement>); }}
+          >
+            <button aria-label="Close" className="absolute top-2 right-3 text-xl" onClick={() => setActiveRewardModal(null)}>×</button>
+            <div className="reward-modal-content text-center">
+              {activeRewardModal === 'r20' ? (
+                <>
+                  <h2 id="r20-title" className="font-seasons text-2xl mb-3">Check Out The Origin Story.</h2>
+                  <p className="mb-2 text-base leading-relaxed">Come take a deeper peek behind the curtain.</p>
+                  <p className="mb-4 text-sm italic opacity-80">Shhh. Don’t share this link with anyone. We’re trying to keep it secret.</p>
+                  <a
+                    href="https://www.eshaansood.in/dream-river"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center bg-[#0b0d1a] hover:brightness-110 text-white font-seasons text-lg px-6 py-2 rounded-xl transition-all"
+                  >
+                    Watch Now
+                  </a>
+                </>
+              ) : activeRewardModal === 'r50' ? (
+                <>
+                  <h2 id="r50-title" className="font-seasons text-2xl mb-3">Watch A Show</h2>
+                  <p className="mb-2 text-base leading-relaxed">This is a recording of our show from the Dream River Launch Tour in Boston. We collaborated with an amazing singer- Aditi Malhotra.</p>
+                  <p className="mb-4 text-sm italic opacity-80">You can now watch this concert from the comfort of your home.</p>
+                  <a
+                    href="https://www.eshaansood.in/dream-river"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center bg-[#0b0d1a] hover:brightness-110 text-white font-seasons text-lg px-6 py-2 rounded-xl transition-all"
+                  >
+                    Watch Now
+                  </a>
+                </>
+              ) : activeRewardModal === 'r100' ? (
+                <>
+                  <h2 id="r100-title" className="font-seasons text-2xl mb-3">Have any questions whatsoever?</h2>
+                  <p className="mb-2 text-base leading-relaxed">Ask Eshaan or any of the other members of the band.</p>
+                  <form
+                    action="https://formspree.io/f/xrbowlbr"
+                    method="POST"
+                    encType="multipart/form-data"
+                    className="mt-4 space-y-4 text-left"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="r100-name" className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                        Full Name
+                      </label>
+                      <input
+                        id="r100-name"
+                        name="full_name"
+                        type="text"
+                        required
+                        className="rounded-lg border px-3 py-2"
+                        style={{ borderColor: 'rgba(19,94,102,0.35)', background: 'rgba(255,255,255,0.9)', color: 'var(--ink)' }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="r100-email" className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                        Email
+                      </label>
+                      <input
+                        id="r100-email"
+                        name="email"
+                        type="email"
+                        required
+                        className="rounded-lg border px-3 py-2"
+                        style={{ borderColor: 'rgba(19,94,102,0.35)', background: 'rgba(255,255,255,0.9)', color: 'var(--ink)' }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="r100-question" className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                        Question / Comment
+                      </label>
+                      <textarea
+                        id="r100-question"
+                        name="question"
+                        required
+                        maxLength={500}
+                        rows={5}
+                        className="rounded-lg border px-3 py-2"
+                        style={{ borderColor: 'rgba(19,94,102,0.35)', background: 'rgba(255,255,255,0.9)', color: 'var(--ink)', resize: 'vertical' }}
+                      />
+                      <div className="text-xs opacity-70" style={{ color: 'var(--ink)' }}>
+                        500 character limit.
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      className="inline-flex items-center justify-center bg-[#0b0d1a] hover:brightness-110 text-white font-seasons text-lg px-6 py-2 rounded-xl transition-all"
+                    >
+                      Send Now
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <h2 id="r250-title" className="font-seasons text-2xl mb-3">Woah! You Made it!</h2>
+                  <p className="mb-4 text-base leading-relaxed">Well, I honestly never thought anyone would get here. So I’m going to let you into my world for Album 2. And if you want to hang with me one on one and ask me about anything at all we can do that too.</p>
+                  <form
+                    action="https://formspree.io/f/meopbzgo"
+                    method="POST"
+                    encType="multipart/form-data"
+                    className="mt-4 space-y-4 text-left"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="r250-name" className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                        Full Name
+                      </label>
+                      <input
+                        id="r250-name"
+                        name="full_name"
+                        type="text"
+                        required
+                        className="rounded-lg border px-3 py-2"
+                        style={{ borderColor: 'rgba(19,94,102,0.35)', background: 'rgba(255,255,255,0.9)', color: 'var(--ink)' }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="r250-email" className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                        Email
+                      </label>
+                      <input
+                        id="r250-email"
+                        name="email"
+                        type="email"
+                        required
+                        className="rounded-lg border px-3 py-2"
+                        style={{ borderColor: 'rgba(19,94,102,0.35)', background: 'rgba(255,255,255,0.9)', color: 'var(--ink)' }}
+                      />
+                    </div>
+                    <fieldset className="flex flex-col gap-2" style={{ color: 'var(--ink)' }}>
+                      <legend className="text-sm font-semibold">Wanna Hang/Study?</legend>
+                      <label className="inline-flex items-center gap-2 text-sm">
+                        <input type="radio" name="wanna_hang" value="Yes" required />
+                        Yes
+                      </label>
+                      <label className="inline-flex items-center gap-2 text-sm">
+                        <input type="radio" name="wanna_hang" value="No" required />
+                        No
+                      </label>
+                    </fieldset>
+                    <button
+                      type="submit"
+                      className="inline-flex items-center justify-center bg-[#0b0d1a] hover:brightness-110 text-white font-seasons text-lg px-6 py-2 rounded-xl transition-all"
+                    >
+                      Submit Now
+                    </button>
+                    <p className="text-xs opacity-70" style={{ color: 'var(--ink)' }}>
+                      I’ll email you to co-ordinate times if you selected yes and send instructions for album 2 previews.
+                    </p>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
       {/* 150 Boats one-time modal */}
       {activeRewardModal === 'r150' && (
         <>
@@ -434,6 +639,106 @@ export default function RewardsView({ onBack, boatsTotal = 0 }: RewardsViewProps
                   Download Songs
                 </a>
               </div>
+            </div>
+          </div>
+        </>
+      )}
+      {activeRewardModal === 'r400' && (
+        <>
+          <div className="fixed inset-0 z-[95] bg-black/45" aria-hidden="true" onClick={() => setActiveRewardModal(null)} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="r400-title"
+            tabIndex={-1}
+            className="fixed z-[100] inset-x-0 bottom-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 w-full sm:max-w-xl rounded-[24px] shadow-md p-6 outline-none"
+            style={{ background: 'rgba(210,245,250,0.35)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+            onKeyDown={(e) => { if (e.key === 'Escape') setActiveRewardModal(null); trapFocus(e as unknown as React.KeyboardEvent<HTMLDivElement>); }}
+          >
+            <button aria-label="Close" className="absolute top-2 right-3 text-xl" onClick={() => setActiveRewardModal(null)}>×</button>
+            <div className="reward-modal-content text-center">
+              <h2 id="r400-title" className="font-seasons text-2xl mb-3">No Way!</h2>
+              <p className="mb-4 text-base leading-relaxed">
+                Well, you did it! I am going to learn how to fold a paper boat blind and send you a goodie bag. Just drop in your details below. Thank you so much for spreading Dream River far and wide.
+              </p>
+              <form
+                action="https://formspree.io/f/xvgvjqrq"
+                method="POST"
+                encType="multipart/form-data"
+                className="mt-4 space-y-4 text-left"
+              >
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="r400-name" className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                    Full Name
+                  </label>
+                  <input
+                    id="r400-name"
+                    name="full_name"
+                    type="text"
+                    required
+                    className="rounded-lg border px-3 py-2"
+                    style={{ borderColor: 'rgba(19,94,102,0.35)', background: 'rgba(255,255,255,0.9)', color: 'var(--ink)' }}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="r400-email" className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                    Email
+                  </label>
+                  <input
+                    id="r400-email"
+                    name="email"
+                    type="email"
+                    required
+                    className="rounded-lg border px-3 py-2"
+                    style={{ borderColor: 'rgba(19,94,102,0.35)', background: 'rgba(255,255,255,0.9)', color: 'var(--ink)' }}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="r400-phone" className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                    Phone
+                  </label>
+                  <input
+                    id="r400-phone"
+                    name="phone"
+                    type="tel"
+                    required
+                    className="rounded-lg border px-3 py-2"
+                    style={{ borderColor: 'rgba(19,94,102,0.35)', background: 'rgba(255,255,255,0.9)', color: 'var(--ink)' }}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="r400-address" className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                    Shipping Address
+                  </label>
+                  <textarea
+                    id="r400-address"
+                    name="shipping_address"
+                    rows={3}
+                    required
+                    className="rounded-lg border px-3 py-2"
+                    style={{ borderColor: 'rgba(19,94,102,0.35)', background: 'rgba(255,255,255,0.9)', color: 'var(--ink)', resize: 'vertical' }}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="r400-comments" className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                    Comments
+                  </label>
+                  <textarea
+                    id="r400-comments"
+                    name="comments"
+                    rows={4}
+                    required
+                    className="rounded-lg border px-3 py-2"
+                    style={{ borderColor: 'rgba(19,94,102,0.35)', background: 'rgba(255,255,255,0.9)', color: 'var(--ink)', resize: 'vertical' }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center bg-[#0b0d1a] hover:brightness-110 text-white font-seasons text-lg px-6 py-2 rounded-xl transition-all"
+                >
+                  Sail Away
+                </button>
+              </form>
             </div>
           </div>
         </>

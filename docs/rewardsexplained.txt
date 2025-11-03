@@ -1,0 +1,70 @@
+Dream River rewards overview (per `components/RewardsView.tsx`)
+================================================================
+
+Points budget
+-------------
+- The component takes `boatsTotal` and uses it directly as the participant's
+  point balance. There is no granular depth weighting yet; a TODO comment
+  notes future support for 10/5/1 scoring, but the live code simply returns
+  `Math.max(0, boatsTotal || 0)`.
+
+Reward ladder
+-------------
+- Six static tiers are defined in the `REWARDS` array:
+  - 20 boats (`r20`): “Watch The Documentary” (video tease).
+  - 50 boats (`r50`): “A Live Concert From the Comfort of Your Home”.
+  - 100 boats (`r100`): “Curiosity Killed The Cat” (message access).
+  - 150 boats (`r150`): “Be Nobody Else Has These Songs” (Bronze bundle with
+    exclusive songs + discount).
+  - 250 boats (`r250`): “Want to Know The Future?” (lesson-focused reward).
+  - 400 boats (`r400`): “The Golden Island” (physical shipping tier).
+
+Unlock and progress UX
+----------------------
+- `points` → highest unlocked tier (`currentTier`) and the upcoming tier
+  (`nextTier`) are computed every render.
+- The “Next Reward” card shows the upcoming tier name, a +N to unlock pill,
+  current progress bar, and falls back to a “final island” message once all
+  tiers are cleared.
+- Tier cards render in three buckets:
+  1. Unlocked (≤ current points) → full card with claim CTA.
+  2. Next/soon (first two locked tiers) → subdued cards with disabled buttons.
+  3. Later tiers → single “And N more islands ahead…” card.
+- When the user crosses a threshold, the component announces
+  “Unlocked {tier.title}” via `aria-live`.
+
+Claim flow
+----------
+- UI state tracks `claimedIds`, `claimedAt`, and `claimingId` locally.
+- Clicking “Claim Reward” runs `handleClaim(tier)`:
+  - For Bronze (`r150` / 150 boats):
+    * Fires `setClaimingId` and fetches the Supabase auth user.
+    * Upserts into the `user_rewards` table with `reward_id` 150 and payload
+      `{ code: "BRONZE12" }`.
+    * On success, adds `tier.id` to claimed state, timestamps it, triggers a
+      confetti overlay, opens a modal showing the Bandcamp code download links,
+      and sets a screen-reader announcement.
+    * On failure, resets `claimingId` and announces an error.
+  - For every other tier: the claim is optimistic-only. The card flips to a
+    “Claimed” button and the confetti fires, but there is no Supabase write
+    (state lives entirely in-memory).
+
+Support modals and accessibility
+--------------------------------
+- A sticky mini-header offers “Back”, “Rewards” title, and “How Points Work”.
+  The latter opens a modal explaining the aspirational 10/5/1 point structure,
+  with focus trapping and Escape/overlay close behavior.
+- When Bronze is claimed, a separate modal surfaces the BRONZE12 code with
+  primary actions (“Redeem on Bandcamp”, “Download Songs”) and can be closed via
+  the close button, overlay click, or Escape.
+- Confetti respects the `prefers-reduced-motion` media query.
+
+Key takeaways
+-------------
+- Points currently mirror `boatsTotal`; the UI messaging about 10/5/1 is ahead
+  of the actual implementation.
+- Only the 150-point Bronze tier persists to the `user_rewards` table with a
+  hard-coded code; all other tiers are cosmetic client toggles for now.
+- The rewards ladder, copy, and unlock thresholds are all hard-coded in the
+  component; there is no dynamic content coming from Supabase yet.
+

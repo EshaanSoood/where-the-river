@@ -1,0 +1,63 @@
+Rewards missing dedicated modals / wiring
+=========================================
+
+Source: `components/RewardsView.tsx` (referencing the static `REWARDS` array).
+Below are the five tiers that currently render cards but have no bespoke modal
+content or Supabase integration. All styling/details are pulled directly from
+the component.
+
+
+1. 20 boats — `r20`
+-------------------
+- Title shown: “20 Boats – Watch The Documentary”.
+- Body copy rendered:
+  “You’ve reached the first island. Here’s an early look at the story behind
+   Dream River.”
+- Claim state:
+  * If the user has ≥20 boats and has not claimed it yet, the card displays a
+    “Claim Reward” button. Clicking it only updates client state
+    (`claimedIds`/`claimedAt`) and fires local confetti; no backend call or
+    modal is attached.
+  * Once clicked, the button flips to a disabled “Claimed” button.
+- No extra code, files, or dialog appears afterwards.
+
+2. 50 boats — `r50`
+-------------------
+- Title: “50 Boats – A Live Concert From the Comfort of Your Home”.
+- Subtitle: “Exclusive Access To A Recorded Live Show”.
+- Body text: “Want to know what the songs sound like when we play them live?”
+- Claim mechanics identical to `r20`: optimistic local toggle with confetti,
+  no additional modal or Supabase record.
+
+3. 100 boats — `r100`
+--------------------
+- Title: “100 Boats – Curiosity Killed The Cat”.
+- Description: “You can now send your message directly to the creators. Ask
+  about the music, the process, or anything that moved you.”
+- Claim button behaves the same way—local state only, no modal.
+
+4. 250 boats — `r250`
+--------------------
+- Title: “250 Boats – Want to Know The Future?”
+- Description: “You’ve reached the Silver island — glimpses of what’s to come,
+  and an invitation to learn directly from Eshaan.”
+- Claim button → purely local state and confetti, no backend/modal.
+
+5. 400 boats — `r400`
+--------------------
+- Title: “400 Boats – The Golden Island”.
+- Description: “You’ve reached the Golden island — thank you for guiding so
+  many boats home. We’re going to send you an actual paper boat made by Eshaan
+  and a special gift with it.”
+- Claim button again just flips to “Claimed” in UI—no modal, no Supabase
+  writes.
+
+
+Next steps if wiring is desired
+-------------------------------
+- Each tier will need its own modal component (similar to the existing Bronze
+  modal) plus a Supabase `user_rewards` upsert to persist fulfillment details.
+- For downloadable assets, provide secure links; for service-based rewards
+  (lessons, shipping), a payload object (e.g., scheduling info) should be saved
+  alongside the reward ID so the backend team can fulfill the promise.
+
