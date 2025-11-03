@@ -187,14 +187,15 @@ export default function FooterBar() {
         .footer-top {
           width: 100%;
           display: flex;
+          flex-direction: column;
           align-items: center;
-          justify-content: space-between;
-          gap: 16px;
+          justify-content: center;
+          gap: 12px;
         }
         .footer-marquee-container {
           flex: 1;
-          display: none;
-          justify-content: flex-end;
+          display: flex;
+          justify-content: center;
           align-items: center;
           overflow: hidden;
           min-width: 0;
@@ -202,18 +203,25 @@ export default function FooterBar() {
           border-radius: 18px;
           padding: 10px 24px;
           box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+          text-align: center;
         }
         .footer-marquee {
           display: inline-flex;
-          gap: 40px;
+          gap: 24px;
           white-space: nowrap;
           font-size: 12px;
           font-weight: 500;
           color: rgba(255,255,255,0.85);
           font-family: "Helvetica", "Arial", sans-serif;
+          animation: marquee-scroll 25s linear infinite;
+          will-change: transform;
         }
         .footer-marquee span {
           display: inline-block;
+        }
+        @keyframes marquee-scroll {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
         }
         .footer-mobile-marquee {
           display: block;
@@ -223,19 +231,19 @@ export default function FooterBar() {
         }
         .footer-top .socials-cluster {
           width: auto;
-        }
-        @media (max-width: 1023px) {
-          .footer-marquee-container {
-            display: none;
-          }
-          .footer-top {
-            justify-content: center;
-          }
+          display: inline-flex;
         }
         @media (min-width: 1024px) {
           .footer-mobile-marquee { display: none; }
           .footer-shell { min-height: 40px; }
-          .footer-marquee-container { display: flex; }
+          .footer-top {
+            flex-direction: row;
+            justify-content: space-between;
+            gap: 24px;
+          }
+          .footer-marquee-container {
+            justify-content: flex-end;
+          }
         }
         .footer-meta {
           margin-top: 12px;
