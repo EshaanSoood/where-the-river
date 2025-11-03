@@ -480,7 +480,7 @@ export default function BelowMap({ initialInviter, initialGlobeSnapshot }: Below
                       <button
                         ref={dashboardToggleRef}
                         type="button"
-                        className="inline-flex items-center h-11 px-5 rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] text-sm whitespace-nowrap overflow-hidden self-center shadow-sm"
+                        className="inline-flex items-center h-11 px-5 min-w-[176px] rounded-[24px] bg-white/85 backdrop-blur-sm border text-[color:var(--ink)] text-sm whitespace-nowrap overflow-hidden self-center shadow-sm"
                         style={{ border: '1.5px solid rgba(255,255,255,0.25)' }}
                         aria-label="Participate"
                         aria-controls="panel-dashboard"

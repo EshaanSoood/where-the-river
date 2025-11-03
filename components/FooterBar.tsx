@@ -157,12 +157,12 @@ export default function FooterBar() {
               <span aria-hidden="true">{marqueeText}</span>
             </div>
           </div>
-        </div>
-        <div className="hidden lg:flex footer-desktop-meta-row" aria-label="Site information links">
-          <PrivacyDetails contentId="privacy-policy-desktop" />
-          <a className="footer-link" href="https://www.eshaansood.in" target="_blank" rel="noopener noreferrer">
-            Go Home
-          </a>
+          <div className="footer-desktop-meta" aria-label="Site information links">
+            <PrivacyDetails contentId="privacy-policy-desktop" />
+            <a className="footer-link" href="https://www.eshaansood.in" target="_blank" rel="noopener noreferrer">
+              Go Home
+            </a>
+          </div>
         </div>
         <div className="h-px" style={{ background: '#0b0d1a', opacity: 0.6 }} />
       </div>
@@ -217,32 +217,32 @@ export default function FooterBar() {
           min-width: 0;
           box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
         }
-        .footer-desktop-meta-row {
-          width: 100%;
-          justify-content: flex-end;
+        .footer-desktop-meta {
+          display: flex;
+          align-items: center;
           gap: 16px;
+          justify-content: flex-end;
           color: rgba(255,255,255,0.9);
-          padding: 0 12px 6px;
         }
-        .footer-desktop-meta-row .footer-link,
-        .footer-desktop-meta-row summary {
+        .footer-desktop-meta .footer-link,
+        .footer-desktop-meta summary {
           color: rgba(255,255,255,0.9);
           text-decoration: underline;
           cursor: pointer;
         }
-        .footer-desktop-meta-row summary {
+        .footer-desktop-meta summary {
           list-style: none;
         }
-        .footer-desktop-meta-row summary::-webkit-details-marker {
+        .footer-desktop-meta summary::-webkit-details-marker {
           display: none;
         }
         @media (min-width: 1024px) {
           .footer-mobile-marquee { display: none; }
           .footer-shell { min-height: 40px; }
-          .footer-desktop-meta-row .privacy-copy {
+          .footer-desktop-meta .privacy-copy {
             margin: 8px 0 0 auto;
           }
-          .footer-desktop-meta-row .footer-privacy {
+          .footer-desktop-meta .footer-privacy {
             text-align: right;
           }
         }
