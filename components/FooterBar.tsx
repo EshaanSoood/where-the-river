@@ -182,7 +182,7 @@ export default function FooterBar() {
           width: 20px;
           height: 20px;
           object-fit: contain;
-          filter: invert(1);
+          filter: brightness(0) invert(1);
         }
         .footer-top {
           width: 100%;
@@ -234,6 +234,12 @@ export default function FooterBar() {
         .footer-top .socials-cluster {
           width: auto;
           display: inline-flex;
+        }
+        @media (max-width: 1023px) {
+          .footer-marquee-container {
+            width: calc(100% - 32px);
+            margin: 0 auto;
+          }
         }
         @media (min-width: 1024px) {
           .footer-mobile-marquee { display: none; }
