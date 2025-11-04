@@ -114,13 +114,13 @@ export default function FooterBar() {
   const socialLinks = (
     <>
       <a href="https://www.instagram.com/thejumpymonkey" aria-label="Instagram" className="footer-btn" target="_blank" rel="noopener noreferrer">
-        <img src="/logos/instagram-.png" alt="" className="footer-icon" width={20} height={20} />
+        <span className="footer-mask footer-mask-instagram" aria-hidden="true" />
       </a>
       <a href="mailto:eshaan@eshaansood.in" aria-label="Email" className="footer-btn">
         <img src="/logos/email.png" alt="" className="footer-icon" width={20} height={20} />
       </a>
       <a href="https://www.youtube.com/@eshaansoood" aria-label="YouTube" className="footer-btn" target="_blank" rel="noopener noreferrer">
-        <img src="/Streaming/pngs/youtube.png" alt="" className="footer-icon" width={20} height={20} />
+        <span className="footer-mask footer-mask-youtube" aria-hidden="true" />
       </a>
       <a href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" aria-label="Apple Music" className="footer-btn" target="_blank" rel="noopener noreferrer">
         <img src="/Streaming/pngs/applemusic.png" alt="" className="footer-icon" width={20} height={20} />
@@ -177,12 +177,30 @@ export default function FooterBar() {
           border: var(--card-border);
           border-bottom: none;
         }
-        .footer-icon { display: none; }
         .footer-icon {
           width: 20px;
           height: 20px;
           object-fit: contain;
-          filter: brightness(0) invert(1);
+        }
+        .footer-mask {
+          display: inline-block;
+          width: 20px;
+          height: 20px;
+          background-color: rgba(255,255,255,0.95);
+          mask-repeat: no-repeat;
+          mask-position: center;
+          mask-size: contain;
+          -webkit-mask-repeat: no-repeat;
+          -webkit-mask-position: center;
+          -webkit-mask-size: contain;
+        }
+        .footer-mask-instagram {
+          mask-image: url('/logos/instagram-.png');
+          -webkit-mask-image: url('/logos/instagram-.png');
+        }
+        .footer-mask-youtube {
+          mask-image: url('/Streaming/pngs/youtube.png');
+          -webkit-mask-image: url('/Streaming/pngs/youtube.png');
         }
         .footer-top {
           width: 100%;
@@ -239,6 +257,11 @@ export default function FooterBar() {
           .footer-marquee-container {
             width: calc(100% - 32px);
             margin: 0 auto;
+            height: 40px;
+            max-height: 40px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
           }
         }
         @media (min-width: 1024px) {
@@ -251,6 +274,10 @@ export default function FooterBar() {
           }
           .footer-marquee-container {
             justify-content: center;
+            height: 32px;
+            max-height: 32px;
+            padding: 6px 16px;
+            margin-left: auto;
           }
         }
         .footer-meta {
