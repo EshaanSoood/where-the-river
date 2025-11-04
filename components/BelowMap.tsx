@@ -826,6 +826,9 @@ export default function BelowMap({ initialInviter, initialGlobeSnapshot }: Below
                     </button>
                     <button className="text-sm underline" onClick={() => setGuestStep('menu')}>Back</button>
                   </div>
+                  <p className="text-xs text-[color:var(--ink-2)] opacity-80">
+                    Your boat might have landed in Junk. Rescue it from the Bermuda Triangle if you see it.
+                  </p>
                         {/* Legal disclaimer */}
                         <div className="mt-3 text-[0.85rem] opacity-80">
                           By clicking <strong>Send Code</strong>, you consent to receiving emails and agree to our{' '}

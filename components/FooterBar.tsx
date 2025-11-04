@@ -140,8 +140,9 @@ export default function FooterBar() {
           <div className="flex items-center gap-2 socials-cluster">
             {socialLinks}
           </div>
-          <div className="footer-marquee-container" aria-hidden="true">
-            <div className="footer-marquee">
+          <div className="footer-marquee-container" role="marquee" aria-live="polite">
+            <div className="sr-only" aria-hidden="false">{marqueeText}</div>
+            <div className="footer-marquee" aria-hidden="true">
               <span>{marqueeText}</span>
               <span aria-hidden="true">{marqueeText}</span>
             </div>
