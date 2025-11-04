@@ -181,10 +181,10 @@ button, .btn {
     border-bottom-right-radius: 0 !important;
   }
   
-  /* Footer icon colors - white text */
-  footer .footer-mask {
-    background-color: white !important;
-  }
+/* Footer icons */
+footer .footer-icon {
+  display: inline-block;
+}
 
 /* GLITCH FIX 1: Globe centering - use flexbox to perfectly center */
 @media (min-width: 1024px) {

@@ -114,19 +114,19 @@ export default function FooterBar() {
   const socialLinks = (
     <>
       <a href="https://www.instagram.com/thejumpymonkey" aria-label="Instagram" className="footer-btn" target="_blank" rel="noopener noreferrer">
-        <span className="footer-mask instagram" aria-hidden="true" />
+        <img src="/logos/instagram-.png" alt="" className="footer-icon" width={20} height={20} />
       </a>
       <a href="mailto:eshaan@eshaansood.in" aria-label="Email" className="footer-btn">
-        <span className="footer-mask mail" aria-hidden="true" />
+        <img src="/logos/email.png" alt="" className="footer-icon" width={20} height={20} />
       </a>
       <a href="https://www.youtube.com/@eshaansoood" aria-label="YouTube" className="footer-btn" target="_blank" rel="noopener noreferrer">
-        <span className="footer-mask youtube" aria-hidden="true" />
+        <img src="/Streaming/pngs/youtube.png" alt="" className="footer-icon" width={20} height={20} />
       </a>
       <a href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" aria-label="Apple Music" className="footer-btn" target="_blank" rel="noopener noreferrer">
-        <span className="footer-mask applemusic" aria-hidden="true" />
+        <img src="/Streaming/pngs/applemusic.png" alt="" className="footer-icon" width={20} height={20} />
       </a>
       <a href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" aria-label="Spotify" className="footer-btn" target="_blank" rel="noopener noreferrer">
-        <span className="footer-mask spotify" aria-hidden="true" />
+        <img src="/Streaming/pngs/spotify.png" alt="" className="footer-icon" width={20} height={20} />
       </a>
     </>
   );
@@ -177,13 +177,12 @@ export default function FooterBar() {
           border-bottom: none;
         }
         .footer-icon { display: none; }
-        .footer-mask { display: inline-block; width: 20px; height: 20px; background-color: white; -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
-        .footer-mask.youtube { -webkit-mask-image: url('/Streaming/pngs/youtube.png'); mask-image: url('/Streaming/pngs/youtube.png'); }
-        .footer-mask.applemusic { -webkit-mask-image: url('/Streaming/pngs/applemusic.png'); mask-image: url('/Streaming/pngs/applemusic.png'); }
-        .footer-mask.bandcamp { -webkit-mask-image: url('/Streaming/pngs/bandcamp.png'); mask-image: url('/Streaming/pngs/bandcamp.png'); }
-        .footer-mask.spotify { -webkit-mask-image: url('/Streaming/pngs/spotify.png'); mask-image: url('/Streaming/pngs/spotify.png'); }
-        .footer-mask.instagram { -webkit-mask-image: url('/logos/instagram-.png'); mask-image: url('/logos/instagram-.png'); }
-        .footer-mask.mail { -webkit-mask-image: url('/logos/email.png'); mask-image: url('/logos/email.png'); }
+        .footer-icon {
+          width: 20px;
+          height: 20px;
+          object-fit: contain;
+          filter: invert(1);
+        }
         .footer-top {
           width: 100%;
           display: flex;
@@ -193,7 +192,7 @@ export default function FooterBar() {
           gap: 12px;
         }
         .footer-marquee-container {
-          flex: 1;
+          flex: 0 1 720px;
           display: flex;
           justify-content: center;
           align-items: center;
@@ -204,6 +203,8 @@ export default function FooterBar() {
           padding: 10px 24px;
           box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
           text-align: center;
+          width: min(100%, 720px);
+          margin: 0 auto;
         }
         .footer-marquee {
           display: inline-flex;
@@ -242,7 +243,7 @@ export default function FooterBar() {
             gap: 24px;
           }
           .footer-marquee-container {
-            justify-content: flex-end;
+            justify-content: center;
           }
         }
         .footer-meta {

@@ -1179,7 +1179,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     const animate = () => {
       const now = performance.now();
       drainPendingSpawns();
-      const tickMs = isHiddenRef.current ? TICK_MS_HIDDEN : (safeProfileRef.current ? 50 : 33);
+      const tickMs = isHiddenRef.current ? TICK_MS_HIDDEN : 33;
       if (now - lastTick >= tickMs) {
         lastTick = now;
         boatsRef.current.forEach(boat => {
@@ -1329,7 +1329,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
           });
         }
       });
-      cloned.scale.set(6, 6, 6);
+      cloned.scale.set(4.2, 4.2, 4.2);
       // Initial placement & orientation at t=0 for immediate visibility
       const pos0 = curve.getPointAt(0);
       cloned.position.copy(pos0);
