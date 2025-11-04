@@ -1227,19 +1227,87 @@ export default function BelowMap({ initialInviter, initialGlobeSnapshot }: Below
                     <div className="rounded-[12px] px-3 py-2 font-seasons text-white" style={{ background: 'rgba(11,13,26,0.80)', border: '1px solid rgba(255,255,255,0.25)' }}>
                       <div className="text-lg">{me?.name || ''}</div>
                     </div>
-                    {/* Share button */}
-                    <button
-                      ref={shareButtonRef}
-                      className="w-full min-h-12 rounded-[24px] font-seasons text-white"
-                      type="button"
-                      aria-label="Share Your Boat"
-                      onClick={handleShareClick}
-                      style={{ background: 'var(--teal)' }}
-                    >
-                      Share Your Boat
-                    </button>
+                    {/* Share button / overlay */}
+                    {!shareOpen && (
+                      <button
+                        ref={shareButtonRef}
+                        className="w-full min-h-12 rounded-[24px] font-seasons text-white"
+                        type="button"
+                        aria-label="Share Your Boat"
+                        onClick={handleShareClick}
+                        style={{ background: 'var(--teal)' }}
+                      >
+                        Share Your Boat
+                      </button>
+                    )}
+                    {shareOpen && (
+                      <div className="space-y-3" role="region" aria-labelledby="share-title-mobile">
+                        <div className="flex items-center justify-between">
+                          <button
+                            className="text-sm underline"
+                            onClick={() => {
+                              setShareOpen(false);
+                              setTimeout(() => shareButtonRef.current?.focus(), 0);
+                            }}
+                            aria-label="Back"
+                          >
+                            Back
+                          </button>
+                          <div aria-live="polite" className="sr-only">{announce}</div>
+                        </div>
+                        <h4
+                          id="share-title-mobile"
+                          ref={shareHeadingRef}
+                          tabIndex={-1}
+                          className="font-seasons text-lg"
+                          aria-label="Share"
+                        >
+                          Share
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3" id="share-tiles-wrap-mobile">
+                          <ShareTiles
+                            referralUrl={referralUrl}
+                            message={shareMessage}
+                            userFullName={me?.name || ''}
+                            onCopy={(ok) => setAnnounce(ok ? 'Copied invite to clipboard' : '')}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="font-sans text-sm" htmlFor="shareMessageMobile">Message</label>
+                          <textarea
+                            id="shareMessageMobile"
+                            className="w-full border rounded-md px-3 py-2"
+                            rows={3}
+                            value={shareMessage}
+                            onChange={(e) => setShareMessage(e.target.value)}
+                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              className="flex-1 border rounded-md px-3 py-2 bg-background"
+                              value={(me?.referral_url || '') as string}
+                              readOnly
+                              aria-label="Referral link"
+                            />
+                            <button
+                              type="button"
+                              className="rounded-md px-3 py-2 btn"
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(`${shareMessage} ${(me?.referral_url || '') as string}`.trim());
+                                  setAnnounce('Copied invite to clipboard');
+                                } catch {}
+                              }}
+                            >
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {/* Helper copy (mobile) */}
-                    <div className="font-sans text-sm opacity-80">Share your boat using this button to extend your river.</div>
+                    {!shareOpen && (
+                      <div className="font-sans text-sm opacity-80">Share your boat using this button to extend your river.</div>
+                    )}
                     {/* Streaming logos row (no heading) */}
                     <div id="dashboard-streaming" className="flex items-center justify-between gap-3 flex-wrap">
                       <a className="stream-btn" href="https://open.spotify.com/album/1Tjrceud212g5KUcZ37Y1U?si=V4_K_uW5T0y-zd7sw481rQ&nd=1&dlsi=5c3cba22ef9f467e" target="_blank" rel="noopener noreferrer" aria-label="Listen on Spotify"><span className="stream-icon spotify" aria-hidden="true" /></a>
