@@ -114,13 +114,13 @@ export default function FooterBar() {
   const socialLinks = (
     <>
       <a href="https://www.instagram.com/thejumpymonkey" aria-label="Instagram" className="footer-btn" target="_blank" rel="noopener noreferrer">
-        <span className="footer-mask footer-mask-instagram" aria-hidden="true" />
+        <img src="/logos/instagramwhite.png" alt="" className="footer-icon" width={20} height={20} />
       </a>
       <a href="mailto:eshaan@eshaansood.in" aria-label="Email" className="footer-btn">
         <img src="/logos/email.png" alt="" className="footer-icon" width={20} height={20} />
       </a>
       <a href="https://www.youtube.com/@eshaansoood" aria-label="YouTube" className="footer-btn" target="_blank" rel="noopener noreferrer">
-        <span className="footer-mask footer-mask-youtube" aria-hidden="true" />
+        <img src="/logos/youtubewhite.png" alt="" className="footer-icon" width={20} height={20} />
       </a>
       <a href="https://music.apple.com/us/album/the-sonic-alchemists-i-dream-river/1837469371" aria-label="Apple Music" className="footer-btn" target="_blank" rel="noopener noreferrer">
         <img src="/Streaming/pngs/applemusic.png" alt="" className="footer-icon" width={20} height={20} />
@@ -181,26 +181,6 @@ export default function FooterBar() {
           width: 20px;
           height: 20px;
           object-fit: contain;
-        }
-        .footer-mask {
-          display: inline-block;
-          width: 20px;
-          height: 20px;
-          background-color: rgba(255,255,255,0.95);
-          mask-repeat: no-repeat;
-          mask-position: center;
-          mask-size: contain;
-          -webkit-mask-repeat: no-repeat;
-          -webkit-mask-position: center;
-          -webkit-mask-size: contain;
-        }
-        .footer-mask-instagram {
-          mask-image: url('/logos/instagram-.png');
-          -webkit-mask-image: url('/logos/instagram-.png');
-        }
-        .footer-mask-youtube {
-          mask-image: url('/Streaming/pngs/youtube.png');
-          -webkit-mask-image: url('/Streaming/pngs/youtube.png');
         }
         .footer-top {
           width: 100%;
