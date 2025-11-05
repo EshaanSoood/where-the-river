@@ -1,3 +1,9 @@
+## 2025-11-05
+
+- Created separate Vercel project `riverflows-dev` for staging/dev deployments (production `riverflows` left untouched).
+- Mirrored Supabase environment variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) across production/preview/development targets on the new project.
+- Stored local project links as `.vercel/project.dev.json` (dev) and `.vercel/project.prod.json` (production) for easy switching.
+
 ## 2025-10-09
 
 - Added country-only schema: `country_code CHAR(2)` (deprecated `city`).

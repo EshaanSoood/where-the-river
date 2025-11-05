@@ -9,7 +9,26 @@ import { geoCentroid, geoBounds } from 'd3-geo';
 import type { PublicGlobeSnapshot } from '@/types/globe';
 
 const DEG_TO_RAD = Math.PI / 180;
+const EARTH_RADIUS_KM = 6371;
 const degToRad = (deg: number): number => deg * DEG_TO_RAD;
+const haversineDistanceKm = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const φ1 = degToRad(lat1);
+  const φ2 = degToRad(lat2);
+  const Δφ = degToRad(lat2 - lat1);
+  const Δλ = degToRad(lng2 - lng1);
+  const sinHalfΔφ = Math.sin(Δφ / 2);
+  const sinHalfΔλ = Math.sin(Δλ / 2);
+  const a = sinHalfΔφ * sinHalfΔφ + Math.cos(φ1) * Math.cos(φ2) * sinHalfΔλ * sinHalfΔλ;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return EARTH_RADIUS_KM * c;
+};
+const scaleForDistance = (distanceKm: number): number => {
+  if (!Number.isFinite(distanceKm) || distanceKm <= 0) return 1;
+  if (distanceKm < 400) return 0.8;
+  if (distanceKm < 2000) return 1;
+  if (distanceKm < 6000) return 1.18;
+  return 1.3;
+};
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
 
@@ -60,6 +79,7 @@ interface ArcData {
   startAltitude?: number;
   endAltitude?: number;
   primary?: boolean;
+  boatScale?: number;
 }
 
 type GlobeProps = {
@@ -208,6 +228,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       const isPrimary = chain.has(source) && chain.has(target);
       const startAltitude = typeof a.altitude === 'number' ? a.altitude : GUEST_NODE_ALTITUDE;
       const endAltitude = typeof b.altitude === 'number' ? b.altitude : GUEST_NODE_ALTITUDE;
+      const distanceKm = haversineDistanceKm(a.lat, a.lng, b.lat, b.lng);
+      const boatScale = scaleForDistance(distanceKm);
       arcs.push({
         startLat: a.lat,
         startLng: a.lng,
@@ -218,6 +240,7 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         startAltitude,
         endAltitude,
         primary: isPrimary,
+        boatScale,
       });
     });
     arcs.sort((x, y) => Number(Boolean(x.primary)) - Number(Boolean(y.primary)));
@@ -302,19 +325,20 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     } else {
       registerBoatKey(traversalKey, 'user');
     }
+    const scaleHint = 1;
     if (!safeProfileRef.current && waypoints.length > 1) {
       try {
         const curve = new THREE.CatmullRomCurve3(waypoints);
         curve.closed = false;
         const scene = sceneRef.current;
         if (scene && boatTemplateRef.current && glbLoadedRef.current) {
-          spawnBoatFromCurve(curve, traversalKey, 'user');
+          spawnBoatFromCurve(curve, traversalKey, 'user', scaleHint);
         } else if (scene) {
-          pendingSpawnsRef.current.push({ curve, arcKey: traversalKey, type: 'user' });
+          pendingSpawnsRef.current.push({ curve, arcKey: traversalKey, type: 'user', scale: scaleHint });
         }
       } catch {}
     } else if (waypoints.length > 1) {
-      pendingSpawnsRef.current.push({ curve: new THREE.CatmullRomCurve3(waypoints), arcKey: traversalKey, type: 'user' });
+      pendingSpawnsRef.current.push({ curve: new THREE.CatmullRomCurve3(waypoints), arcKey: traversalKey, type: 'user', scale: scaleHint });
     }
 
     drainPendingSpawns();
@@ -325,7 +349,17 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       if (!isBoatRegistered(key, 'user')) {
         const startAltitude = typeof arc.startAltitude === 'number' ? arc.startAltitude : GUEST_NODE_ALTITUDE;
         const endAltitude = typeof arc.endAltitude === 'number' ? arc.endAltitude : GUEST_NODE_ALTITUDE;
-        spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, startAltitude, endAltitude, 'user', key);
+        spawnBoatAlongArc(
+          arc.startLat,
+          arc.startLng,
+          arc.endLat,
+          arc.endLng,
+          startAltitude,
+          endAltitude,
+          'user',
+          key,
+          arc.boatScale
+        );
       }
     });
   };
@@ -514,9 +548,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   const boatTemplateRef = useRef<THREE.Object3D | null>(null);
   const boatTemplateMaterialRef = useRef<THREE.Material | null>(null);
   const glbLoadedRef = useRef<boolean>(false);
-  const boatsRef = useRef<{ id: number; mesh: THREE.Object3D; curve: THREE.CatmullRomCurve3; startTime: number; duration: number; type: BoatType; arcKey: string; materials: THREE.Material[] }[]>([]);
+  const boatsRef = useRef<{ id: number; mesh: THREE.Object3D; curve: THREE.CatmullRomCurve3; elapsed: number; duration: number; type: BoatType; arcKey: string; materials: THREE.Material[]; scale: number }[]>([]);
   const boatArcKeysRef = useRef<Set<string>>(new Set());
-  const pendingSpawnsRef = useRef<{ curve: THREE.CatmullRomCurve3; arcKey: string; type: BoatType }[]>([]);
+  const pendingSpawnsRef = useRef<{ curve: THREE.CatmullRomCurve3; arcKey: string; type: BoatType; scale?: number }[]>([]);
   const drainingPendingRef = useRef<boolean>(false);
   const appliedInitialSnapshotRef = useRef<boolean>(false);
 
@@ -531,9 +565,9 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     drainingPendingRef.current = true;
     try {
       const queue = pendingSpawnsRef.current.splice(0);
-      queue.forEach(({ curve, arcKey, type }) => {
+      queue.forEach(({ curve, arcKey, type, scale }) => {
         try {
-          spawnBoatFromCurve(curve, arcKey, type);
+          spawnBoatFromCurve(curve, arcKey, type, scale);
         } catch (err) {
           unregisterBoatKey(arcKey, type);
           console.error('[GlobeNew] pending boat spawn failed', err);
@@ -1172,56 +1206,109 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
   // --- Boat animation loop (single-boat) with fixed-step simulation (allocation-free) ---
   useEffect(() => {
     let rafId: number;
-    const TICK_MS_HIDDEN = 1000; // 1Hz when hidden (user-requested)
-    let lastTick = performance.now();
+    const TICK_MS_HIDDEN = 1000;
     const pos = new THREE.Vector3();
     const tan = new THREE.Vector3();
-    const animate = () => {
-      const now = performance.now();
-      drainPendingSpawns();
-      const tickMs = isHiddenRef.current ? TICK_MS_HIDDEN : 33;
-      if (now - lastTick >= tickMs) {
-        lastTick = now;
-        boatsRef.current.forEach(boat => {
-          const elapsed = now - boat.startTime;
-          const t = (elapsed / boat.duration) % 1.0;
-          boat.curve.getPointAt(t, pos);
-          try {
-            const globe = globeEl.current; const cam = globe?.camera();
-            if (cam) {
-              const visible = pos.clone().normalize().dot(cam.position.clone().normalize()) > 0;
-              (boat.mesh as any).visible = visible;
-              if (!visible) return;
-            }
-          } catch {}
-          boat.mesh.position.copy(pos);
-          // Offset boat slightly away from globe center (radially outward) to keep it above arcs/land
-          boat.mesh.position.multiplyScalar(1.02);
-          boat.curve.getTangentAt(t, tan);
-          boat.mesh.up.copy(pos).normalize();
-          boat.mesh.lookAt(pos.clone().add(tan));
+    const lookTarget = new THREE.Vector3();
+    const cameraDir = new THREE.Vector3();
+    const unitPos = new THREE.Vector3();
+    let lastTime = performance.now();
+    let hiddenAccum = 0;
 
-          const fadeStart = 0.9;
-          const fade = t < fadeStart ? 1 : Math.max(0, 1 - (t - fadeStart) / (1 - fadeStart));
-          if (boat.materials && boat.materials.length) {
-            boat.materials.forEach((mat) => {
-              if (typeof (mat as any).opacity === 'number') {
+    const animate = () => {
+      rafId = requestAnimationFrame(animate);
+      const now = performance.now();
+      let delta = now - lastTime;
+      lastTime = now;
+
+      if (isHiddenRef.current) {
+        hiddenAccum += delta;
+        if (hiddenAccum < TICK_MS_HIDDEN) {
+          return;
+        }
+        delta = hiddenAccum;
+        hiddenAccum = 0;
+      } else {
+        hiddenAccum = 0;
+        const maxStep = safeProfileRef.current ? 33 : 16;
+        delta = Math.min(delta, maxStep);
+      }
+
+      drainPendingSpawns();
+
+      if (!Number.isFinite(delta) || delta <= 0) {
+        return;
+      }
+
+      const globe = globeEl.current;
+      const cam: THREE.PerspectiveCamera | null = globe?.camera?.() ?? null;
+      if (cam) {
+        cameraDir.copy(cam.position).normalize();
+      }
+
+      const HORIZON_FADE_START = -0.15;
+      const HORIZON_FULL_VISIBLE = 0.1;
+
+      boatsRef.current.forEach((boat) => {
+        boat.elapsed = (boat.elapsed + delta) % boat.duration;
+        const t = boat.duration > 0 ? boat.elapsed / boat.duration : 0;
+
+        boat.curve.getPointAt(t, pos);
+        const outwardScale = boat.type === 'user' ? 1.022 : 1.018;
+        boat.mesh.position.copy(pos).multiplyScalar(outwardScale);
+
+        boat.curve.getTangentAt(t, tan);
+        boat.mesh.up.copy(pos).normalize();
+        lookTarget.copy(pos).add(tan);
+        boat.mesh.lookAt(lookTarget);
+
+        let horizonOpacity = 1;
+        if (cam) {
+          unitPos.copy(pos).normalize();
+          const dot = unitPos.dot(cameraDir);
+          horizonOpacity = clamp(
+            (dot - HORIZON_FADE_START) / (HORIZON_FULL_VISIBLE - HORIZON_FADE_START),
+            0,
+            1
+          );
+          if (horizonOpacity <= 0.001) {
+            boat.mesh.visible = false;
+            if (boat.materials && boat.materials.length) {
+              boat.materials.forEach((mat) => {
                 const material = mat as any;
-                if (material.opacity !== fade) {
-                  material.opacity = fade;
+                if (typeof material.opacity === 'number' && material.opacity !== 0) {
+                  material.opacity = 0;
                   material.transparent = true;
                   material.needsUpdate = true;
                 }
-              }
-            });
+              });
+            }
+            return;
           }
-        });
-        // Keep overlay labels pinned to nodes every frame
-        scheduleOverlayUpdate();
-      }
-      rafId = requestAnimationFrame(animate);
+        }
+
+        boat.mesh.visible = true;
+
+        const fadeStart = 0.9;
+        const travelFade = t < fadeStart ? 1 : Math.max(0, 1 - (t - fadeStart) / (1 - fadeStart));
+        const finalOpacity = Math.max(0, Math.min(1, horizonOpacity * travelFade));
+
+        if (boat.materials && boat.materials.length) {
+          boat.materials.forEach((mat) => {
+            const material = mat as any;
+            if (typeof material.opacity === 'number' && Math.abs(material.opacity - finalOpacity) > 0.01) {
+              material.opacity = finalOpacity;
+              material.transparent = true;
+              material.needsUpdate = true;
+            }
+          });
+        }
+      });
+
+      scheduleOverlayUpdate();
     };
-    animate();
+
+    rafId = requestAnimationFrame(animate);
     return () => {
       cancelAnimationFrame(rafId);
       try {
@@ -1248,7 +1335,8 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
     startAltitude: number,
     endAltitude: number,
     type: BoatType,
-    arcKey?: string
+  arcKey?: string,
+  scaleHint?: number
   ) => {
     let key = '';
     try {
@@ -1281,19 +1369,20 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       key = arcKey || `${startLat},${startLng}->${endLat},${endLng}`;
       if (isBoatRegistered(key, type)) return;
       registerBoatKey(key, type);
+      const scale = typeof scaleHint === 'number' && Number.isFinite(scaleHint) ? scaleHint : 1;
       if (!boatTemplateRef.current || !glbLoadedRef.current) {
-        pendingSpawnsRef.current.push({ curve, arcKey: key, type });
+        pendingSpawnsRef.current.push({ curve, arcKey: key, type, scale });
         drainPendingSpawns();
         return;
       }
-      spawnBoatFromCurve(curve, key, type);
+      spawnBoatFromCurve(curve, key, type, scale);
     } catch (err) {
       if (key) unregisterBoatKey(key, type);
       console.error('[GlobeNew] spawnBoatAlongArc failed', err);
     }
   };
 
-  const spawnBoatFromCurve = (curve: THREE.CatmullRomCurve3, arcKey: string, type: BoatType) => {
+const spawnBoatFromCurve = (curve: THREE.CatmullRomCurve3, arcKey: string, type: BoatType, scaleOverride?: number) => {
     const scene = sceneRef.current; const globe = globeEl.current; if (!scene || !globe) return;
     try {
       const src = boatTemplateRef.current!;
@@ -1329,7 +1418,10 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
           });
         }
       });
-      cloned.scale.set(4.2, 4.2, 4.2);
+    const baseScale = 4.2;
+    const scale = typeof scaleOverride === 'number' && Number.isFinite(scaleOverride) ? scaleOverride : 1;
+    const finalScale = baseScale * scale;
+    cloned.scale.set(finalScale, finalScale, finalScale);
       // Initial placement & orientation at t=0 for immediate visibility
       const pos0 = curve.getPointAt(0);
       cloned.position.copy(pos0);
@@ -1342,10 +1434,15 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       (cloned as any).traverse?.((child: any) => {
         if (child.isMesh) {
           child.renderOrder = 9999;
-          if (child.material) {
-            child.material.depthTest = true;
-            child.material.depthWrite = true;
-          }
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((mat: any) => {
+            if (mat && typeof mat === 'object') {
+              mat.depthTest = false;
+              mat.depthWrite = false;
+              mat.transparent = true;
+              mat.needsUpdate = true;
+            }
+          });
         }
       });
       // capacity checks
@@ -1356,7 +1453,20 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
         removeBoat(removed);
       }
       registerBoatKey(arcKey, type);
-      boatsRef.current.push({ id: Date.now() + Math.random(), mesh: cloned, curve, arcKey, startTime: performance.now(), duration: 15000, type, materials });
+      cloned.visible = true;
+      const duration = 15000;
+      const initialElapsed = type === 'guest' ? Math.random() * duration : 0;
+      boatsRef.current.push({
+        id: Date.now() + Math.random(),
+        mesh: cloned,
+        curve,
+        arcKey,
+        elapsed: initialElapsed,
+        duration,
+        type,
+        materials,
+        scale
+      });
       scene.add(cloned);
     } catch {}
   };
@@ -1386,7 +1496,17 @@ const Globe: React.FC<GlobeProps> = ({ describedById, ariaLabel, tabIndex, initi
       if (isBoatRegistered(key, 'guest')) continue;
       const startAltitude = typeof arc.startAltitude === 'number' ? arc.startAltitude : GUEST_NODE_ALTITUDE;
       const endAltitude = typeof arc.endAltitude === 'number' ? arc.endAltitude : GUEST_NODE_ALTITUDE;
-      spawnBoatAlongArc(arc.startLat, arc.startLng, arc.endLat, arc.endLng, startAltitude, endAltitude, 'guest', key);
+      spawnBoatAlongArc(
+        arc.startLat,
+        arc.startLng,
+        arc.endLat,
+        arc.endLng,
+        startAltitude,
+        endAltitude,
+        'guest',
+        key,
+        arc.boatScale
+      );
       spawned += 1;
     }
 
